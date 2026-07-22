@@ -1,0 +1,2 @@
+# spendly
+Expense Manager App
