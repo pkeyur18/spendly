@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spendly — Full Screen Set</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --primary: #6366F1;
+    --primary-soft: #818CF8;
+    --primary-deep: #4F46E5;
+    --accent: #F59E0B;
+    --pink: #EC4899;
+    --teal: #14B8A6;
+    --red: #EF4444;
+
+    --bg: #F5F5F7;
+    --card: #FFFFFF;
+    --card-2: #FFFFFF;
+    --text: #14141C;
+    --text-dim: #6B6B7B;
+    --line: #ECECF1;
+    --shadow: 0 8px 30px rgba(20,20,40,0.08);
+    --shadow-sm: 0 2px 10px rgba(20,20,40,0.05);
+  }
+
+  [data-theme="dark"] {
+    --bg: #0B0B12;
+    --card: #16161F;
+    --card-2: #1D1D28;
+    --text: #F4F4F8;
+    --text-dim: #8B8B9C;
+    --line: #26262F;
+    --shadow: 0 8px 30px rgba(0,0,0,0.4);
+    --shadow-sm: 0 2px 10px rgba(0,0,0,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+    transition: background .4s ease, color .4s ease;
+  }
+
+  .page-head {
+    max-width: 1200px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .brand {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand .dot {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--primary), var(--pink));
+    display: grid; place-items: center;
+    color: #fff; font-size: 16px;
+  }
+  .page-head p { color: var(--text-dim); font-size: 14px; margin-top: 2px; }
+
+  .theme-toggle {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 100px; cursor: pointer;
+    font-weight: 600; font-size: 14px; color: var(--text);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Tabs */
+  .tabs {
+    max-width: 1200px; margin: 0 auto 40px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .tab {
+    padding: 9px 16px; border-radius: 100px; font-size: 13px; font-weight: 600;
+    background: var(--card); border: 1px solid var(--line); color: var(--text-dim);
+    cursor: pointer;
+  }
+  .tab.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  .group { display: none; }
+  .group.on { display: block; }
+
+  .phones {
+    display: flex;
+    gap: 40px;
+    justify-content: center;
+    flex-wrap: wrap;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .phone {
+    width: 320px;
+    background: var(--bg);
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: var(--shadow), 0 0 0 2px var(--line);
+    position: relative;
+  }
+  .screen {
+    background: var(--bg);
+    border-radius: 34px;
+    overflow: hidden;
+    height: 690px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 26px; background: #000; border-radius: 0 0 16px 16px;
+    z-index: 20;
+  }
+  .status-bar {
+    padding: 14px 22px 6px; display: flex; justify-content: space-between;
+    font-size: 13px; font-weight: 600; z-index: 10;
+  }
+
+  .phone-label {
+    text-align: center; margin-top: 16px; font-weight: 600;
+    font-size: 14px; color: var(--text-dim);
+  }
+
+  .screen-body { flex: 1; overflow-y: auto; padding: 4px 16px 90px; }
+  .screen-body::-webkit-scrollbar { display: none; }
+
+  .screen-title-bar {
+    display: flex; align-items: center; gap: 10px; margin: 10px 2px 18px;
+  }
+  .screen-title-bar .back {
+    width: 32px; height: 32px; border-radius: 10px; background: var(--card);
+    display: grid; place-items: center; border: 1px solid var(--line); font-size: 14px;
+  }
+  .screen-title-bar h2 { font-family: 'Sora', sans-serif; font-size: 18px; font-weight: 600; }
+
+  /* Header greeting */
+  .greeting { margin: 8px 4px 20px; }
+  .greeting small { color: var(--text-dim); font-size: 13px; }
+  .greeting h2 { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 600; margin-top: 2px; }
+
+  /* Hero */
+  .hero {
+    background: linear-gradient(135deg, var(--primary-deep), var(--primary), var(--pink));
+    border-radius: 26px;
+    padding: 22px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(99,102,241,0.35);
+  }
+  .hero::after {
+    content: ''; position: absolute; right: -30px; top: -30px;
+    width: 140px; height: 140px; border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+  }
+  .hero small { opacity: .85; font-size: 13px; font-weight: 500; }
+  .hero .amount {
+    font-family: 'Sora', sans-serif; font-size: 36px; font-weight: 700;
+    margin: 4px 0 14px; letter-spacing: -1px;
+  }
+  .hero .amount span { font-size: 20px; opacity: .8; }
+  .budget-bar {
+    height: 7px; background: rgba(255,255,255,0.25); border-radius: 10px; overflow: hidden;
+  }
+  .budget-bar i { display: block; height: 100%; width: 61%; background: #fff; border-radius: 10px; }
+  .hero .budget-txt { font-size: 12px; opacity: .9; margin-top: 8px; display: flex; justify-content: space-between; }
+
+  .sec-title {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 24px 4px 12px;
+  }
+  .sec-title h3 { font-family: 'Sora', sans-serif; font-size: 16px; font-weight: 600; }
+  .sec-title a { color: var(--primary); font-size: 13px; font-weight: 600; text-decoration: none; cursor:pointer; }
+
+  .chart-card {
+    background: var(--card); border-radius: 22px; padding: 20px;
+    box-shadow: var(--shadow-sm); border: 1px solid var(--line);
+    display: flex; align-items: center; gap: 18px;
+  }
+  .donut {
+    width: 110px; height: 110px; border-radius: 50%; flex-shrink: 0;
+    position: relative;
+    background: conic-gradient(
+      var(--primary) 0% 45%,
+      var(--accent) 45% 68%,
+      var(--teal) 68% 85%,
+      var(--pink) 85% 100%
+    );
+  }
+  .donut::before {
+    content: ''; position: absolute; inset: 15px; border-radius: 50%;
+    background: var(--card);
+  }
+  .donut-center {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+  }
+  .donut-center b { font-family: 'Sora', sans-serif; font-size: 17px; display: block; }
+  .donut-center small { font-size: 10px; color: var(--text-dim); }
+  .legend { flex: 1; }
+  .legend div { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 7px 0; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 3px; }
+  .legend .pct { margin-left: auto; font-weight: 600; color: var(--text-dim); }
+
+  .bars {
+    background: var(--card); border-radius: 22px; padding: 20px;
+    box-shadow: var(--shadow-sm); border: 1px solid var(--line);
+  }
+  .bar-row { display: flex; align-items: flex-end; gap: 10px; height: 100px; margin-top: 6px; }
+  .bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .bar i {
+    width: 100%; border-radius: 8px 8px 4px 4px;
+    background: linear-gradient(180deg, var(--primary-soft), var(--primary));
+  }
+  .bar.active i { background: linear-gradient(180deg, var(--accent), #EA580C); }
+  .bar span { font-size: 11px; color: var(--text-dim); }
+
+  .txn {
+    display: flex; align-items: center; gap: 12px; padding: 12px;
+    background: var(--card); border-radius: 16px; margin-bottom: 10px;
+    box-shadow: var(--shadow-sm); border: 1px solid var(--line);
+  }
+  .txn .t-ico { width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; font-size: 17px; flex-shrink: 0; }
+  .txn .t-info { flex: 1; }
+  .txn .t-info b { font-size: 14px; font-weight: 600; display: block; }
+  .txn .t-info small { font-size: 12px; color: var(--text-dim); }
+  .txn .t-amt { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 15px; }
+
+  .nav {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--card); border-top: 1px solid var(--line);
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 12px 20px 22px; z-index: 15;
+  }
+  .nav a { color: var(--text-dim); font-size: 21px; text-decoration: none; }
+  .nav a.active { color: var(--primary); }
+  .fab {
+    width: 54px; height: 54px; border-radius: 19px; margin-top: -28px;
+    background: linear-gradient(135deg, var(--primary), var(--pink));
+    color: #fff; display: grid; place-items: center; font-size: 25px;
+    box-shadow: 0 8px 20px rgba(99,102,241,0.5); cursor: pointer;
+  }
+
+  /* Quick add */
+  .qa-amount {
+    font-family: 'Sora', sans-serif; font-size: 48px; font-weight: 700;
+    text-align: center; letter-spacing: -2px; margin: 16px 0 4px;
+  }
+  .qa-amount span { color: var(--text-dim); font-size: 30px; }
+  .qa-sub { text-align: center; color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
+  .qa-cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 18px; }
+  .qa-cat {
+    aspect-ratio: 1; border-radius: 16px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 4px; cursor: pointer;
+    background: var(--card); border: 1.5px solid var(--line); font-size: 18px;
+  }
+  .qa-cat small { font-size: 9px; color: var(--text-dim); }
+  .qa-cat.sel { border-color: var(--primary); background: rgba(99,102,241,0.1); }
+  .qa-cat.sel small { color: var(--primary); font-weight: 600; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .key {
+    padding: 14px; text-align: center; font-family: 'Sora', sans-serif;
+    font-size: 20px; font-weight: 600; border-radius: 14px; cursor: pointer;
+    background: var(--card); border: 1px solid var(--line); user-select: none;
+  }
+  .btn-save {
+    margin-top: 12px; width: 100%; padding: 16px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--primary), var(--pink));
+    color: #fff; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 15px;
+    border-radius: 16px; box-shadow: 0 8px 20px rgba(99,102,241,0.4);
+  }
+
+  /* Reports screen */
+  .report-hero {
+    background: var(--card); border-radius: 22px; padding: 20px;
+    border: 1px solid var(--line); box-shadow: var(--shadow-sm); text-align: center;
+  }
+  .report-hero .rlabel { font-size: 12px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px;}
+  .report-hero .ramt { font-family: 'Sora', sans-serif; font-size: 34px; font-weight: 700; margin: 8px 0 4px; }
+  .report-hero .rcompare { font-size: 12px; }
+  .rcompare.up { color: var(--red); }
+  .rcompare.down { color: var(--teal); }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .stat-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-box small { color: var(--text-dim); font-size: 11px; }
+  .stat-box b { font-family: 'Sora', sans-serif; font-size: 16px; display: block; margin-top: 3px; }
+
+  .top-list { background: var(--card); border-radius: 18px; border: 1px solid var(--line); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .top-list-row { display:flex; align-items:center; gap:10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .top-list-row:last-child { border-bottom: none; }
+  .rank { width:20px; font-weight:700; font-family:'Sora',sans-serif; color: var(--text-dim); font-size:13px; }
+  .top-list-row b { flex:1; font-size:13px; font-weight:600; }
+  .top-list-row span { font-family:'Sora',sans-serif; font-weight:600; font-size:13px; }
+
+  .export-row { display:flex; gap:10px; margin-top:16px; }
+  .export-btn {
+    flex:1; padding: 13px; text-align:center; border-radius: 14px; font-size:13px; font-weight:600;
+    background: var(--card); border: 1px solid var(--line); cursor:pointer;
+  }
+  .export-btn.primary { background: var(--primary); color:#fff; border-color: var(--primary); }
+
+  /* Date range */
+  .range-row { display:flex; gap:10px; margin-bottom: 16px; }
+  .range-box { flex:1; background: var(--card); border:1px solid var(--line); border-radius: 14px; padding: 12px; }
+  .range-box small { color: var(--text-dim); font-size: 11px; }
+  .range-box b { display:block; font-family:'Sora',sans-serif; font-size: 14px; margin-top:2px; }
+  .chip-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 18px; }
+  .chip {
+    padding: 8px 14px; border-radius: 100px; font-size: 12px; font-weight: 600;
+    background: var(--card); border: 1px solid var(--line); color: var(--text-dim); cursor:pointer;
+  }
+  .chip.sel { background: var(--primary); color:#fff; border-color: var(--primary); }
+
+  /* Category manager */
+  .cat-row {
+    display:flex; align-items:center; gap:12px; background: var(--card); border:1px solid var(--line);
+    border-radius: 16px; padding: 12px 14px; margin-bottom: 9px; box-shadow: var(--shadow-sm);
+  }
+  .cat-row .cico { width: 38px; height:38px; border-radius:12px; display:grid; place-items:center; font-size:17px; }
+  .cat-row .cname { flex:1; font-size:14px; font-weight:600; }
+  .cat-row .cbudget { font-size: 11px; color: var(--text-dim); }
+  .drag { color: var(--text-dim); font-size: 16px; cursor: grab; }
+  .add-cat-btn {
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    padding: 14px; border-radius: 16px; border: 1.5px dashed var(--line);
+    color: var(--primary); font-weight: 600; font-size: 13px; cursor:pointer; margin-top: 6px;
+  }
+
+  /* Budget setup */
+  .budget-card {
+    background: var(--card); border:1px solid var(--line); border-radius: 20px; padding: 18px;
+    box-shadow: var(--shadow-sm); margin-bottom: 14px;
+  }
+  .budget-card .bhead { display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; }
+  .budget-card .bhead b { font-family:'Sora',sans-serif; font-size:15px; }
+  .budget-card .bhead span { font-size: 13px; color: var(--text-dim); }
+  .slider-track { height: 8px; background: var(--line); border-radius: 10px; position: relative; margin: 8px 0 4px; }
+  .slider-fill { position:absolute; left:0; top:0; bottom:0; border-radius: 10px; background: linear-gradient(90deg, var(--primary), var(--pink)); }
+  .slider-track .handle {
+    position:absolute; top:50%; width: 18px; height:18px; border-radius:50%; background:#fff;
+    border: 3px solid var(--primary); transform: translate(-50%,-50%); box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  }
+  .budget-mini { display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); }
+
+  /* Widgets section */
+  .widgets-wrap { max-width: 1200px; margin: 60px auto 0; text-align: center; }
+  .widgets-wrap > h3 { font-family: 'Sora', sans-serif; font-size: 22px; margin-bottom: 8px; }
+  .widgets-wrap > p { color: var(--text-dim); font-size: 14px; margin-bottom: 30px; }
+  .widget-row { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
+  .widget { border-radius: 26px; padding: 18px; box-shadow: var(--shadow); text-align: left; }
+  .w-small { width: 160px; height: 160px; }
+  .w-medium { width: 340px; height: 160px; }
+  .widget-dark { background: linear-gradient(145deg, #1D1D28, #101019); color: #fff; }
+  .widget-grad { background: linear-gradient(145deg, var(--primary-deep), var(--pink)); color: #fff; }
+  .w-label { font-size: 11px; opacity: .8; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .w-amt { font-family: 'Sora', sans-serif; font-size: 26px; font-weight: 700; margin: 6px 0; }
+  .w-quick { display: flex; gap: 8px; margin-top: 10px; }
+  .w-quick div { width: 36px; height: 36px; border-radius: 11px; background: rgba(255,255,255,0.18); display: grid; place-items: center; font-size: 16px; }
+  .w-medium .w-inner { display: flex; gap: 18px; height: 100%; align-items: center; }
+  .w-mini-bars { display: flex; align-items: flex-end; gap: 5px; height: 55px; }
+  .w-mini-bars i { width: 8px; border-radius: 4px; background: rgba(255,255,255,0.5); }
+  .w-mini-bars i.hi { background: #fff; }
+  .lock-widget {
+    width: 140px; margin: 0 auto; background: rgba(120,120,140,0.25); backdrop-filter: blur(10px);
+    border-radius: 20px; padding: 14px; color:#fff; text-align:center; border: 1px solid rgba(255,255,255,.15);
+  }
+  .lock-widget .llabel { font-size: 10px; opacity:.8; }
+  .lock-widget .lamt { font-family:'Sora',sans-serif; font-size: 20px; font-weight:700; margin-top:2px; }
+
+  /* Backup & restore */
+  .backup-card {
+    background: var(--card); border:1px solid var(--line); border-radius: 20px; padding: 18px;
+    box-shadow: var(--shadow-sm); margin-bottom: 14px;
+  }
+  .backup-card .bc-head { display:flex; align-items:center; gap:10px; margin-bottom: 4px; }
+  .backup-card .bc-ico { width: 36px; height:36px; border-radius:11px; display:grid; place-items:center; font-size:16px; background: rgba(99,102,241,.12); }
+  .backup-card b { font-family:'Sora',sans-serif; font-size:14px; }
+  .backup-card p { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height:1.5; }
+  .status-pill {
+    display:inline-flex; align-items:center; gap:6px; padding: 6px 12px; border-radius: 100px;
+    background: rgba(20,184,166,.12); color: var(--teal); font-size: 12px; font-weight: 600; margin-top: 10px;
+  }
+  .status-pill .dotgreen { width:7px; height:7px; border-radius:50%; background: var(--teal); }
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; padding: 4px 0; }
+  .toggle-row span { font-size: 13px; font-weight: 600; }
+  .toggle-row small { display:block; font-size:11px; color:var(--text-dim); font-weight:400; margin-top:1px; }
+  .switch { width: 44px; height: 26px; border-radius: 100px; background: var(--primary); position: relative; cursor:pointer; flex-shrink:0; }
+  .switch::after { content:''; position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .switch.off { background: var(--line); }
+  .switch.off::after { right: auto; left: 3px; }
+  .freq-row { display:flex; gap:8px; margin-top: 12px; }
+  .freq-chip { flex:1; text-align:center; padding: 9px; border-radius: 12px; font-size: 12px; font-weight:600; background: var(--card-2); border:1px solid var(--line); color: var(--text-dim); cursor:pointer; }
+  .freq-chip.sel { background: var(--primary); color:#fff; border-color:var(--primary); }
+  .btn-outline {
+    width:100%; padding: 14px; border-radius: 16px; text-align:center; font-weight:600; font-size:14px;
+    background: var(--card); border: 1.5px solid var(--primary); color: var(--primary); cursor:pointer; margin-top: 6px;
+  }
+  .dropzone {
+    border: 1.5px dashed var(--line); border-radius: 18px; padding: 26px 16px; text-align:center;
+    color: var(--text-dim); font-size: 13px; margin-bottom: 14px; cursor:pointer;
+  }
+  .dropzone .dz-ico { font-size: 28px; margin-bottom: 8px; }
+  .dropzone b { color: var(--text); display:block; margin-bottom:2px; }
+  .preview-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px;
+    box-shadow: var(--shadow-sm); margin-bottom: 14px;
+  }
+  .preview-row { display:flex; justify-content:space-between; font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .preview-row:last-child { border-bottom:none; }
+  .preview-row span:first-child { color: var(--text-dim); }
+  .preview-row span:last-child { font-weight: 600; }
+  .radio-card {
+    display:flex; gap:12px; padding: 14px; border-radius: 16px; border: 1.5px solid var(--line);
+    background: var(--card); margin-bottom: 10px; cursor:pointer;
+  }
+  .radio-card.sel { border-color: var(--primary); background: rgba(99,102,241,.08); }
+  .radio-dot { width:20px; height:20px; border-radius:50%; border: 2px solid var(--line); flex-shrink:0; margin-top:2px; position:relative; }
+  .radio-card.sel .radio-dot { border-color: var(--primary); }
+  .radio-card.sel .radio-dot::after { content:''; position:absolute; inset:3px; border-radius:50%; background:var(--primary); }
+  .radio-card b { font-size: 13px; display:block; }
+  .radio-card p { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height:1.4; }
+
+  .note {
+    max-width: 1200px; margin: 50px auto 0; padding: 22px 26px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+    font-size: 14px; color: var(--text-dim); line-height: 1.7; box-shadow: var(--shadow-sm);
+  }
+  .note b { color: var(--text); }
+
+  @media (max-width: 720px) {
+    .phone { width: 290px; }
+    body { padding: 24px 12px 60px; }
+  }
+</style>
+</head>
+<body data-theme="light">
+
+  <div class="page-head">
+    <div>
+      <div class="brand"><span class="dot">₹</span> Spendly</div>
+      <p>Full screen set — tap a tab to jump between flows</p>
+    </div>
+    <div class="theme-toggle" onclick="toggleTheme()">
+      <span id="themeIcon">🌙</span> <span id="themeLabel">Dark mode</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on" onclick="showGroup('core')">Home &amp; Add</div>
+    <div class="tab" onclick="showGroup('reports')">Reports</div>
+    <div class="tab" onclick="showGroup('categories')">Categories &amp; Budget</div>
+    <div class="tab" onclick="showGroup('widgets')">Widgets</div>
+    <div class="tab" onclick="showGroup('backup')">Backup &amp; Restore</div>
+  </div>
+
+  <!-- ============ GROUP: CORE ============ -->
+  <div class="group on" id="g-core">
+  <div class="phones">
+
+    <!-- PHONE: HOME -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="greeting"><small>Good evening 👋</small><h2>Here's your July</h2></div>
+            <div class="hero">
+              <small>Spent this month</small>
+              <div class="amount"><span>₹</span>24,350</div>
+              <div class="budget-bar"><i></i></div>
+              <div class="budget-txt"><span>61% of ₹40,000 budget</span><span>₹15,650 left</span></div>
+            </div>
+            <div class="sec-title"><h3>Where it went</h3><a onclick="showGroup('reports')">Report ›</a></div>
+            <div class="chart-card">
+              <div class="donut"><div class="donut-center"><div><b>₹24.3k</b><small>total</small></div></div></div>
+              <div class="legend">
+                <div><span class="swatch" style="background:var(--primary)"></span> Food <span class="pct">45%</span></div>
+                <div><span class="swatch" style="background:var(--accent)"></span> Travel <span class="pct">23%</span></div>
+                <div><span class="swatch" style="background:var(--teal)"></span> Bills <span class="pct">17%</span></div>
+                <div><span class="swatch" style="background:var(--pink)"></span> Other <span class="pct">15%</span></div>
+              </div>
+            </div>
+            <div class="sec-title"><h3>Last 6 months</h3></div>
+            <div class="bars">
+              <div class="bar-row">
+                <div class="bar"><i style="height:55%"></i><span>Feb</span></div>
+                <div class="bar"><i style="height:70%"></i><span>Mar</span></div>
+                <div class="bar"><i style="height:48%"></i><span>Apr</span></div>
+                <div class="bar"><i style="height:82%"></i><span>May</span></div>
+                <div class="bar"><i style="height:65%"></i><span>Jun</span></div>
+                <div class="bar active"><i style="height:60%"></i><span>Jul</span></div>
+              </div>
+            </div>
+            <div class="sec-title"><h3>Recent</h3><a>All ›</a></div>
+            <div class="txn"><div class="t-ico" style="background:rgba(99,102,241,.15)">🍔</div><div class="t-info"><b>Lunch — Cafe Nero</b><small>Today · 1:24 PM</small></div><div class="t-amt">-₹350</div></div>
+            <div class="txn"><div class="t-ico" style="background:rgba(245,158,11,.15)">🛒</div><div class="t-info"><b>Groceries</b><small>Today · 10:02 AM</small></div><div class="t-amt">-₹1,240</div></div>
+            <div class="txn"><div class="t-ico" style="background:rgba(20,184,166,.15)">🚕</div><div class="t-info"><b>Cab to office</b><small>Yesterday</small></div><div class="t-amt">-₹210</div></div>
+          </div>
+          <div class="nav">
+            <a class="active">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab" onclick="alert('Opens Quick Add')">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a>⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">1 · Home / Dashboard</div>
+    </div>
+
+    <!-- PHONE: QUICK ADD -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back">✕</div><h2>New expense</h2></div>
+            <div class="qa-amount"><span>₹</span><span id="qaVal">350</span></div>
+            <div class="qa-sub">Food · Cafe Nero · Today</div>
+            <div class="qa-cats">
+              <div class="qa-cat sel" onclick="selCat(this)">🍔<small>Food</small></div>
+              <div class="qa-cat" onclick="selCat(this)">🚕<small>Travel</small></div>
+              <div class="qa-cat" onclick="selCat(this)">🛒<small>Shop</small></div>
+              <div class="qa-cat" onclick="selCat(this)">🧾<small>Bills</small></div>
+              <div class="qa-cat" onclick="selCat(this)">🎬<small>Fun</small></div>
+              <div class="qa-cat" onclick="selCat(this)">💊<small>Health</small></div>
+              <div class="qa-cat" onclick="selCat(this)">🏠<small>Home</small></div>
+              <div class="qa-cat" onclick="selCat(this)">➕<small>More</small></div>
+            </div>
+            <div class="keypad">
+              <div class="key" onclick="kp('1')">1</div><div class="key" onclick="kp('2')">2</div><div class="key" onclick="kp('3')">3</div>
+              <div class="key" onclick="kp('4')">4</div><div class="key" onclick="kp('5')">5</div><div class="key" onclick="kp('6')">6</div>
+              <div class="key" onclick="kp('7')">7</div><div class="key" onclick="kp('8')">8</div><div class="key" onclick="kp('9')">9</div>
+              <div class="key" onclick="kp('.')">.</div><div class="key" onclick="kp('0')">0</div><div class="key" onclick="kp('del')">⌫</div>
+            </div>
+            <button class="btn-save" onclick="alert('Expense saved ✓')">Save expense</button>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">2 · Quick Add (2-tap)</div>
+    </div>
+
+  </div>
+  </div>
+
+  <!-- ============ GROUP: REPORTS ============ -->
+  <div class="group" id="g-reports">
+  <div class="phones">
+
+    <!-- PHONE: MONTHLY REPORT -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back">‹</div><h2>July Report</h2></div>
+            <div class="report-hero">
+              <div class="rlabel">Total spent</div>
+              <div class="ramt">₹24,350</div>
+              <div class="rcompare up">↑ 8% vs June (₹22,540)</div>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-box"><small>Daily average</small><b>₹785</b></div>
+              <div class="stat-box"><small>Transactions</small><b>62</b></div>
+              <div class="stat-box"><small>Top category</small><b>Food 🍔</b></div>
+              <div class="stat-box"><small>Budget used</small><b>61%</b></div>
+            </div>
+            <div class="sec-title"><h3>By category</h3></div>
+            <div class="chart-card">
+              <div class="donut"><div class="donut-center"><div><b>₹24.3k</b><small>total</small></div></div></div>
+              <div class="legend">
+                <div><span class="swatch" style="background:var(--primary)"></span> Food <span class="pct">45%</span></div>
+                <div><span class="swatch" style="background:var(--accent)"></span> Travel <span class="pct">23%</span></div>
+                <div><span class="swatch" style="background:var(--teal)"></span> Bills <span class="pct">17%</span></div>
+                <div><span class="swatch" style="background:var(--pink)"></span> Other <span class="pct">15%</span></div>
+              </div>
+            </div>
+            <div class="sec-title"><h3>Top 5 expenses</h3></div>
+            <div class="top-list">
+              <div class="top-list-row"><span class="rank">1</span><b>Flight — Goa trip</b><span>₹6,200</span></div>
+              <div class="top-list-row"><span class="rank">2</span><b>Rent top-up</b><span>₹3,000</span></div>
+              <div class="top-list-row"><span class="rank">3</span><b>Electronics</b><span>₹2,450</span></div>
+              <div class="top-list-row"><span class="rank">4</span><b>Groceries (week 3)</b><span>₹1,890</span></div>
+              <div class="top-list-row"><span class="rank">5</span><b>Dinner — anniversary</b><span>₹1,650</span></div>
+            </div>
+            <div class="export-row">
+              <div class="export-btn" onclick="alert('Exports as CSV')">Export CSV</div>
+              <div class="export-btn primary" onclick="alert('Exports as PDF')">Export PDF</div>
+            </div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a class="active">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a>⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">3 · Monthly Report (auto-generated)</div>
+    </div>
+
+    <!-- PHONE: CUSTOM RANGE REPORT -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back">‹</div><h2>Custom report</h2></div>
+            <div class="sec-title" style="margin-top:6px"><h3>Quick ranges</h3></div>
+            <div class="chip-row">
+              <div class="chip">Last 7 days</div>
+              <div class="chip sel">Last 30 days</div>
+              <div class="chip">This year</div>
+              <div class="chip">Custom</div>
+            </div>
+            <div class="range-row">
+              <div class="range-box"><small>From</small><b>Jun 22, 2026</b></div>
+              <div class="range-box"><small>To</small><b>Jul 22, 2026</b></div>
+            </div>
+            <div class="report-hero">
+              <div class="rlabel">Total in range</div>
+              <div class="ramt">₹27,910</div>
+              <div class="rcompare down">↓ 4% vs previous 30 days</div>
+            </div>
+            <div class="sec-title"><h3>Spending trend</h3></div>
+            <div class="bars">
+              <div class="bar-row">
+                <div class="bar"><i style="height:40%"></i><span>W1</span></div>
+                <div class="bar"><i style="height:75%"></i><span>W2</span></div>
+                <div class="bar active"><i style="height:90%"></i><span>W3</span></div>
+                <div class="bar"><i style="height:55%"></i><span>W4</span></div>
+              </div>
+            </div>
+            <div class="sec-title"><h3>By category</h3></div>
+            <div class="chart-card">
+              <div class="donut"><div class="donut-center"><div><b>₹27.9k</b><small>total</small></div></div></div>
+              <div class="legend">
+                <div><span class="swatch" style="background:var(--primary)"></span> Food <span class="pct">38%</span></div>
+                <div><span class="swatch" style="background:var(--accent)"></span> Travel <span class="pct">31%</span></div>
+                <div><span class="swatch" style="background:var(--teal)"></span> Bills <span class="pct">16%</span></div>
+                <div><span class="swatch" style="background:var(--pink)"></span> Other <span class="pct">15%</span></div>
+              </div>
+            </div>
+            <div class="export-row">
+              <div class="export-btn" onclick="alert('Exports as CSV')">Export CSV</div>
+              <div class="export-btn primary" onclick="alert('Exports as PDF')">Export PDF</div>
+            </div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a class="active">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a>⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">4 · Reports — Any Time (on demand)</div>
+    </div>
+
+  </div>
+  </div>
+
+  <!-- ============ GROUP: CATEGORIES & BUDGET ============ -->
+  <div class="group" id="g-categories">
+  <div class="phones">
+
+    <!-- PHONE: CATEGORY MANAGER -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back">‹</div><h2>Categories</h2></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(99,102,241,.15)">🍔</div><div><div class="cname">Food</div><div class="cbudget">Budget: ₹10,000/mo</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(245,158,11,.15)">🚕</div><div><div class="cname">Travel</div><div class="cbudget">Budget: ₹6,000/mo</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(20,184,166,.15)">🧾</div><div><div class="cname">Bills</div><div class="cbudget">Budget: ₹5,000/mo</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(236,72,153,.15)">🎬</div><div><div class="cname">Entertainment</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(99,102,241,.15)">🛒</div><div><div class="cname">Shopping</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(20,184,166,.15)">💊</div><div><div class="cname">Health</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row" style="opacity:.5"><div class="cico" style="background:rgba(107,107,123,.15)">📦</div><div><div class="cname">Misc (archived)</div><div class="cbudget">Hidden from Quick Add</div></div><span class="drag">⠿</span></div>
+            <div class="add-cat-btn" onclick="alert('Opens new category form')">+ Add category</div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a class="active">🏷️</a><a>⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">5 · Category Manager</div>
+    </div>
+
+    <!-- PHONE: BUDGET SETUP -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back">‹</div><h2>Budgets</h2></div>
+            <div class="budget-card">
+              <div class="bhead"><b>Overall monthly budget</b></div>
+              <div style="font-family:'Sora',sans-serif;font-size:26px;font-weight:700;">₹40,000</div>
+              <div class="slider-track"><div class="slider-fill" style="width:61%"></div><div class="handle" style="left:61%"></div></div>
+              <div class="budget-mini"><span>₹0</span><span>61% used</span><span>₹60k</span></div>
+            </div>
+            <div class="sec-title" style="margin-top:6px"><h3>Per category</h3></div>
+            <div class="budget-card">
+              <div class="bhead"><b>🍔 Food</b><span>₹8,200 / ₹10,000</span></div>
+              <div class="slider-track"><div class="slider-fill" style="width:82%;background:linear-gradient(90deg,var(--accent),#EA580C)"></div><div class="handle" style="left:82%;border-color:var(--accent)"></div></div>
+              <div class="budget-mini"><span>82% used</span><span style="color:var(--accent);font-weight:600">Near limit</span></div>
+            </div>
+            <div class="budget-card">
+              <div class="bhead"><b>🚕 Travel</b><span>₹4,100 / ₹6,000</span></div>
+              <div class="slider-track"><div class="slider-fill" style="width:68%"></div><div class="handle" style="left:68%"></div></div>
+              <div class="budget-mini"><span>68% used</span><span>On track</span></div>
+            </div>
+            <div class="budget-card">
+              <div class="bhead"><b>🧾 Bills</b><span>₹3,900 / ₹5,000</span></div>
+              <div class="slider-track"><div class="slider-fill" style="width:78%"></div><div class="handle" style="left:78%"></div></div>
+              <div class="budget-mini"><span>78% used</span><span>On track</span></div>
+            </div>
+            <div class="add-cat-btn" onclick="alert('Set budget for another category')">+ Set budget for a category</div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a class="active">🏷️</a><a>⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">6 · Budget Setup</div>
+    </div>
+
+  </div>
+  </div>
+
+  <!-- ============ GROUP: WIDGETS ============ -->
+  <div class="group" id="g-widgets">
+  <div class="widgets-wrap" style="margin-top:10px">
+    <h3>Home &amp; Lock screen widgets</h3>
+    <p>Add an expense without opening the app — 7 &amp; 8 in the screen list</p>
+    <div class="widget-row">
+      <div class="widget widget-grad w-small">
+        <div class="w-label">Quick add</div>
+        <div class="w-quick"><div>🍔</div><div>🚕</div></div>
+        <div class="w-quick"><div>🛒</div><div>🧾</div></div>
+        <div style="font-size:11px;opacity:.85;margin-top:10px;">Tap a category to add</div>
+      </div>
+      <div class="widget widget-dark w-small">
+        <div class="w-label">Today</div>
+        <div class="w-amt">₹1,590</div>
+        <div class="w-mini-bars">
+          <i style="height:30%"></i><i style="height:50%"></i><i style="height:40%"></i>
+          <i style="height:70%"></i><i style="height:35%"></i><i class="hi" style="height:90%"></i><i style="height:55%"></i>
+        </div>
+      </div>
+      <div class="widget widget-dark w-medium">
+        <div class="w-inner">
+          <div style="flex:1">
+            <div class="w-label">This month</div>
+            <div class="w-amt">₹24,350</div>
+            <div style="font-size:11px;opacity:.7">61% of budget · ₹15,650 left</div>
+            <div class="w-quick"><div>🍔</div><div>🚕</div><div>🛒</div><div>➕</div></div>
+          </div>
+          <div class="w-mini-bars" style="height:85px">
+            <i style="height:40%"></i><i style="height:60%"></i><i style="height:45%"></i>
+            <i style="height:75%"></i><i style="height:55%"></i><i class="hi" style="height:65%"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:50px">iOS Lock Screen widget</h3>
+    <p>Glanceable total, no unlock required</p>
+    <div class="widget-row">
+      <div class="lock-widget">
+        <div class="llabel">SPENDLY</div>
+        <div class="lamt">₹24,350</div>
+        <div style="font-size:10px;opacity:.75;margin-top:2px">This month</div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- ============ GROUP: BACKUP & RESTORE ============ -->
+  <div class="group" id="g-backup">
+  <div class="phones">
+
+    <!-- PHONE: BACKUP SETTINGS -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back">‹</div><h2>Backup &amp; Restore</h2></div>
+
+            <div class="backup-card">
+              <div class="bc-head"><div class="bc-ico">☁️</div><b>Your data is backed up</b></div>
+              <p>Last backup: Today, 6:02 AM · 1.4 MB · saved to Google Drive</p>
+              <div class="status-pill"><span class="dotgreen"></span> Protected</div>
+            </div>
+
+            <div class="sec-title" style="margin-top:6px"><h3>Automatic backup</h3></div>
+            <div class="backup-card">
+              <div class="toggle-row">
+                <div><span>Auto backup</span><small>Creates a new backup on a schedule</small></div>
+                <div class="switch" id="autoBackupSwitch" onclick="toggleSwitch(this)"></div>
+              </div>
+              <div class="freq-row">
+                <div class="freq-chip" onclick="selFreq(this)">Daily</div>
+                <div class="freq-chip sel" onclick="selFreq(this)">Weekly</div>
+                <div class="freq-chip" onclick="selFreq(this)">Monthly</div>
+              </div>
+            </div>
+
+            <div class="sec-title"><h3>Manual backup</h3></div>
+            <div class="backup-card">
+              <p style="margin-bottom:10px">Save a full copy of your expenses, categories, and budgets right now.</p>
+              <div class="btn-save" style="margin-top:0" onclick="alert('Backup file created — choose where to save (iCloud Drive, Google Drive, or Files)')">Back up now</div>
+              <div class="btn-outline" onclick="showGroup('restore')">Restore from a backup file</div>
+            </div>
+
+            <div class="sec-title"><h3>What's included</h3></div>
+            <div class="preview-card">
+              <div class="preview-row"><span>Expenses</span><span>✓ All transactions</span></div>
+              <div class="preview-row"><span>Categories</span><span>✓ Custom + defaults</span></div>
+              <div class="preview-row"><span>Budgets</span><span>✓ Overall + per-category</span></div>
+              <div class="preview-row"><span>Settings</span><span>✓ Theme, currency</span></div>
+            </div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a class="active">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">9 · Backup Settings</div>
+    </div>
+
+    <!-- PHONE: RESTORE FLOW -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('backup')">‹</div><h2>Restore data</h2></div>
+
+            <div class="dropzone" onclick="alert('Opens file picker — iCloud Drive, Google Drive, or Files')">
+              <div class="dz-ico">📄</div>
+              <b>Choose backup file</b>
+              Tap to browse iCloud Drive, Google Drive, or Files
+            </div>
+
+            <div class="sec-title" style="margin-top:0"><h3>File preview</h3></div>
+            <div class="preview-card">
+              <div class="preview-row"><span>File</span><span>spendly-backup-2026-07-22.json</span></div>
+              <div class="preview-row"><span>Backup date</span><span>Jul 22, 2026, 6:02 AM</span></div>
+              <div class="preview-row"><span>Expenses</span><span>1,204 transactions</span></div>
+              <div class="preview-row"><span>Date range</span><span>Jan 2025 – Jul 2026</span></div>
+              <div class="preview-row"><span>File size</span><span>1.4 MB</span></div>
+            </div>
+
+            <div class="sec-title"><h3>How should we restore?</h3></div>
+            <div class="radio-card sel" onclick="selRadio(this)">
+              <div class="radio-dot"></div>
+              <div><b>Merge</b><p>Add backup data to what's already on this device. Duplicate-safe.</p></div>
+            </div>
+            <div class="radio-card" onclick="selRadio(this)">
+              <div class="radio-dot"></div>
+              <div><b>Replace</b><p>Erase current data on this device and restore only from the backup file.</p></div>
+            </div>
+
+            <div class="btn-save" onclick="alert('Data restored ✓')">Restore data</div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a class="active">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">10 · Restore Flow</div>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="note">
+    <b>How to use:</b> Use the tabs above to move between the four flows. Toggle 🌙/☀️ for theme. On Quick Add, the keypad and category chips are live. All buttons show placeholder confirmations — this is a UX prototype, not a functional build.
+    <br><br>
+    <b>Screens included (matches the numbered list in the requirements doc):</b> 1) Home/Dashboard 2) Quick Add 3) Monthly Report 4) Custom Range Report 5) Category Manager 6) Budget Setup 7) Home Screen Widgets 8) Lock Screen Widget 9) Backup Settings 10) Restore Flow.
+    <br><br>
+    <b>New this update:</b> full backup/export/import support — manual backup, scheduled auto-backup, save-to-cloud (iCloud/Drive/Files), and a restore flow with file preview plus a Merge vs. Replace choice, so data survives an uninstall or device change.
+    <br><br>
+    <b>Palette:</b> Indigo → Pink gradient (#6366F1 → #EC4899), full light/dark support.
+  </div>
+
+<script>
+  function toggleTheme() {
+    const b = document.body;
+    const dark = b.getAttribute('data-theme') === 'dark';
+    b.setAttribute('data-theme', dark ? 'light' : 'dark');
+    document.getElementById('themeIcon').textContent = dark ? '🌙' : '☀️';
+    document.getElementById('themeLabel').textContent = dark ? 'Dark mode' : 'Light mode';
+  }
+  function selCat(el) {
+    document.querySelectorAll('.qa-cat').forEach(c => c.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+  let val = '350';
+  function kp(k) {
+    if (k === 'del') val = val.length > 1 ? val.slice(0, -1) : '0';
+    else if (k === '.') { if (!val.includes('.')) val += '.'; }
+    else val = (val === '0') ? k : val + k;
+    document.getElementById('qaVal').textContent = val;
+  }
+  function showGroup(name) {
+    // 'restore' is a sub-view of the backup tab
+    const groupId = name === 'restore' ? 'backup' : name;
+    document.querySelectorAll('.group').forEach(g => g.classList.remove('on'));
+    document.getElementById('g-' + groupId).classList.add('on');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+    const idx = {core:0, reports:1, categories:2, widgets:3, backup:4}[groupId];
+    document.querySelectorAll('.tab')[idx].classList.add('on');
+    // If jumping specifically to restore, scroll the second phone into view on mobile
+    if (name === 'restore') {
+      setTimeout(() => {
+        const phones = document.querySelectorAll('#g-backup .phone-label');
+        if (phones[1]) phones[1].scrollIntoView({behavior:'smooth', block:'center'});
+      }, 50);
+    }
+  }
+  function toggleSwitch(el) { el.classList.toggle('off'); }
+  function selFreq(el) {
+    el.parentElement.querySelectorAll('.freq-chip').forEach(c => c.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+  function selRadio(el) {
+    el.parentElement.querySelectorAll('.radio-card').forEach(c => c.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+</script>
+</body>
+</html>
