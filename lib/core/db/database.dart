@@ -75,7 +75,10 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
+        onCreate: (m) async {
+          await m.createAll();
+          await batch((b) => b.insertAll(categories, _defaultCategories));
+        },
         onUpgrade: (m, from, to) async {
           // ponytail: no migrations yet at v1. Add stepwise upgrades here as
           // schemaVersion bumps; every future version must read old backups.
@@ -90,3 +93,27 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 }
+
+/// Ships-with-the-app categories (FR-8). Icons + colors match the prototype.
+final List<CategoriesCompanion> _defaultCategories = () {
+  const specs = <(String, String, int)>[
+    ('Food', '🍔', 0xFF6366F1), // primary
+    ('Travel', '🚕', 0xFFF59E0B), // accent
+    ('Shopping', '🛒', 0xFF6366F1), // primary
+    ('Bills', '🧾', 0xFF14B8A6), // teal
+    ('Entertainment', '🎬', 0xFFEC4899), // pink
+    ('Health', '💊', 0xFF14B8A6), // teal
+    ('Home', '🏠', 0xFF6366F1), // primary
+    ('Other', '📦', 0xFF6B6B7B), // text-dim
+  ];
+  return [
+    for (var i = 0; i < specs.length; i++)
+      CategoriesCompanion.insert(
+        name: specs[i].$1,
+        icon: specs[i].$2,
+        colorValue: specs[i].$3,
+        sortOrder: Value(i),
+        isDefault: const Value(true),
+      ),
+  ];
+}();

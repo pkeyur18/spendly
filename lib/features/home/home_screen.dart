@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
+import '../dev/debug_data_screen.dart';
 import '../settings/theme_mode_provider.dart';
 
 /// Sprint 0 home shell: themed empty state + bottom nav matching the prototype.
@@ -33,6 +35,14 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'Debug data',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DebugDataScreen()),
+              ),
+              icon: const Icon(Icons.bug_report_outlined),
+            ),
           IconButton(
             tooltip: 'Theme',
             onPressed: () => _cycleTheme(ref),

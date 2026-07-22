@@ -5,8 +5,8 @@
 
 ## Current status
 
-- **Sprint:** 0 (Project Setup) — **built, awaiting user verification**
-- **Next:** Sprint 1 (Core Data Layer) — do NOT start until user gives go.
+- **Sprint:** 1 (Core Data Layer) — **built, awaiting user verification**
+- **Next:** Sprint 2 (Home Dashboard & Quick Add) — do NOT start until user gives go.
 
 ## Locked decisions (from PRD open questions)
 
@@ -18,7 +18,8 @@
 
 ## Stack / tooling
 
-- Flutter 3.44.5 · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
+- Flutter 3.44.7 (latest stable) · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
+- Dependency freshness: **all direct deps latest**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
 - Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart. Dev: drift_dev, build_runner, flutter_lints.
 - Fonts bundled as assets (offline-first): `assets/fonts/Sora.ttf`, `assets/fonts/Inter.ttf`.
 - Codegen: `dart run build_runner build` (generates `lib/core/db/database.g.dart`).
@@ -42,6 +43,26 @@
 ### Deferred / notes
 - Fonts are variable TTFs; weights map via `fontWeight`. Fine for v1.
 - Category/budget seed data + CRUD deliberately deferred to Sprint 1 per plan.
+
+## Sprint 1 — done (Core Data Layer)
+
+Recurring decision: **date-math + flag only** this sprint (template→confirm reminders = Sprint 3). Verification = in-app debug screen + unit tests.
+
+- [x] Seed 8 default categories (FR-8) in `onCreate` → `lib/core/db/database.dart` (`_defaultCategories`, prototype icons/colors, isDefault=true).
+- [x] Row→domain extensions (no parallel models) → `lib/core/db/row_extensions.dart` (`ExpenseRow.amount` = Money, `CategoryRow.color`).
+- [x] Category CRUD (FR-9,10,11) → `lib/features/categories/category_repository.dart`: create/rename/recolor/setIcon/reorder/archive/unarchive, watchAll/watchActive. Archive never deletes. Providers: categoryRepositoryProvider, activeCategoriesProvider, allCategoriesProvider.
+- [x] Expense CRUD + money-math (FR-1,6) → `lib/features/expenses/expense_repository.dart`: add/update/delete, watchInRange, watchMonth, monthTotal, totalInRange, totalsByCategory. `monthBounds()` helper. Providers: expenseRepositoryProvider + currentMonth{Expenses,Total,CategoryTotals}.
+- [x] Recurrence date-math (FR-7) → `lib/features/expenses/recurrence.dart`: `nextOccurrence` (month-end clamp), `occurrencesBetween`. Pure, no DB.
+- [x] Debug screen → `lib/features/dev/debug_data_screen.dart`, reachable from Home AppBar bug icon (kDebugMode only). Throwaway.
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **30 passed** (money, recurrence, category repo, expense repo, widget smoke).
+
+### Deferred / notes
+- Recurring: no auto-insert/scheduling yet (Sprint 3).
+- Debug screen is scaffolding; deleted when real Quick Add (S2) + Category Manager (S3) land.
+- No expense↔category join view yet (Sprint 2 need).
 
 ## How to run
 
