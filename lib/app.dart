@@ -9,6 +9,7 @@ import 'features/expenses/quick_add_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/settings/theme_mode_provider.dart';
 import 'features/widgets/widget_refresh.dart';
+import 'features/widgets/widget_snapshot.dart' show widgetAppGroupId;
 
 class SpendlyApp extends ConsumerStatefulWidget {
   const SpendlyApp({super.key});
@@ -27,9 +28,12 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // A widget tap can cold-launch the app; handle both that and taps while
-    // running.
-    HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
+    // Must be set before any other HomeWidget call (iOS throws otherwise).
+    HomeWidget.setAppGroupId(widgetAppGroupId).then((_) {
+      // A widget tap can cold-launch the app; handle both that and taps
+      // while running.
+      HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
+    });
     HomeWidget.widgetClicked.listen(_handleWidgetUri);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       refreshWidgets(ref);

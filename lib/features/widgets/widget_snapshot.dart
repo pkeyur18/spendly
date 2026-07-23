@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:home_widget/home_widget.dart';
 
@@ -108,9 +109,14 @@ class WidgetBridge {
     }
     // Reload the Android receiver once and each iOS kind (all read the same
     // data). updateWidget maps iOSName → WidgetCenter.reloadTimelines(ofKind:).
-    await HomeWidget.updateWidget(qualifiedAndroidName: androidWidgetReceiver);
-    for (final kind in iOSWidgetKinds) {
-      await HomeWidget.updateWidget(iOSName: kind);
+    // Platform-gated: passing the wrong platform's name-less call throws on
+    // the native side ("updateWidget must be called with name").
+    if (Platform.isAndroid) {
+      await HomeWidget.updateWidget(qualifiedAndroidName: androidWidgetReceiver);
+    } else if (Platform.isIOS) {
+      for (final kind in iOSWidgetKinds) {
+        await HomeWidget.updateWidget(iOSName: kind);
+      }
     }
   }
 }
