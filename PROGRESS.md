@@ -5,8 +5,8 @@
 
 ## Current status
 
-- **Sprint:** 4 (Reports + export/share + auto monthly report) — **built, awaiting user verification**
-- **Next:** Sprint 5 (Backup/export/import) — do NOT start until user gives go. **Resolve first:** cloud-sync scope (Q2), backup encryption (Q6), auto-backup default frequency (Q7).
+- **Sprint:** 5 (Backup, Export & Import) — **built, awaiting user verification**
+- **Next:** Sprint 6 (Widgets — Home Screen + Lock Screen, `home_widget` package + native Swift/Kotlin). Budget extra time per the sprint plan; most likely sprint to have platform-specific surprises.
 
 ## Locked decisions (from PRD open questions)
 
@@ -14,14 +14,18 @@
 - **Recurring (FR-7):** remind + user confirms on due date via local notification; never silent auto-log. (PRD Q3)
 - **State management:** Riverpod (`flutter_riverpod`).
 - **Local DB:** Drift (SQLite). Money stored as **integer minor units** (paise), never float.
-- Still open, resolve before Sprint 5: cloud-sync scope (Q2), backup encryption (Q6), auto-backup default frequency (Q7).
+- **Cloud sync (PRD Q2):** share-sheet save only for v1 — no account, no auto-sync, no server. FR-31's account-based sync is out of scope; FR-35 is fully satisfied by the OS share/save sheet.
+- **Backup encryption (PRD Q6):** optional password protection (AES-256-GCM + PBKDF2), user's choice per backup — not mandatory, not always-on.
+- **Auto-backup default frequency (PRD Q7):** weekly (matches the prototype's pre-selected chip). Daily/monthly also selectable.
 
 ## Stack / tooling
 
 - Flutter 3.44.7 (latest stable) · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
-- Dependency freshness: **all direct deps latest**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
-- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** + **share_plus ^13.2** (S4 export/share), **flutter_timezone ^5.1** + **timezone ^0.11** (S4 — now used, for `zonedSchedule`). Dev: drift_dev, build_runner, flutter_lints.
-- **KGP warning (non-blocking):** `flutter_timezone` applies the legacy Kotlin Gradle Plugin; APK builds fine but Flutter warns future versions will fail. Watch for a flutter_timezone release migrated to Built-in Kotlin, then bump.
+- Dependency freshness: **all direct deps latest, except where noted below**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
+- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** (S4 export), **flutter_timezone ^5.1** + **timezone ^0.11** (S4, for `zonedSchedule`), **cryptography ^2.9** (S5 — AES-GCM + PBKDF2 for optional backup password). Dev: drift_dev, build_runner, flutter_lints.
+- **share_plus pinned to ^12.0.2 (downgraded from ^13.2 in S4) — deliberate, do not bump casually.** `share_plus ^13.2.1` requires `win32 ^6.0.1`; every `file_picker` version compatible with this project's Android toolchain (see below) requires `win32 ^5.9.0`. The two can't coexist above `share_plus 12.x`. Verified `share_plus 12.0.2`'s `ShareParams`/`SharePlus.instance.share` API is unchanged from 13.x — `report_export.dart`'s `shareReportFile` needed no changes. Re-check this constraint before bumping either package.
+- **file_picker pinned to exactly `10.3.10` (not `^`) — deliberate, do not bump to 11.x.** FR-38 restore needs a file picker; `file_picker` 11.0.0+ added an AGP-9-or-above code path in its own `android/build.gradle` that **skips applying the classic `org.jetbrains.kotlin.android` plugin**, assuming the host app's `android.builtInKotlin` gradle property is `true`. This project's `android/gradle.properties` sets `android.builtInKotlin=false` (the Flutter-template default, required because `flutter_local_notifications` applies the classic Kotlin plugin unconditionally and hard-fails under `builtInKotlin=true` — tried it, real build break, not just a warning). Net effect with `file_picker >=11.0.0`: its Kotlin sources never compile (`FilePickerPlugin` class missing) → link error in `GeneratedPluginRegistrant`. `file_picker 10.3.10` still applies the classic Kotlin plugin unconditionally like every other plugin here, so it just works. Also note: 10.3.10's `FilePicker` API is the older instance-based `FilePicker.platform.pickFiles(...)`, not 11.x's static `FilePicker.pickFiles(...)` — `restore_screen.dart` uses the `.platform` form. Re-check this whole situation (ideally by trying 11.x again) once `flutter_local_notifications` ships a Built-in-Kotlin-compatible release.
+- **KGP warning (non-blocking):** `flutter_timezone`, `share_plus` (≤12.x), and `file_picker` (10.3.10) all apply the legacy Kotlin Gradle Plugin; APK builds fine but Flutter warns future versions will fail. Watch for releases migrated to Built-in Kotlin, then reconsider `android.builtInKotlin=true` as a set (see above — it's an all-or-nothing flip across every plugin in this project today).
 - Android needs **core library desugaring** for flutter_local_notifications: `isCoreLibraryDesugaringEnabled = true` + `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` in `android/app/build.gradle.kts`. iOS AppDelegate sets `UNUserNotificationCenter.delegate`; `POST_NOTIFICATIONS` in the manifest.
 - Fonts bundled as assets (offline-first): `assets/fonts/Sora.ttf`, `assets/fonts/Inter.ttf`.
 - Codegen: `dart run build_runner build` (generates `lib/core/db/database.g.dart`).
@@ -133,6 +137,32 @@ Decisions: export via **pdf + share_plus**; CSV hand-written (RFC-4180). Auto mo
 - PDF is a functional summary, not a pixel-match of prototype cards (prototype has no PDF design).
 - Comparison = immediately-preceding same-length window only.
 - Reports load all in-range expenses into memory (on-demand, fine); `listInRange` added for this.
+
+## Sprint 5 — done (Backup, Export & Import)
+
+Decisions locked with the user before starting (see "Locked decisions" above): share-sheet-only cloud save, optional password protection via `cryptography` (AES-256-GCM + PBKDF2), weekly default auto-backup frequency, `file_picker` added for restore's file selection (pinned to 10.3.10 — see "Stack / tooling" above for why). Full format spec: `docs/backup-schema.md`.
+
+- [x] Versioned JSON backup format (FR-34) → `docs/backup-schema.md` + `lib/features/backup/backup_models.dart` (DTOs), `backup_format.dart` (envelope encode/decode + validation). Outer envelope (`spendlyBackup`/`version`/`encrypted`) is always plaintext so an incompatible-future-version file is rejected *before* a password is ever requested. `amountMinor` round-trips as an integer, never a float.
+- [x] Optional password protection (PRD Q6) → `backup_crypto.dart`: PBKDF2-HMAC-SHA256 (200k iterations) derives an AES-256-GCM key from the password; salt/nonce/mac/ciphertext travel in the envelope. Wrong password / tampered ciphertext both surface as `BackupWrongPasswordException` (GCM tag check), distinct from a generic corrupt-file error.
+- [x] Full backup export (FR-33) → `backup_repository.dart` `exportAll()` reads all 4 Drift tables directly via `AppDatabase`'s generated table getters (no changes needed to the existing category/expense/budget repositories — they're scoped to their own CRUD, not bulk export). Settings export excludes the app's own backup-bookkeeping keys (`auto_backup_enabled`, `auto_backup_frequency`, `last_backup_at`, `last_backup_size`) so restoring a file never rewrites the restoring device's own schedule/status.
+- [x] Save-to-cloud via share sheet (FR-35) → `backup_export.dart` `shareBackupFile()` reuses `report_export.dart`'s `shareReportFile()` verbatim (same temp-file + `SharePlus.instance.share` pattern Sprint 4 built) — no duplicated share logic.
+- [x] Manual "Back up now" (FR-36) + Settings screen → `lib/features/settings/settings_screen.dart` (replaces the Sprint-4 stub; theme row + Backup & Restore tile) and `lib/features/backup/backup_restore_screen.dart` (prototype phone 9): status card, auto-backup toggle + Daily/Weekly/Monthly chips, "Back up now" (optional password dialog) + "Restore from a backup file", what's-included card.
+- [x] Auto-backup scheduler (FR-37) → `local_auto_backup.dart` `runAutoBackupIfDue()`. **Deliberate deviation, flagged to the user and approved:** no background-execution package exists in this project and adding one (`workmanager`/`android_alarm_manager_plus`) is heavy/flaky cross-platform for a weekly cadence, so the due-check runs on **app launch/resume** instead (`app.dart`'s `WidgetsBindingObserver`, invalidating `autoBackupCheckProvider` on `AppLifecycleState.resumed`) — satisfies user-facing FR-37 for an app opened at least as often as its own cadence, but isn't a true OS-scheduled background job. Auto-backups are never password-protected (nobody's present to type one) and only write a local file at `<applicationSupportDirectory>/backups/spendly-backup-latest.json` (single file, overwritten each run, no rotation) — they do **not** open the share sheet; only manual "Back up now" delivers to cloud storage, since that hand-off is inherently an interactive OS action.
+- [x] "Last backup" status (FR-42) → `backup_providers.dart` `lastBackupStatusProvider` reads timestamp + size from Settings, shown in the status card.
+- [x] Restore flow (FR-38, FR-39, FR-40) → `backup_import.dart` (`loadAndValidate` → preview, `executeRestore` → dispatch) + `restore_screen.dart` (prototype phone 10): file picker → preview card (date, expense count, date range, file size) → Merge/Replace radio choice → restore. Password-required/wrong-password both re-prompt inline without re-picking the file.
+- [x] Merge algorithm — natural-key matching, **no schema change** (`backup_repository.dart` `mergeAll`): categories matched by normalized name (stops the 8 seeded defaults from doubling), expenses matched by content fingerprint (amount/date/mapped-category/note/payment-method), budgets matched by mapped-category slot. Deliberately rejected adding a UUID column — the only in-scope cross-device scenario is a one-time restore onto an empty/near-empty device, not continuous multi-device sync (out of scope per the Q2 decision), so a migration for it wasn't justified. **Known ceiling, documented in `docs/backup-schema.md`:** renaming a category between backup and restore breaks name-matching (inserts a "new" one instead of recognizing the rename); fingerprint matching can rarely collide two distinct expenses sharing amount+date+category+note+payment-method. Upgrade path: nullable `externalId` UUID column via a real migration, if this ever bites.
+- [x] Replace algorithm (`replaceAll`) — wipes all 4 tables (child-to-parent FK order) then restores the backup verbatim (original ids reused, safe since tables are empty), all inside one `db.transaction` — any failure rolls back automatically.
+- [x] Backup file validation (FR-41) → `backup_format.dart`'s `decodePayload` is the single gate: corrupt JSON, missing `spendlyBackup` marker, incompatible future `version`, wrong/missing password all throw distinct typed exceptions *before* any DB write is attempted — verified by a repository test that a corrupted-file import leaves all existing rows untouched.
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **74 passed** (+ backup_format 7, backup_repository 6, backup_crypto 3).
+- `flutter build apk --debug` ✓ · `flutter build ios --debug --simulator --no-codesign` ✓ (new native deps — see the file_picker/share_plus pin notes above; this took real back-and-forth, don't casually bump either without re-reading those notes first).
+
+### Deferred / notes
+- Manual verification (uninstall/reinstall/restore, both Merge and Replace, password-protected backup, auto-backup firing on resume, corrupted-file import) not yet run on a real simulator/emulator by the user — see the steps in the plan file / ask for the walkthrough.
+- Currency/notification rows deliberately not stubbed in the new Settings screen — not assigned a sprint yet.
+- `android/gradle.properties`' `android.builtInKotlin` flag was tried at `true` to fix file_picker, then reverted — it breaks `flutter_local_notifications` outright (real error, not just the deprecation warning). Left at `false`; see the file_picker pin note above.
 
 ## How to run
 

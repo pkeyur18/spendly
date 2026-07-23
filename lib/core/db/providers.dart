@@ -17,6 +17,13 @@ class SettingsRepository {
 
   static const themeModeKey = 'theme_mode';
 
+  // Backup bookkeeping (FR-37, FR-42) — excluded from what a backup exports,
+  // so restoring one never rewrites the restoring device's own schedule/state.
+  static const autoBackupEnabledKey = 'auto_backup_enabled';
+  static const autoBackupFrequencyKey = 'auto_backup_frequency';
+  static const lastBackupAtKey = 'last_backup_at';
+  static const lastBackupSizeKey = 'last_backup_size';
+
   Future<String?> get(String key) async {
     final row = await (_db.select(_db.settings)
           ..where((t) => t.key.equals(key)))

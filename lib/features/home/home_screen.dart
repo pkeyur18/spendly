@@ -13,6 +13,7 @@ import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
 import '../expenses/quick_add_screen.dart';
 import '../reports/monthly_report_screen.dart';
+import '../settings/settings_screen.dart';
 import '../settings/theme_mode_provider.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
@@ -315,7 +316,10 @@ class _BottomNav extends StatelessWidget {
             Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => const CategoryManagerScreen()));
           }),
-          item(Icons.settings_rounded, 'Settings (Sprint 5)'),
+          item(Icons.settings_rounded, 'Settings', onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const SettingsScreen()));
+          }),
         ],
       ),
     );

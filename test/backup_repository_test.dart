@@ -1,0 +1,132 @@
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:spendly/core/db/database.dart';
+import 'package:spendly/core/money/money.dart';
+import 'package:spendly/features/backup/backup_format.dart';
+import 'package:spendly/features/backup/backup_repository.dart';
+import 'package:spendly/features/budgets/budget_repository.dart';
+import 'package:spendly/features/categories/category_repository.dart';
+import 'package:spendly/features/expenses/expense_repository.dart';
+
+void main() {
+  late AppDatabase db;
+  late BackupRepository repo;
+
+  setUp(() {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    repo = BackupRepository(db);
+  });
+  tearDown(() => db.close());
+
+  test('export then replace into a fresh db reproduces identical data', () async {
+    final catRepo = CategoryRepository(db);
+    final expRepo = ExpenseRepository(db);
+    final budgetRepo = BudgetRepository(db);
+
+    final catId = await catRepo.create(name: 'Extra', icon: '⭐', colorValue: 0xFF6366F1);
+    await expRepo.add(amount: Money.parse('24.50'), categoryId: catId, date: DateTime(2026, 7, 1));
+    await budgetRepo.setOverall(Money.parse('40000'));
+
+    final payload = await repo.exportAll();
+
+    final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final freshRepo = BackupRepository(freshDb);
+    await freshRepo.replaceAll(payload);
+
+    final reExported = await freshRepo.exportAll();
+    expect(reExported.categories.length, payload.categories.length);
+    expect(reExported.expenses.length, payload.expenses.length);
+    expect(reExported.budgets.length, payload.budgets.length);
+    expect(
+      reExported.expenses.single.amountMinor,
+      Money.parse('24.50').minor,
+    );
+    await freshDb.close();
+  });
+
+  test('merge into a freshly-seeded db does not duplicate the 8 defaults', () async {
+    final payload = await repo.exportAll(); // 8 default categories, nothing else
+
+    await repo.mergeAll(payload);
+
+    final categories = await db.select(db.categories).get();
+    expect(categories.length, 8); // still 8, not 16
+  });
+
+  test('merging the same backup twice does not duplicate expenses or budgets', () async {
+    // A separate source device's data, exported once, then merged into
+    // `db` (fresh, 8-default) twice — the second merge must be a no-op.
+    final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+    await ExpenseRepository(sourceDb)
+        .add(amount: Money.parse('100'), categoryId: 1, date: DateTime(2026, 7, 5));
+    await BudgetRepository(sourceDb).setForCategory(1, Money.parse('5000'));
+    final payload = await BackupRepository(sourceDb).exportAll();
+    await sourceDb.close();
+
+    await repo.mergeAll(payload);
+    await repo.mergeAll(payload); // run twice
+
+    final expenses = await db.select(db.expenses).get();
+    final budgets = await db.select(db.budgets).get();
+    expect(expenses.length, 1); // not duplicated on the repeat merge
+    expect(budgets.length, 1);
+  });
+
+  test('merge still adds genuinely new categories, expenses and budgets', () async {
+    final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final sourceCatRepo = CategoryRepository(sourceDb);
+    final sourceExpRepo = ExpenseRepository(sourceDb);
+    final newCatId =
+        await sourceCatRepo.create(name: 'Brand New', icon: '🆕', colorValue: 0xFF14B8A6);
+    await sourceExpRepo.add(
+        amount: Money.parse('75'), categoryId: newCatId, date: DateTime(2026, 7, 10));
+    final payload = await BackupRepository(sourceDb).exportAll();
+    await sourceDb.close();
+
+    await repo.mergeAll(payload); // into the fresh 8-default db
+
+    final categories = await db.select(db.categories).get();
+    final expenses = await db.select(db.expenses).get();
+    expect(categories.any((c) => c.name == 'Brand New'), isTrue);
+    expect(expenses.length, 1);
+    expect(expenses.single.amountMinor, Money.parse('75').minor);
+  });
+
+  test('replace fully wipes prior data before restoring the backup', () async {
+    final expRepo = ExpenseRepository(db);
+    await expRepo.add(amount: Money.parse('999'), categoryId: 1, date: DateTime(2026, 1, 1));
+
+    final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+    await ExpenseRepository(sourceDb)
+        .add(amount: Money.parse('50'), categoryId: 1, date: DateTime(2026, 7, 1));
+    final payload = await BackupRepository(sourceDb).exportAll();
+    await sourceDb.close();
+
+    await repo.replaceAll(payload);
+
+    final expenses = await db.select(db.expenses).get();
+    expect(expenses.length, 1);
+    expect(expenses.single.amountMinor, Money.parse('50').minor); // the ₹999 row is gone
+  });
+
+  test('importing a corrupted file leaves all existing data untouched', () async {
+    final expRepo = ExpenseRepository(db);
+    await expRepo.add(amount: Money.parse('123'), categoryId: 1, date: DateTime(2026, 3, 1));
+
+    final categoriesBefore = (await db.select(db.categories).get()).length;
+    final expensesBefore = (await db.select(db.expenses).get()).length;
+    final budgetsBefore = (await db.select(db.budgets).get()).length;
+
+    // decodePayload is the full FR-41 validation gate `loadAndValidate` runs
+    // before ever touching the repository — it must throw here, before any
+    // DB write is attempted.
+    await expectLater(
+      () => decodePayload('not valid json {{{'),
+      throwsA(isA<BackupCorruptException>()),
+    );
+
+    expect((await db.select(db.categories).get()).length, categoriesBefore);
+    expect((await db.select(db.expenses).get()).length, expensesBefore);
+    expect((await db.select(db.budgets).get()).length, budgetsBefore);
+  });
+}
