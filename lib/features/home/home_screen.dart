@@ -1,20 +1,29 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart';
+import '../../core/db/row_extensions.dart';
+import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/app_card.dart';
+import '../budgets/budget_repository.dart';
 import '../dev/debug_data_screen.dart';
+import '../expenses/quick_add_screen.dart';
 import '../settings/theme_mode_provider.dart';
+import 'dashboard_providers.dart';
+import 'widgets/spend_donut.dart';
+import 'widgets/trend_bars.dart';
 
-/// Sprint 0 home shell: themed empty state + bottom nav matching the prototype.
-/// Real dashboard (hero total, donut, trend, recent list) lands in Sprint 2.
+/// Home dashboard (FR-12–16) — prototype phone 1.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    final text = Theme.of(context).textTheme;
+    final recent = ref.watch(recentExpensesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -50,33 +59,23 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xxl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  gradient: AppColors.heroGradient,
-                  borderRadius: BorderRadius.circular(AppRadius.hero),
-                ),
-                alignment: Alignment.center,
-                child: const Text('₹', style: TextStyle(color: Colors.white, fontSize: 34)),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Text('No expenses yet', style: text.titleLarge),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Tap + to log your first expense.\nYour dashboard fills in from here.',
-                textAlign: TextAlign.center,
-                style: text.bodyMedium?.copyWith(color: palette.textDim),
-              ),
-            ],
-          ),
-        ),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        children: [
+          _greeting(context, palette),
+          const _HeroCard(),
+          const SectionTitle('Where it went'),
+          const SpendDonut(),
+          const SectionTitle('Last 6 months'),
+          const TrendBars(),
+          const SectionTitle('Recent'),
+          if (recent.isEmpty)
+            _emptyRecent(palette)
+          else
+            for (final (expense, category) in recent)
+              _TransactionTile(expense: expense, category: category),
+          const SizedBox(height: 80),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Container(
@@ -85,16 +84,43 @@ class HomeScreen extends ConsumerWidget {
           borderRadius: BorderRadius.circular(19),
         ),
         child: FloatingActionButton(
-          onPressed: () => _soon(context, 'Quick Add (Sprint 2)'),
+          onPressed: () => _openQuickAdd(context),
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: const Icon(Icons.add, color: Colors.white, size: 28),
         ),
       ),
-      bottomNavigationBar: _BottomNav(
-        palette: palette,
-        onTap: (label) => _soon(context, label),
+      bottomNavigationBar: _BottomNav(palette: palette),
+    );
+  }
+
+  Widget _greeting(BuildContext context, AppPalette palette) {
+    final now = DateTime.now();
+    final part = now.hour < 12
+        ? 'morning'
+        : now.hour < 17
+            ? 'afternoon'
+            : 'evening';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.xs, AppSpacing.sm, AppSpacing.xs, AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Good $part 👋',
+              style: TextStyle(color: palette.textDim, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text("Here's your ${DateFormat.MMMM().format(now)}",
+              style: Theme.of(context).textTheme.headlineMedium),
+        ],
       ),
+    );
+  }
+
+  Widget _emptyRecent(AppPalette palette) {
+    return AppCard(
+      child: Text('No expenses yet — tap + to log one.',
+          style: TextStyle(color: palette.textDim, fontSize: 13)),
     );
   }
 
@@ -105,24 +131,167 @@ class HomeScreen extends ConsumerWidget {
     ref.read(themeModeProvider.notifier).setMode(next);
   }
 
-  void _soon(BuildContext context, String what) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$what — coming soon')));
+  void _openQuickAdd(BuildContext context, {ExpenseRow? editing}) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => QuickAddScreen(editing: editing)),
+    );
+  }
+}
+
+/// Hero gradient card: month total + budget bar (FR-12, FR-16).
+class _HeroCard extends ConsumerWidget {
+  const _HeroCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final total = ref.watch(monthTotalProvider);
+    final budget = ref.watch(overallBudgetProvider).value;
+
+    final hasBudget = budget != null && budget.minor > 0;
+    final ratio = hasBudget ? total.ratioOf(budget).clamp(0.0, 1.0) : 0.0;
+    final left = hasBudget
+        ? Money.fromMinor((budget.minor - total.minor).clamp(0, budget.minor))
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xxl),
+      decoration: BoxDecoration(
+        gradient: AppColors.heroGradient,
+        borderRadius: BorderRadius.circular(AppRadius.hero),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.35),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Spent this month',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            total.format(locale: 'en_IN'),
+            style: const TextStyle(
+                fontFamily: 'Sora',
+                color: Colors.white,
+                fontSize: 36,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -1),
+          ),
+          const SizedBox(height: 14),
+          if (hasBudget) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 7,
+                backgroundColor: Colors.white.withValues(alpha: 0.25),
+                valueColor: const AlwaysStoppedAnimation(Colors.white),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('${(ratio * 100).round()}% of ${budget.format(locale: 'en_IN')} budget',
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                Text('${left!.format(locale: 'en_IN')} left',
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+              ],
+            ),
+          ] else
+            const Text('Set a monthly budget in Settings',
+                style: TextStyle(color: Colors.white70, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransactionTile extends ConsumerWidget {
+  const _TransactionTile({required this.expense, required this.category});
+
+  final ExpenseRow expense;
+  final CategoryRow? category;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final title = expense.note?.isNotEmpty == true
+        ? expense.note!
+        : (category?.name ?? 'Expense');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => QuickAddScreen(editing: expense)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: (category?.color ?? palette.textDim).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppRadius.icon),
+              ),
+              alignment: Alignment.center,
+              child: Text(category?.icon ?? '💸', style: const TextStyle(fontSize: 17)),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(_relativeTime(expense.date),
+                      style: TextStyle(fontSize: 12, color: palette.textDim)),
+                ],
+              ),
+            ),
+            Text('-${expense.amount.format(locale: 'en_IN')}',
+                style: const TextStyle(
+                    fontFamily: 'Sora', fontWeight: FontWeight.w600, fontSize: 15)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _relativeTime(DateTime d) {
+    final now = DateTime.now();
+    final day = DateTime(d.year, d.month, d.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(day).inDays;
+    final time = DateFormat.jm().format(d);
+    if (diff == 0) return 'Today · $time';
+    if (diff == 1) return 'Yesterday · $time';
+    return DateFormat.MMMd().format(d);
   }
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.palette, required this.onTap});
+  const _BottomNav({required this.palette});
 
   final AppPalette palette;
-  final void Function(String label) onTap;
 
   @override
   Widget build(BuildContext context) {
-    Widget item(IconData icon, String label, {bool active = false}) {
+    void soon(String label) => ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
+
+    Widget item(IconData icon, String label, {bool active = false, VoidCallback? onTap}) {
       return IconButton(
-        onPressed: () => onTap(label),
+        onPressed: onTap ?? () => soon(label),
         icon: Icon(icon, color: active ? AppColors.primary : palette.textDim),
       );
     }
@@ -134,11 +303,11 @@ class _BottomNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          item(Icons.home_rounded, 'Home', active: true),
+          item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
           item(Icons.bar_chart_rounded, 'Reports (Sprint 4)'),
-          const SizedBox(width: 40), // FAB notch
+          const SizedBox(width: 40),
           item(Icons.sell_rounded, 'Categories (Sprint 3)'),
-          item(Icons.settings_rounded, 'Settings'),
+          item(Icons.settings_rounded, 'Settings (Sprint 3)'),
         ],
       ),
     );

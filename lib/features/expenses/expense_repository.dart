@@ -77,6 +77,15 @@ class ExpenseRepository {
     return watchInRange(start, end);
   }
 
+  /// Expenses across the last [n] calendar months up to (and including) [now]'s
+  /// month — feeds the trend chart. Bucket by month in Dart.
+  Stream<List<ExpenseRow>> watchLastNMonths(int n, {DateTime? now}) {
+    final ref = now ?? DateTime.now();
+    final start = DateTime(ref.year, ref.month - (n - 1), 1);
+    final end = DateTime(ref.year, ref.month + 1, 1);
+    return watchInRange(start, end);
+  }
+
   /// Exact total across a calendar month (sum of minor units).
   Future<Money> monthTotal(DateTime month) {
     final (start, end) = monthBounds(month);
