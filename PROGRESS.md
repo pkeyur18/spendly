@@ -5,8 +5,8 @@
 
 ## Current status
 
-- **Sprint:** 3 (Categories & Budgets + threshold notifications) — **built, awaiting user verification**
-- **Next:** Sprint 4 (Reports) — do NOT start until user gives go.
+- **Sprint:** 4 (Reports + export/share + auto monthly report) — **built, awaiting user verification**
+- **Next:** Sprint 5 (Backup/export/import) — do NOT start until user gives go. **Resolve first:** cloud-sync scope (Q2), backup encryption (Q6), auto-backup default frequency (Q7).
 
 ## Locked decisions (from PRD open questions)
 
@@ -20,7 +20,8 @@
 
 - Flutter 3.44.7 (latest stable) · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
 - Dependency freshness: **all direct deps latest**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
-- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0** (S3, pulls timezone transitively — unused, alerts are immediate `.show()`). Dev: drift_dev, build_runner, flutter_lints.
+- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** + **share_plus ^13.2** (S4 export/share), **flutter_timezone ^5.1** + **timezone ^0.11** (S4 — now used, for `zonedSchedule`). Dev: drift_dev, build_runner, flutter_lints.
+- **KGP warning (non-blocking):** `flutter_timezone` applies the legacy Kotlin Gradle Plugin; APK builds fine but Flutter warns future versions will fail. Watch for a flutter_timezone release migrated to Built-in Kotlin, then bump.
 - Android needs **core library desugaring** for flutter_local_notifications: `isCoreLibraryDesugaringEnabled = true` + `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` in `android/app/build.gradle.kts`. iOS AppDelegate sets `UNUserNotificationCenter.delegate`; `POST_NOTIFICATIONS` in the manifest.
 - Fonts bundled as assets (offline-first): `assets/fonts/Sora.ttf`, `assets/fonts/Inter.ttf`.
 - Codegen: `dart run build_runner build` (generates `lib/core/db/database.g.dart`).
@@ -107,6 +108,31 @@ Decisions: notifications via **flutter_local_notifications**, fire at add-time o
 - Alerts fire only on in-app writes (no background re-check) — correct for offline; no per-alert dedup store (crossing computed from before/after, fires once per real crossing).
 - `timezone` dep pulled transitively but unused (no scheduled notifications).
 - Debug screen still present (kDebugMode); real Category Manager now supersedes its category bits — left as-is, throwaway.
+
+## Sprint 4 — done (Reports + export/share + auto monthly report)
+
+Decisions: export via **pdf + share_plus**; CSV hand-written (RFC-4180). Auto month-end report = **scheduled local notification** (`zonedSchedule`, monthly-repeat, no backend); **email = a share-sheet target** (no email backend/secrets). Custom range = native `showDateRangePicker`.
+
+- [x] Report math (FR-20) → pure `lib/features/reports/report_model.dart` (`buildReport` — total, prev-period compare + `changePct`, daily avg, txn count, top category, breakdown, top-5, weekly buckets). Derived from ONE in-range list (`ExpenseRepository.listInRange`) + one prev-period `totalInRange`. Unit-tested.
+- [x] Providers → `report_providers.dart` (`reportProvider` FutureProvider.family keyed by `(start,end)`).
+- [x] Export/share (FR-21,22,32) → `report_export.dart`: `buildCsv` (pure, tested), `buildPdf` (pdf pkg, renders with bundled Inter/Sora so ₹ shows — Helvetica lacks it), `shareReportFile` (temp file → `SharePlus.instance.share`). One path serves PDF/CSV/email.
+- [x] Screens: `monthly_report_screen.dart` (phone 3 — hero, stat grid incl. budget-used %, donut, top-5, export) + `custom_report_screen.dart` (phone 4 — quick chips + `showDateRangePicker`, hero, weekly trend, donut, export). Shared UI in `report_widgets.dart` (ReportHero, StatGrid, TopExpensesCard, ExportRow).
+- [x] Chart reuse: extracted provider-free `DonutChart` + `TrendBarsView` from `spend_donut.dart` / `trend_bars.dart`; Home wrappers unchanged.
+- [x] Auto report (FR-17,18) → `notifications.dart`: `init()` now sets up timezone db + local zone (flutter_timezone); `scheduleMonthlyReport()` = `zonedSchedule` 1st-of-month 09:00, `matchDateTimeComponents.dayOfMonthAndTime` (monthly repeat, no persisted state), `inexactAllowWhileIdle` (no exact-alarm perm). Tap → `appNavigatorKey` pushes previous month's report. Called in `main()`.
+- [x] Nav: Home Reports tab → MonthlyReportScreen(current month). `MaterialApp.navigatorKey = appNavigatorKey`.
+- [x] Android: `RECEIVE_BOOT_COMPLETED` + `ScheduledNotificationBootReceiver` (re-arm after reboot).
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **58 passed** (+ report_model 6, report_csv 3).
+- `flutter build apk --debug` ✓ · `flutter build ios --debug --simulator --no-codesign` ✓ (new native deps).
+
+### Deferred / notes
+- No server push / email backend — auto delivery = on-device scheduled notification; "email" = share-sheet target. Server-triggered push / backend-mailed PDF = separate infra track.
+- Monthly notification body is fixed text ("report ready"), month resolved at tap time — required because `matchDateTimeComponents` can't vary text per fire. Inexact firing (dodges SCHEDULE_EXACT_ALARM).
+- PDF is a functional summary, not a pixel-match of prototype cards (prototype has no PDF design).
+- Comparison = immediately-preceding same-length window only.
+- Reports load all in-range expenses into memory (on-demand, fine); `listInRange` added for this.
 
 ## How to run
 

@@ -12,6 +12,7 @@ import '../budgets/budget_repository.dart';
 import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
 import '../expenses/quick_add_screen.dart';
+import '../reports/monthly_report_screen.dart';
 import '../settings/theme_mode_provider.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
@@ -305,7 +306,10 @@ class _BottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
-          item(Icons.bar_chart_rounded, 'Reports (Sprint 4)'),
+          item(Icons.bar_chart_rounded, 'Reports', onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => MonthlyReportScreen(month: DateTime.now())));
+          }),
           const SizedBox(width: 40),
           item(Icons.sell_rounded, 'Categories', onTap: () {
             Navigator.of(context).push(MaterialPageRoute(

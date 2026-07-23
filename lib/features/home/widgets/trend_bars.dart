@@ -6,15 +6,27 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../dashboard_providers.dart';
 
-/// "Last 6 months" trend (FR-14). Current month highlighted accent, per the
-/// prototype's `.bar.active`.
+/// "Last 6 months" trend (FR-14), bound to the dashboard. Presentation lives in
+/// [TrendBarsView] so reports can reuse it for weekly buckets.
 class TrendBars extends ConsumerWidget {
   const TrendBars({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return TrendBarsView(bars: ref.watch(trendProvider));
+  }
+}
+
+/// Provider-free bar chart over given [bars]. Current bar highlighted accent,
+/// per the prototype's `.bar.active`. Reused by Home and Reports.
+class TrendBarsView extends StatelessWidget {
+  const TrendBarsView({super.key, required this.bars});
+
+  final List<TrendBar> bars;
+
+  @override
+  Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    final bars = ref.watch(trendProvider);
     final maxMinor =
         bars.fold<int>(0, (m, b) => b.$2.minor > m ? b.$2.minor : m);
     final maxY = maxMinor == 0 ? 1.0 : maxMinor * 1.25 / 100;

@@ -8,6 +8,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final notifications = NotificationService();
   await notifications.init();
+  await notifications.scheduleMonthlyReport();
   runApp(
     ProviderScope(
       overrides: [notificationServiceProvider.overrideWithValue(notifications)],

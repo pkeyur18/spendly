@@ -102,6 +102,18 @@ class ExpenseRepository {
     return Money.fromMinor(row.read(sum) ?? 0);
   }
 
+  /// All expenses in [start, end), newest first — reports derive total, count,
+  /// per-category, top-5 and weekly trend from this single list (FR-20).
+  Future<List<ExpenseRow>> listInRange(DateTime start, DateTime end) {
+    return (_db.select(_db.expenses)
+          ..where((t) => t.date.isBiggerOrEqualValue(start) &
+              t.date.isSmallerThanValue(end))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
+          ]))
+        .get();
+  }
+
   /// Spend per category in [start, end) — feeds the donut / reports.
   Future<Map<int, Money>> totalsByCategory(DateTime start, DateTime end) async {
     final sum = _db.expenses.amountMinor.sum();

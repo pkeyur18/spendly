@@ -3,19 +3,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/row_extensions.dart';
+import '../../../core/money/money.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../dashboard_providers.dart';
 
-/// "Where it went" — donut + legend (FR-13). Matches prototype `.chart-card`.
+/// "Where it went" — donut + legend (FR-13), bound to the current month.
+/// Presentation lives in [DonutChart] so reports can reuse it for any range.
 class SpendDonut extends ConsumerWidget {
   const SpendDonut({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return DonutChart(
+      slices: ref.watch(categoryBreakdownProvider),
+      total: ref.watch(monthTotalProvider),
+    );
+  }
+}
+
+/// Provider-free donut + legend over given [slices] (desc) and [total].
+/// Matches the prototype `.chart-card`. Reused by Home and Reports.
+class DonutChart extends StatelessWidget {
+  const DonutChart({super.key, required this.slices, required this.total});
+
+  final List<CategorySlice> slices;
+  final Money total;
+
+  @override
+  Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    final slices = ref.watch(categoryBreakdownProvider);
-    final total = ref.watch(monthTotalProvider);
     final empty = slices.isEmpty;
 
     return AppCard(
