@@ -8,6 +8,7 @@ import '../../core/notify/notifications.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/category_glyph.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
@@ -112,6 +113,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Widget _titleBar(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -121,10 +123,23 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Close',
-            icon: const Icon(Icons.close),
+          Semantics(
+            button: true,
+            label: 'Close',
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.card,
+                  border: Border.all(color: palette.line),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.close, size: 16),
+              ),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Text(
@@ -191,6 +206,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           decoration: BoxDecoration(
             gradient: AppColors.brandGradient,
             borderRadius: BorderRadius.circular(AppRadius.button),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.4),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           alignment: Alignment.center,
           child: Text(
@@ -280,6 +302,7 @@ class _CategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Stack(
+      fit: StackFit.expand,
       children: [
         Container(
           decoration: BoxDecoration(
@@ -295,7 +318,7 @@ class _CategoryTile extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(category.icon, style: const TextStyle(fontSize: 18)),
+              CategoryGlyph(category.icon, size: 18),
               const SizedBox(height: 4),
               Text(
                 category.name,

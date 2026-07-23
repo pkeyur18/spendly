@@ -6,6 +6,7 @@ import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/category_glyph.dart';
 import '../budgets/budget_repository.dart';
 import '../budgets/budget_setup_screen.dart';
 import 'category_edit_sheet.dart';
@@ -149,10 +150,7 @@ class _CategoryRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.icon),
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    category.icon,
-                    style: const TextStyle(fontSize: 17),
-                  ),
+                  child: CategoryGlyph(category.icon, size: 17),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(

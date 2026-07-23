@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/category_glyph.dart';
 import 'category_repository.dart';
 
 /// Curated emoji set for the icon picker (FR-10) — no emoji-keyboard dependency.
@@ -144,10 +145,7 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                               ),
                             ),
                             alignment: Alignment.center,
-                            child: Text(
-                              e,
-                              style: const TextStyle(fontSize: 18),
-                            ),
+                            child: CategoryGlyph(e, size: 18),
                           ),
                           // Selection isn't color-only: a checkmark badge too.
                           if (_icon == e)
