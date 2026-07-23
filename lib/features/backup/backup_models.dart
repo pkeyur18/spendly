@@ -27,34 +27,34 @@ class BackupCategory {
   final bool isDefault;
 
   factory BackupCategory.fromRow(CategoryRow row) => BackupCategory(
-        id: row.id,
-        name: row.name,
-        icon: row.icon,
-        colorValue: row.colorValue,
-        sortOrder: row.sortOrder,
-        isArchived: row.isArchived,
-        isDefault: row.isDefault,
-      );
+    id: row.id,
+    name: row.name,
+    icon: row.icon,
+    colorValue: row.colorValue,
+    sortOrder: row.sortOrder,
+    isArchived: row.isArchived,
+    isDefault: row.isDefault,
+  );
 
   factory BackupCategory.fromJson(Map<String, dynamic> j) => BackupCategory(
-        id: j['id'] as int,
-        name: j['name'] as String,
-        icon: j['icon'] as String,
-        colorValue: j['colorValue'] as int,
-        sortOrder: j['sortOrder'] as int,
-        isArchived: j['isArchived'] as bool,
-        isDefault: j['isDefault'] as bool,
-      );
+    id: j['id'] as int,
+    name: j['name'] as String,
+    icon: j['icon'] as String,
+    colorValue: j['colorValue'] as int,
+    sortOrder: j['sortOrder'] as int,
+    isArchived: j['isArchived'] as bool,
+    isDefault: j['isDefault'] as bool,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'icon': icon,
-        'colorValue': colorValue,
-        'sortOrder': sortOrder,
-        'isArchived': isArchived,
-        'isDefault': isDefault,
-      };
+    'id': id,
+    'name': name,
+    'icon': icon,
+    'colorValue': colorValue,
+    'sortOrder': sortOrder,
+    'isArchived': isArchived,
+    'isDefault': isDefault,
+  };
 
   /// Merge: new row, id auto-assigned; caller picks the append-order slot.
   CategoriesCompanion toInsertCompanion({required int sortOrder}) =>
@@ -69,14 +69,14 @@ class BackupCategory {
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
   CategoriesCompanion toReplaceCompanion() => CategoriesCompanion(
-        id: Value(id),
-        name: Value(name),
-        icon: Value(icon),
-        colorValue: Value(colorValue),
-        sortOrder: Value(sortOrder),
-        isArchived: Value(isArchived),
-        isDefault: Value(isDefault),
-      );
+    id: Value(id),
+    name: Value(name),
+    icon: Value(icon),
+    colorValue: Value(colorValue),
+    sortOrder: Value(sortOrder),
+    isArchived: Value(isArchived),
+    isDefault: Value(isDefault),
+  );
 }
 
 class BackupExpense {
@@ -105,45 +105,45 @@ class BackupExpense {
   final DateTime updatedAt;
 
   factory BackupExpense.fromRow(ExpenseRow row) => BackupExpense(
-        id: row.id,
-        amountMinor: row.amountMinor,
-        categoryId: row.categoryId,
-        date: row.date,
-        note: row.note,
-        paymentMethod: row.paymentMethod,
-        isRecurring: row.isRecurring,
-        recurrence: row.recurrence,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      );
+    id: row.id,
+    amountMinor: row.amountMinor,
+    categoryId: row.categoryId,
+    date: row.date,
+    note: row.note,
+    paymentMethod: row.paymentMethod,
+    isRecurring: row.isRecurring,
+    recurrence: row.recurrence,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  );
 
   factory BackupExpense.fromJson(Map<String, dynamic> j) => BackupExpense(
-        id: j['id'] as int,
-        amountMinor: j['amountMinor'] as int,
-        categoryId: j['categoryId'] as int,
-        date: DateTime.parse(j['date'] as String),
-        note: j['note'] as String?,
-        paymentMethod: j['paymentMethod'] as String?,
-        isRecurring: j['isRecurring'] as bool,
-        recurrence: j['recurrence'] == null
-            ? null
-            : Recurrence.values.byName(j['recurrence'] as String),
-        createdAt: DateTime.parse(j['createdAt'] as String),
-        updatedAt: DateTime.parse(j['updatedAt'] as String),
-      );
+    id: j['id'] as int,
+    amountMinor: j['amountMinor'] as int,
+    categoryId: j['categoryId'] as int,
+    date: DateTime.parse(j['date'] as String),
+    note: j['note'] as String?,
+    paymentMethod: j['paymentMethod'] as String?,
+    isRecurring: j['isRecurring'] as bool,
+    recurrence: j['recurrence'] == null
+        ? null
+        : Recurrence.values.byName(j['recurrence'] as String),
+    createdAt: DateTime.parse(j['createdAt'] as String),
+    updatedAt: DateTime.parse(j['updatedAt'] as String),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'amountMinor': amountMinor,
-        'categoryId': categoryId,
-        'date': date.toIso8601String(),
-        'note': note,
-        'paymentMethod': paymentMethod,
-        'isRecurring': isRecurring,
-        'recurrence': recurrence?.name,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'amountMinor': amountMinor,
+    'categoryId': categoryId,
+    'date': date.toIso8601String(),
+    'note': note,
+    'paymentMethod': paymentMethod,
+    'isRecurring': isRecurring,
+    'recurrence': recurrence?.name,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
   /// category id the backup's categoryId was resolved to.
@@ -162,17 +162,17 @@ class BackupExpense {
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
   ExpensesCompanion toReplaceCompanion() => ExpensesCompanion(
-        id: Value(id),
-        amountMinor: Value(amountMinor),
-        categoryId: Value(categoryId),
-        date: Value(date),
-        note: Value(note),
-        paymentMethod: Value(paymentMethod),
-        isRecurring: Value(isRecurring),
-        recurrence: Value(recurrence),
-        createdAt: Value(createdAt),
-        updatedAt: Value(updatedAt),
-      );
+    id: Value(id),
+    amountMinor: Value(amountMinor),
+    categoryId: Value(categoryId),
+    date: Value(date),
+    note: Value(note),
+    paymentMethod: Value(paymentMethod),
+    isRecurring: Value(isRecurring),
+    recurrence: Value(recurrence),
+    createdAt: Value(createdAt),
+    updatedAt: Value(updatedAt),
+  );
 
   /// Content fingerprint used to dedupe on Merge — deliberately not the id,
   /// which isn't stable across devices/reinstalls. [mappedCategoryId] is the
@@ -196,25 +196,25 @@ class BackupBudget {
   final BudgetPeriod period;
 
   factory BackupBudget.fromRow(BudgetRow row) => BackupBudget(
-        id: row.id,
-        categoryId: row.categoryId,
-        amountMinor: row.amountMinor,
-        period: row.period,
-      );
+    id: row.id,
+    categoryId: row.categoryId,
+    amountMinor: row.amountMinor,
+    period: row.period,
+  );
 
   factory BackupBudget.fromJson(Map<String, dynamic> j) => BackupBudget(
-        id: j['id'] as int,
-        categoryId: j['categoryId'] as int?,
-        amountMinor: j['amountMinor'] as int,
-        period: BudgetPeriod.values.byName(j['period'] as String),
-      );
+    id: j['id'] as int,
+    categoryId: j['categoryId'] as int?,
+    amountMinor: j['amountMinor'] as int,
+    period: BudgetPeriod.values.byName(j['period'] as String),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'categoryId': categoryId,
-        'amountMinor': amountMinor,
-        'period': period.name,
-      };
+    'id': id,
+    'categoryId': categoryId,
+    'amountMinor': amountMinor,
+    'period': period.name,
+  };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is null for the
   /// overall budget or the local category id the backup's slot resolved to.
@@ -227,11 +227,11 @@ class BackupBudget {
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
   BudgetsCompanion toReplaceCompanion() => BudgetsCompanion(
-        id: Value(id),
-        categoryId: Value(categoryId),
-        amountMinor: Value(amountMinor),
-        period: Value(period),
-      );
+    id: Value(id),
+    categoryId: Value(categoryId),
+    amountMinor: Value(amountMinor),
+    period: Value(period),
+  );
 }
 
 class BackupSetting {
@@ -281,31 +281,31 @@ class BackupPayload {
   }
 
   factory BackupPayload.fromJson(Map<String, dynamic> j) => BackupPayload(
-        exportedAt: DateTime.parse(j['exportedAt'] as String),
-        categories: (j['categories'] as List)
-            .map((e) => BackupCategory.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        expenses: (j['expenses'] as List)
-            .map((e) => BackupExpense.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        budgets: (j['budgets'] as List)
-            .map((e) => BackupBudget.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        settings: (j['settings'] as List)
-            .map((e) => BackupSetting.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    exportedAt: DateTime.parse(j['exportedAt'] as String),
+    categories: (j['categories'] as List)
+        .map((e) => BackupCategory.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    expenses: (j['expenses'] as List)
+        .map((e) => BackupExpense.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    budgets: (j['budgets'] as List)
+        .map((e) => BackupBudget.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    settings: (j['settings'] as List)
+        .map((e) => BackupSetting.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 
   Map<String, dynamic> toJson() => {
-        'exportedAt': exportedAt.toIso8601String(),
-        'counts': {
-          'expenses': expenses.length,
-          'categories': categories.length,
-          'budgets': budgets.length,
-        },
-        'categories': categories.map((c) => c.toJson()).toList(),
-        'expenses': expenses.map((e) => e.toJson()).toList(),
-        'budgets': budgets.map((b) => b.toJson()).toList(),
-        'settings': settings.map((s) => s.toJson()).toList(),
-      };
+    'exportedAt': exportedAt.toIso8601String(),
+    'counts': {
+      'expenses': expenses.length,
+      'categories': categories.length,
+      'budgets': budgets.length,
+    },
+    'categories': categories.map((c) => c.toJson()).toList(),
+    'expenses': expenses.map((e) => e.toJson()).toList(),
+    'budgets': budgets.map((b) => b.toJson()).toList(),
+    'settings': settings.map((s) => s.toJson()).toList(),
+  };
 }

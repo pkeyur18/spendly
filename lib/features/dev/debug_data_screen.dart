@@ -24,8 +24,10 @@ class DebugDataScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           total.when(
-            data: (m) => Text('This month total: ${m.format(locale: 'en_IN')}',
-                style: Theme.of(context).textTheme.titleMedium),
+            data: (m) => Text(
+              'This month total: ${m.format(locale: 'en_IN')}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             loading: () => const Text('…'),
             error: (e, _) => Text('err: $e'),
           ),
@@ -46,7 +48,9 @@ class DebugDataScreen extends ConsumerWidget {
                         IconButton(
                           icon: const Icon(Icons.add_card, size: 20),
                           tooltip: 'Add ₹100 expense here',
-                          onPressed: () => ref.read(expenseRepositoryProvider).add(
+                          onPressed: () => ref
+                              .read(expenseRepositoryProvider)
+                              .add(
                                 amount: Money.parse('100'),
                                 categoryId: c.id,
                               ),
@@ -69,32 +73,36 @@ class DebugDataScreen extends ConsumerWidget {
                 TextButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('Add "Test" category'),
-                  onPressed: () => ref.read(categoryRepositoryProvider).create(
-                        name: 'Test',
-                        icon: '⭐',
-                        colorValue: 0xFF6366F1,
-                      ),
+                  onPressed: () => ref
+                      .read(categoryRepositoryProvider)
+                      .create(name: 'Test', icon: '⭐', colorValue: 0xFF6366F1),
                 ),
               ],
             ),
             loading: () => const Padding(
-                padding: EdgeInsets.all(8), child: LinearProgressIndicator()),
+              padding: EdgeInsets.all(8),
+              child: LinearProgressIndicator(),
+            ),
             error: (e, _) => Text('err: $e'),
           ),
           const Divider(height: 32),
-          Text('This month expenses',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'This month expenses',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           expenses.when(
             data: (rows) => rows.isEmpty
                 ? const Padding(
-                    padding: EdgeInsets.all(8), child: Text('none yet'))
+                    padding: EdgeInsets.all(8),
+                    child: Text('none yet'),
+                  )
                 : Column(
-                    children: [
-                      for (final e in rows) _expenseTile(ref, e),
-                    ],
+                    children: [for (final e in rows) _expenseTile(ref, e)],
                   ),
             loading: () => const Padding(
-                padding: EdgeInsets.all(8), child: LinearProgressIndicator()),
+              padding: EdgeInsets.all(8),
+              child: LinearProgressIndicator(),
+            ),
             error: (e, _) => Text('err: $e'),
           ),
         ],
@@ -113,10 +121,9 @@ class DebugDataScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.add, size: 20),
             tooltip: '+₹50 (edit)',
-            onPressed: () => ref.read(expenseRepositoryProvider).update(
-                  e.id,
-                  amount: e.amount + Money.parse('50'),
-                ),
+            onPressed: () => ref
+                .read(expenseRepositoryProvider)
+                .update(e.id, amount: e.amount + Money.parse('50')),
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20),

@@ -3,7 +3,9 @@ import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/budgets/budget_repository.dart';
 
 void main() {
-  final budget = Money.parse('100'); // ₹100 → 10000 minor. 80% = 8000, 100% = 10000.
+  final budget = Money.parse(
+    '100',
+  ); // ₹100 → 10000 minor. 80% = 8000, 100% = 10000.
   Money m(String s) => Money.parse(s);
 
   test('crossing 80% only fires [80]', () {
@@ -34,6 +36,9 @@ void main() {
 
   test('zero / negative budget never alerts', () {
     expect(crossedThresholds(Money.zero, m('500'), Money.zero), isEmpty);
-    expect(crossedThresholds(Money.zero, m('500'), Money.fromMinor(-1)), isEmpty);
+    expect(
+      crossedThresholds(Money.zero, m('500'), Money.fromMinor(-1)),
+      isEmpty,
+    );
   });
 }

@@ -10,19 +10,20 @@ typedef DateRange = (DateTime start, DateTime end);
 /// A report over any date range (FR-19). One in-range fetch derives total,
 /// count, breakdown, top-5 and weekly trend; a second fetch gets the previous
 /// period's total for the comparison line.
-final reportProvider = FutureProvider.family<ReportData, DateRange>(
-  (ref, range) async {
-    final (start, end) = range;
-    final repo = ref.watch(expenseRepositoryProvider);
-    final expenses = await repo.listInRange(start, end);
-    final (pStart, pEnd) = previousPeriod(start, end);
-    final previousTotal = await repo.totalInRange(pStart, pEnd);
-    return buildReport(
-      start: start,
-      end: end,
-      expenses: expenses,
-      previousTotal: previousTotal,
-      categoriesById: ref.watch(categoriesByIdProvider),
-    );
-  },
-);
+final reportProvider = FutureProvider.family<ReportData, DateRange>((
+  ref,
+  range,
+) async {
+  final (start, end) = range;
+  final repo = ref.watch(expenseRepositoryProvider);
+  final expenses = await repo.listInRange(start, end);
+  final (pStart, pEnd) = previousPeriod(start, end);
+  final previousTotal = await repo.totalInRange(pStart, pEnd);
+  return buildReport(
+    start: start,
+    end: end,
+    expenses: expenses,
+    previousTotal: previousTotal,
+    categoriesById: ref.watch(categoriesByIdProvider),
+  );
+});

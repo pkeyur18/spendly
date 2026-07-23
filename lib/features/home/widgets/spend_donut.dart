@@ -22,6 +22,17 @@ class SpendDonut extends ConsumerWidget {
   }
 }
 
+/// Screen-reader summary for the donut, since fl_chart's canvas slices expose
+/// nothing to VoiceOver/TalkBack on their own. Pure + unit-tested.
+String donutSemanticsLabel(List<CategorySlice> slices, Money total) {
+  if (slices.isEmpty) return 'Category breakdown, no spending yet.';
+  final parts = slices
+      .take(5)
+      .map((s) => '${s.$1.name} ${(s.$3 * 100).round()} percent')
+      .join(', ');
+  return 'Category breakdown, total ${total.format(locale: 'en_IN')}: $parts.';
+}
+
 /// Provider-free donut + legend over given [slices] (desc) and [total].
 /// Matches the prototype `.chart-card`. Reused by Home and Reports.
 class DonutChart extends StatelessWidget {
@@ -36,80 +47,110 @@ class DonutChart extends StatelessWidget {
     final empty = slices.isEmpty;
 
     return AppCard(
-      child: Row(
-        children: [
-          SizedBox(
-            width: 110,
-            height: 110,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                PieChart(
-                  PieChartData(
-                    startDegreeOffset: -90,
-                    sectionsSpace: empty ? 0 : 2,
-                    centerSpaceRadius: 32,
-                    sections: empty
-                        ? [
-                            PieChartSectionData(
-                              value: 1,
-                              color: palette.line,
-                              radius: 23,
-                              showTitle: false,
-                            ),
-                          ]
-                        : [
-                            for (final s in slices)
-                              PieChartSectionData(
-                                value: s.$2.minor.toDouble(),
-                                color: s.$1.color,
-                                radius: 23,
-                                showTitle: false,
-                              ),
-                          ],
-                  ),
+      child: Semantics(
+        label: donutSemanticsLabel(slices, total),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 110,
+              height: 110,
+              // The chart's fixed size can't reflow with Dynamic Type, so its
+              // centered label is capped at 1.3x rather than left uncapped —
+              // a documented, bounded ceiling; everything else in the app
+              // scales fully.
+              child: MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: MediaQuery.textScalerOf(
+                    context,
+                  ).clamp(maxScaleFactor: 1.3),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      empty ? '₹0' : total.formatCompact(locale: 'en_IN'),
-                      style: const TextStyle(
-                          fontFamily: 'Sora', fontSize: 15, fontWeight: FontWeight.w700),
+                    ExcludeSemantics(
+                      child: PieChart(
+                        PieChartData(
+                          startDegreeOffset: -90,
+                          sectionsSpace: empty ? 0 : 2,
+                          centerSpaceRadius: 32,
+                          sections: empty
+                              ? [
+                                  PieChartSectionData(
+                                    value: 1,
+                                    color: palette.line,
+                                    radius: 23,
+                                    showTitle: false,
+                                  ),
+                                ]
+                              : [
+                                  for (final s in slices)
+                                    PieChartSectionData(
+                                      value: s.$2.minor.toDouble(),
+                                      color: s.$1.color,
+                                      radius: 23,
+                                      showTitle: false,
+                                    ),
+                                ],
+                        ),
+                      ),
                     ),
-                    Text('total',
-                        style: TextStyle(fontSize: 10, color: palette.textDim)),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          empty ? '₹0' : total.formatCompact(locale: 'en_IN'),
+                          style: const TextStyle(
+                            fontFamily: 'Sora',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          'total',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: palette.textDim,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: empty
-                ? Text('No spending yet',
-                    style: TextStyle(color: palette.textDim, fontSize: 13))
-                : Column(
-                    children: [
-                      for (final s in slices.take(5))
-                        _LegendRow(
-                          color: s.$1.color,
-                          name: s.$1.name,
-                          pct: (s.$3 * 100).round(),
-                          dim: palette.textDim,
-                        ),
-                    ],
-                  ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: empty
+                  ? Text(
+                      'No spending yet',
+                      style: TextStyle(color: palette.textDim, fontSize: 13),
+                    )
+                  : Column(
+                      children: [
+                        for (final s in slices.take(5))
+                          _LegendRow(
+                            color: s.$1.color,
+                            name: s.$1.name,
+                            pct: (s.$3 * 100).round(),
+                            dim: palette.textDim,
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _LegendRow extends StatelessWidget {
-  const _LegendRow(
-      {required this.color, required this.name, required this.pct, required this.dim});
+  const _LegendRow({
+    required this.color,
+    required this.name,
+    required this.pct,
+    required this.dim,
+  });
 
   final Color color;
   final String name;
@@ -125,13 +166,21 @@ class _LegendRow extends StatelessWidget {
           Container(
             width: 10,
             height: 10,
-            decoration:
-                BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(3),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(name, style: const TextStyle(fontSize: 13))),
-          Text('$pct%',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: dim)),
+          Text(
+            '$pct%',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: dim,
+            ),
+          ),
         ],
       ),
     );

@@ -7,10 +7,36 @@ import 'category_repository.dart';
 
 /// Curated emoji set for the icon picker (FR-10) — no emoji-keyboard dependency.
 const _iconChoices = [
-  '🍔', '🚕', '🛒', '🧾', '🎬', '💊', '🏠', '📦',
-  '☕', '🍺', '🎁', '✈️', '⛽', '📱', '💡', '👕',
-  '🏥', '🎓', '🐶', '💇', '🏋️', '🎮', '📚', '🚌',
-  '💳', '💰', '🧾', '🍎', '🌮', '🎧',
+  '🍔',
+  '🚕',
+  '🛒',
+  '🧾',
+  '🎬',
+  '💊',
+  '🏠',
+  '📦',
+  '☕',
+  '🍺',
+  '🎁',
+  '✈️',
+  '⛽',
+  '📱',
+  '💡',
+  '👕',
+  '🏥',
+  '🎓',
+  '🐶',
+  '💇',
+  '🏋️',
+  '🎮',
+  '📚',
+  '🚌',
+  '💳',
+  '💰',
+  '🧾',
+  '🍎',
+  '🌮',
+  '🎧',
 ];
 
 /// Brand palette swatches for the color picker (FR-9).
@@ -37,10 +63,12 @@ class CategoryEditSheet extends ConsumerStatefulWidget {
 }
 
 class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
-  late final TextEditingController _name =
-      TextEditingController(text: widget.existing?.name ?? '');
+  late final TextEditingController _name = TextEditingController(
+    text: widget.existing?.name ?? '',
+  );
   late String _icon = widget.existing?.icon ?? _iconChoices.first;
-  late int _color = widget.existing?.colorValue ?? _colorChoices.first.toARGB32();
+  late int _color =
+      widget.existing?.colorValue ?? _colorChoices.first.toARGB32();
 
   bool get _isEdit => widget.existing != null;
 
@@ -54,15 +82,21 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.lg, AppSpacing.xl,
-          AppSpacing.lg + MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.lg + MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_isEdit ? 'Edit category' : 'New category',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              _isEdit ? 'Edit category' : 'New category',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: AppSpacing.lg),
             TextField(
               controller: _name,
@@ -73,56 +107,106 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text('Icon', style: TextStyle(color: palette.textDim, fontSize: 13)),
+            Text(
+              'Icon',
+              style: TextStyle(color: palette.textDim, fontSize: 13),
+            ),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 for (final e in _iconChoices)
-                  GestureDetector(
-                    onTap: () => setState(() => _icon = e),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: _icon == e
-                            ? Color(_color).withValues(alpha: 0.15)
-                            : palette.card,
-                        borderRadius: BorderRadius.circular(AppRadius.icon),
-                        border: Border.all(
-                          color: _icon == e ? Color(_color) : palette.line,
-                          width: _icon == e ? 1.6 : 1,
-                        ),
+                  Semantics(
+                    button: true,
+                    selected: _icon == e,
+                    label: 'Icon $e',
+                    child: GestureDetector(
+                      onTap: () => setState(() => _icon = e),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: _icon == e
+                                  ? Color(_color).withValues(alpha: 0.15)
+                                  : palette.card,
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.icon,
+                              ),
+                              border: Border.all(
+                                color: _icon == e
+                                    ? Color(_color)
+                                    : palette.line,
+                                width: _icon == e ? 1.6 : 1,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              e,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          ),
+                          // Selection isn't color-only: a checkmark badge too.
+                          if (_icon == e)
+                            Positioned(
+                              top: -3,
+                              right: -3,
+                              child: Icon(
+                                Icons.check_circle,
+                                size: 14,
+                                color: Color(_color),
+                              ),
+                            ),
+                        ],
                       ),
-                      alignment: Alignment.center,
-                      child: Text(e, style: const TextStyle(fontSize: 18)),
                     ),
                   ),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text('Color', style: TextStyle(color: palette.textDim, fontSize: 13)),
+            Text(
+              'Color',
+              style: TextStyle(color: palette.textDim, fontSize: 13),
+            ),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                for (final c in _colorChoices)
-                  GestureDetector(
-                    onTap: () => setState(() => _color = c.toARGB32()),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: c,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _color == c.toARGB32()
-                              ? Theme.of(context).colorScheme.onSurface
-                              : Colors.transparent,
-                          width: 2.5,
+                for (final (i, c) in _colorChoices.indexed)
+                  Semantics(
+                    button: true,
+                    selected: _color == c.toARGB32(),
+                    label: 'Color option ${i + 1}',
+                    child: GestureDetector(
+                      onTap: () => setState(() => _color = c.toARGB32()),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _color == c.toARGB32()
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Colors.transparent,
+                            width: 2.5,
+                          ),
                         ),
+                        alignment: Alignment.center,
+                        // Selection isn't color-only: a checkmark on top too.
+                        child: _color == c.toARGB32()
+                            ? Icon(
+                                Icons.check,
+                                size: 16,
+                                color: c.computeLuminance() > 0.5
+                                    ? Colors.black
+                                    : Colors.white,
+                              )
+                            : null,
                       ),
                     ),
                   ),
@@ -141,22 +225,29 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
   }
 
   Widget _saveButton() {
-    return GestureDetector(
-      onTap: _save,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        decoration: BoxDecoration(
-          gradient: AppColors.brandGradient,
-          borderRadius: BorderRadius.circular(AppRadius.button),
-        ),
-        alignment: Alignment.center,
-        child: const Text('Save',
+    return Semantics(
+      button: true,
+      label: 'Save category',
+      child: GestureDetector(
+        onTap: _save,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          decoration: BoxDecoration(
+            gradient: AppColors.brandGradient,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          alignment: Alignment.center,
+          child: const Text(
+            'Save',
             style: TextStyle(
-                fontFamily: 'Sora',
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600)),
+              fontFamily: 'Sora',
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -171,16 +262,19 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
             : await repo.archive(widget.existing!.id);
         if (mounted) Navigator.of(context).pop();
       },
-      child: Text(archived ? 'Unarchive' : 'Archive (hide from Quick Add)',
-          style: TextStyle(color: palette.textDim)),
+      child: Text(
+        archived ? 'Unarchive' : 'Archive (hide from Quick Add)',
+        style: TextStyle(color: palette.textDim),
+      ),
     );
   }
 
   Future<void> _save() async {
     final name = _name.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Enter a name')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a name')));
       return;
     }
     final repo = ref.read(categoryRepositoryProvider);
@@ -197,7 +291,10 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
 }
 
 /// Open the add/edit sheet as a modal bottom sheet.
-Future<void> showCategoryEditSheet(BuildContext context, {CategoryRow? existing}) {
+Future<void> showCategoryEditSheet(
+  BuildContext context, {
+  CategoryRow? existing,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,

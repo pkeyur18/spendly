@@ -76,7 +76,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
   );
 
   @override
-  AppPalette copyWith({Color? card, Color? card2, Color? textDim, Color? line}) {
+  AppPalette copyWith({
+    Color? card,
+    Color? card2,
+    Color? textDim,
+    Color? line,
+  }) {
     return AppPalette(
       card: card ?? this.card,
       card2: card2 ?? this.card2,

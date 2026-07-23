@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/async_state_views.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../home/widgets/trend_bars.dart';
@@ -46,12 +47,22 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
       context: context,
       firstDate: DateTime(now.year - 5),
       lastDate: DateTime(now.year, now.month, now.day),
-      initialDateRange: DateTimeRange(start: _range.$1, end: _range.$2.subtract(const Duration(days: 1))),
+      initialDateRange: DateTimeRange(
+        start: _range.$1,
+        end: _range.$2.subtract(const Duration(days: 1)),
+      ),
     );
     if (picked == null) return;
-    final start = DateTime(picked.start.year, picked.start.month, picked.start.day);
-    final end = DateTime(picked.end.year, picked.end.month, picked.end.day)
-        .add(const Duration(days: 1)); // half-open, inclusive of picked end
+    final start = DateTime(
+      picked.start.year,
+      picked.start.month,
+      picked.start.day,
+    );
+    final end = DateTime(
+      picked.end.year,
+      picked.end.month,
+      picked.end.day,
+    ).add(const Duration(days: 1)); // half-open, inclusive of picked end
     setState(() {
       _selected = 3;
       _range = (start, end);
@@ -93,8 +104,9 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
                   onSelected: (_) => _selectChip(i),
                   selectedColor: AppColors.primary,
                   labelStyle: TextStyle(
-                      color: _selected == i ? Colors.white : palette.textDim,
-                      fontWeight: FontWeight.w600),
+                    color: _selected == i ? Colors.white : palette.textDim,
+                    fontWeight: FontWeight.w600,
+                  ),
                   backgroundColor: palette.card,
                   shape: StadiumBorder(side: BorderSide(color: palette.line)),
                   showCheckmark: false,
@@ -107,34 +119,49 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
               _RangeBox(label: 'From', value: df.format(_range.$1)),
               const SizedBox(width: AppSpacing.md),
               _RangeBox(
-                  label: 'To',
-                  value: df.format(_range.$2.subtract(const Duration(days: 1)))),
+                label: 'To',
+                value: df.format(_range.$2.subtract(const Duration(days: 1))),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
           async.when(
             loading: () => const Padding(
-                padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => Padding(
-                padding: const EdgeInsets.all(40),
-                child: Center(child: Text('Could not load report:\n$e'))),
-            data: (data) => Column(
-              children: [
-                ReportHero(label: 'Total in range', data: data),
-                const SectionTitle('Spending trend'),
-                TrendBarsView(bars: data.weekly),
-                const SectionTitle('By category'),
-                DonutChart(slices: data.breakdown, total: data.total),
-                const SizedBox(height: AppSpacing.xxl),
-                ExportRow(
-                    data: data,
-                    byId: byId,
-                    title:
-                        'Report ${DateFormat('MMM d').format(_range.$1)} to ${DateFormat('MMM d').format(_range.$2.subtract(const Duration(days: 1)))}'),
-                const SizedBox(height: AppSpacing.lg),
-              ],
+              padding: EdgeInsets.all(40),
+              child: LoadingView(),
             ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(40),
+              child: ErrorView(
+                message: 'Could not load this report.',
+                onRetry: () => ref.invalidate(reportProvider(_range)),
+              ),
+            ),
+            data: (data) => data.txnCount == 0
+                ? const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: EmptyView(
+                      icon: Icons.receipt_long_outlined,
+                      message: 'No transactions in this range.',
+                    ),
+                  )
+                : Column(
+                    children: [
+                      ReportHero(label: 'Total in range', data: data),
+                      const SectionTitle('Spending trend'),
+                      TrendBarsView(bars: data.weekly),
+                      const SectionTitle('By category'),
+                      DonutChart(slices: data.breakdown, total: data.total),
+                      const SizedBox(height: AppSpacing.xxl),
+                      ExportRow(
+                        data: data,
+                        byId: byId,
+                        title:
+                            'Report ${DateFormat('MMM d').format(_range.$1)} to ${DateFormat('MMM d').format(_range.$2.subtract(const Duration(days: 1)))}',
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -164,9 +191,14 @@ class _RangeBox extends StatelessWidget {
           children: [
             Text(label, style: TextStyle(fontSize: 11, color: palette.textDim)),
             const SizedBox(height: AppSpacing.xs),
-            Text(value,
-                style: const TextStyle(
-                    fontFamily: 'Sora', fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),

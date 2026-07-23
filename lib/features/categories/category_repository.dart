@@ -11,9 +11,9 @@ class CategoryRepository {
   final AppDatabase _db;
 
   Stream<List<CategoryRow>> watchAll() {
-    return (_db.select(_db.categories)
-          ..orderBy([(t) => OrderingTerm(expression: t.sortOrder)]))
-        .watch();
+    return (_db.select(
+      _db.categories,
+    )..orderBy([(t) => OrderingTerm(expression: t.sortOrder)])).watch();
   }
 
   /// Active (non-archived) categories shown in Quick Add / pickers.
@@ -30,7 +30,9 @@ class CategoryRepository {
     required int colorValue,
   }) async {
     final maxOrder = await _maxSortOrder();
-    return _db.into(_db.categories).insert(
+    return _db
+        .into(_db.categories)
+        .insert(
           CategoriesCompanion.insert(
             name: name,
             icon: icon,
@@ -79,8 +81,9 @@ class CategoryRepository {
 
   Future<int> _maxSortOrder() async {
     final expr = _db.categories.sortOrder.max();
-    final row = await (_db.selectOnly(_db.categories)..addColumns([expr]))
-        .getSingleOrNull();
+    final row = await (_db.selectOnly(
+      _db.categories,
+    )..addColumns([expr])).getSingleOrNull();
     return row?.read(expr) ?? -1;
   }
 }

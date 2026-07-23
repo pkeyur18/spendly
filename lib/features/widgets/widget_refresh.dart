@@ -16,7 +16,10 @@ Future<void> refreshWidgets(WidgetRef ref) async {
 
   final todayTotal = await expenses.todayTotal(now);
   final monthTotal = await expenses.monthTotal(now);
-  final budget = await ref.read(budgetRepositoryProvider).watchOverallBudget().first;
+  final budget = await ref
+      .read(budgetRepositoryProvider)
+      .watchOverallBudget()
+      .first;
 
   // Trend: reuse the same pure bucketing the dashboard uses.
   final lastSix = await expenses.watchLastNMonths(6).first;

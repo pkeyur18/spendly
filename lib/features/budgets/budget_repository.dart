@@ -27,20 +27,24 @@ class BudgetRepository {
       _upsert(categoryId, amount);
 
   Future<void> clearForCategory(int categoryId) async {
-    await (_db.delete(_db.budgets)
-          ..where((t) => t.categoryId.equals(categoryId)))
-        .go();
+    await (_db.delete(
+      _db.budgets,
+    )..where((t) => t.categoryId.equals(categoryId))).go();
   }
 
   /// Insert or update the single budget row for [categoryId] (null = overall).
   Future<void> _upsert(int? categoryId, Money amount) async {
-    final existing = await (_db.select(_db.budgets)
-          ..where((t) => categoryId == null
-              ? t.categoryId.isNull()
-              : t.categoryId.equals(categoryId)))
-        .getSingleOrNull();
+    final existing =
+        await (_db.select(_db.budgets)..where(
+              (t) => categoryId == null
+                  ? t.categoryId.isNull()
+                  : t.categoryId.equals(categoryId),
+            ))
+            .getSingleOrNull();
     if (existing == null) {
-      await _db.into(_db.budgets).insert(
+      await _db
+          .into(_db.budgets)
+          .insert(
             BudgetsCompanion.insert(
               categoryId: Value(categoryId),
               amountMinor: amount.minor,

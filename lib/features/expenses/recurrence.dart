@@ -47,8 +47,14 @@ DateTime _addMonths(DateTime d, int months) {
   final targetMonthStart = DateTime(d.year, d.month + months, 1);
   final lastDay = _daysInMonth(targetMonthStart.year, targetMonthStart.month);
   final day = d.day < lastDay ? d.day : lastDay; // clamp end-of-month
-  return DateTime(targetMonthStart.year, targetMonthStart.month, day,
-      d.hour, d.minute, d.second);
+  return DateTime(
+    targetMonthStart.year,
+    targetMonthStart.month,
+    day,
+    d.hour,
+    d.minute,
+    d.second,
+  );
 }
 
 int _daysInMonth(int year, int month) {

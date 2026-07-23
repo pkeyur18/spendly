@@ -5,6 +5,7 @@ import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/async_state_views.dart';
 import '../budgets/budget_repository.dart';
 import '../budgets/budget_setup_screen.dart';
 import 'category_edit_sheet.dart';
@@ -39,15 +40,28 @@ class CategoryManagerScreen extends ConsumerWidget {
         label: const Text('Add category'),
       ),
       body: categoriesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => const LoadingView(),
+        error: (e, _) => ErrorView(
+          message: 'Couldn\'t load categories.',
+          onRetry: () => ref.invalidate(allCategoriesProvider),
+        ),
         data: (categories) {
+          if (categories.isEmpty) {
+            return const EmptyView(
+              icon: Icons.sell_outlined,
+              message: 'No categories yet — tap + to add one.',
+            );
+          }
           // Active first (kept in sortOrder), archived after.
           final active = categories.where((c) => !c.isArchived).toList();
           final archived = categories.where((c) => c.isArchived).toList();
           return ReorderableListView(
             padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              96,
+            ),
             onReorderItem: (oldIndex, newIndex) =>
                 _reorder(ref, active, oldIndex, newIndex),
             footer: Column(
@@ -76,7 +90,12 @@ class CategoryManagerScreen extends ConsumerWidget {
     );
   }
 
-  void _reorder(WidgetRef ref, List<CategoryRow> active, int oldIndex, int newIndex) {
+  void _reorder(
+    WidgetRef ref,
+    List<CategoryRow> active,
+    int oldIndex,
+    int newIndex,
+  ) {
     // onReorderItem already gives the post-removal index — no manual adjust.
     final ids = active.map((c) => c.id).toList();
     final moved = ids.removeAt(oldIndex);
@@ -103,8 +122,8 @@ class _CategoryRow extends StatelessWidget {
     final subtitle = category.isArchived
         ? 'Hidden from Quick Add'
         : (budget == null
-            ? 'No budget set'
-            : 'Budget: ${budget!.format(locale: 'en_IN')}/mo');
+              ? 'No budget set'
+              : 'Budget: ${budget!.format(locale: 'en_IN')}/mo');
 
     return Opacity(
       opacity: category.isArchived ? 0.5 : 1,
@@ -130,18 +149,27 @@ class _CategoryRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.icon),
                   ),
                   alignment: Alignment.center,
-                  child: Text(category.icon, style: const TextStyle(fontSize: 17)),
+                  child: Text(
+                    category.icon,
+                    style: const TextStyle(fontSize: 17),
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(category.name,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600)),
-                      Text(subtitle,
-                          style: TextStyle(fontSize: 12, color: palette.textDim)),
+                      Text(
+                        category.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(fontSize: 12, color: palette.textDim),
+                      ),
                     ],
                   ),
                 ),

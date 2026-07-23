@@ -1,7 +1,8 @@
 import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
-import '../home/dashboard_providers.dart' show CategorySlice, TrendBar, sumMoney;
+import '../home/dashboard_providers.dart'
+    show CategorySlice, TrendBar, sumMoney;
 
 /// Everything a report screen renders (FR-20). Built purely from a list of
 /// in-range expenses + the previous period's total — no DB, so it's unit-tested
@@ -58,7 +59,8 @@ ReportData buildReport({
   // Per-category totals → slices (fraction of grand total), desc.
   final byCategory = <int, Money>{};
   for (final e in expenses) {
-    byCategory[e.categoryId] = (byCategory[e.categoryId] ?? Money.zero) + e.amount;
+    byCategory[e.categoryId] =
+        (byCategory[e.categoryId] ?? Money.zero) + e.amount;
   }
   final breakdown = <CategorySlice>[
     for (final entry in byCategory.entries)
@@ -98,7 +100,10 @@ ReportData buildReport({
 /// trend). The most recent bucket is flagged current (highlighted like the
 /// prototype's `.bar.active`).
 List<TrendBar> weeklyBuckets(
-    List<ExpenseRow> expenses, DateTime start, DateTime end) {
+  List<ExpenseRow> expenses,
+  DateTime start,
+  DateTime end,
+) {
   final days = end.difference(start).inDays;
   final n = ((days <= 0 ? 1 : days) / 7).ceil().clamp(1, 12);
   final totals = List<Money>.filled(n, Money.zero);

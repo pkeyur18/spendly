@@ -14,7 +14,9 @@ void main() {
 
   setUp(() async {
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    cats = await CategoryRepository(db).watchActive().first; // 8 seeded defaults
+    cats = await CategoryRepository(
+      db,
+    ).watchActive().first; // 8 seeded defaults
   });
   tearDown(() => db.close());
 

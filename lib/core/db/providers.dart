@@ -25,14 +25,16 @@ class SettingsRepository {
   static const lastBackupSizeKey = 'last_backup_size';
 
   Future<String?> get(String key) async {
-    final row = await (_db.select(_db.settings)
-          ..where((t) => t.key.equals(key)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.settings,
+    )..where((t) => t.key.equals(key))).getSingleOrNull();
     return row?.value;
   }
 
   Future<void> set(String key, String? value) {
-    return _db.into(_db.settings).insertOnConflictUpdate(
+    return _db
+        .into(_db.settings)
+        .insertOnConflictUpdate(
           SettingsCompanion.insert(key: key, value: Value(value)),
         );
   }

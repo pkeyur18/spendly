@@ -20,13 +20,15 @@ String buildCsv(List<ExpenseRow> expenses, Map<int, CategoryRow> byId) {
   final df = DateFormat('yyyy-MM-dd');
   final rows = <String>['Date,Category,Note,Amount,Payment method'];
   for (final e in expenses) {
-    rows.add([
-      df.format(e.date),
-      byId[e.categoryId]?.name ?? '',
-      e.note ?? '',
-      _decimal(e.amountMinor),
-      e.paymentMethod ?? '',
-    ].map(_csvField).join(','));
+    rows.add(
+      [
+        df.format(e.date),
+        byId[e.categoryId]?.name ?? '',
+        e.note ?? '',
+        _decimal(e.amountMinor),
+        e.paymentMethod ?? '',
+      ].map(_csvField).join(','),
+    );
   }
   return rows.join('\r\n');
 }
@@ -61,25 +63,28 @@ Future<Uint8List> buildPdf(
   String money(Money m) => m.format(locale: 'en_IN');
 
   pw.Widget statBox(String label, String value) => pw.Expanded(
-        child: pw.Container(
-          margin: const pw.EdgeInsets.only(right: 8),
-          padding: const pw.EdgeInsets.all(10),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey300),
-            borderRadius: pw.BorderRadius.circular(8),
-          ),
-          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text(label, style: pw.TextStyle(fontSize: 9, color: dim)),
-            pw.SizedBox(height: 3),
-            pw.Text(value, style: pw.TextStyle(font: bold, fontSize: 13)),
-          ]),
-        ),
-      );
+    child: pw.Container(
+      margin: const pw.EdgeInsets.only(right: 8),
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(label, style: pw.TextStyle(fontSize: 9, color: dim)),
+          pw.SizedBox(height: 3),
+          pw.Text(value, style: pw.TextStyle(font: bold, fontSize: 13)),
+        ],
+      ),
+    ),
+  );
 
   final compare = data.changePct == null
       ? 'No prior-period spend to compare'
       : '${data.changeUp ? '↑' : '↓'} ${data.changePct!.abs().toStringAsFixed(0)}% '
-          'vs previous period (${money(data.previousTotal)})';
+            'vs previous period (${money(data.previousTotal)})';
 
   doc.addPage(
     pw.Page(
@@ -91,20 +96,27 @@ Future<Uint8List> buildPdf(
           pw.Text(title, style: pw.TextStyle(font: bold, fontSize: 22)),
           pw.SizedBox(height: 2),
           pw.Text('Total spent', style: pw.TextStyle(fontSize: 10, color: dim)),
-          pw.Text(money(data.total),
-              style: pw.TextStyle(font: bold, fontSize: 30, color: indigo)),
+          pw.Text(
+            money(data.total),
+            style: pw.TextStyle(font: bold, fontSize: 30, color: indigo),
+          ),
           pw.Text(compare, style: pw.TextStyle(fontSize: 10, color: dim)),
           pw.SizedBox(height: 16),
-          pw.Row(children: [
-            statBox('Daily average', money(data.dailyAverage)),
-            statBox('Transactions', '${data.txnCount}'),
-            statBox('Top category', data.topCategory?.$1.name ?? '—'),
-          ]),
+          pw.Row(
+            children: [
+              statBox('Daily average', money(data.dailyAverage)),
+              statBox('Transactions', '${data.txnCount}'),
+              statBox('Top category', data.topCategory?.$1.name ?? '—'),
+            ],
+          ),
           pw.SizedBox(height: 20),
           pw.Text('By category', style: pw.TextStyle(font: bold, fontSize: 14)),
           pw.SizedBox(height: 6),
           if (data.breakdown.isEmpty)
-            pw.Text('No spending in this period', style: pw.TextStyle(color: dim))
+            pw.Text(
+              'No spending in this period',
+              style: pw.TextStyle(color: dim),
+            )
           else
             pw.Table(
               columnWidths: const {
@@ -114,35 +126,50 @@ Future<Uint8List> buildPdf(
               },
               children: [
                 for (final s in data.breakdown)
-                  pw.TableRow(children: [
-                    pw.Padding(
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(
                         padding: const pw.EdgeInsets.symmetric(vertical: 3),
-                        child: pw.Text(s.$1.name)),
-                    pw.Text(money(s.$2), textAlign: pw.TextAlign.right),
-                    pw.Text('${(s.$3 * 100).round()}%',
+                        child: pw.Text(s.$1.name),
+                      ),
+                      pw.Text(money(s.$2), textAlign: pw.TextAlign.right),
+                      pw.Text(
+                        '${(s.$3 * 100).round()}%',
                         textAlign: pw.TextAlign.right,
-                        style: pw.TextStyle(color: dim)),
-                  ]),
+                        style: pw.TextStyle(color: dim),
+                      ),
+                    ],
+                  ),
               ],
             ),
           pw.SizedBox(height: 20),
-          pw.Text('Top ${data.top5.length} expenses',
-              style: pw.TextStyle(font: bold, fontSize: 14)),
+          pw.Text(
+            'Top ${data.top5.length} expenses',
+            style: pw.TextStyle(font: bold, fontSize: 14),
+          ),
           pw.SizedBox(height: 6),
           for (var i = 0; i < data.top5.length; i++)
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(vertical: 2),
-              child: pw.Row(children: [
-                pw.SizedBox(width: 18, child: pw.Text('${i + 1}.')),
-                pw.Expanded(
-                    child: pw.Text(data.top5[i].note?.isNotEmpty == true
-                        ? data.top5[i].note!
-                        : (byId[data.top5[i].categoryId]?.name ?? 'Expense'))),
-                pw.Text(money(data.top5[i].amount)),
-              ]),
+              child: pw.Row(
+                children: [
+                  pw.SizedBox(width: 18, child: pw.Text('${i + 1}.')),
+                  pw.Expanded(
+                    child: pw.Text(
+                      data.top5[i].note?.isNotEmpty == true
+                          ? data.top5[i].note!
+                          : (byId[data.top5[i].categoryId]?.name ?? 'Expense'),
+                    ),
+                  ),
+                  pw.Text(money(data.top5[i].amount)),
+                ],
+              ),
             ),
           pw.Spacer(),
-          pw.Text('Generated by Spendly', style: pw.TextStyle(fontSize: 9, color: dim)),
+          pw.Text(
+            'Generated by Spendly',
+            style: pw.TextStyle(fontSize: 9, color: dim),
+          ),
         ],
       ),
     ),

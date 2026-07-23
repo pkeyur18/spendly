@@ -73,7 +73,9 @@ class Money {
   static String _symbolFor(String? locale) {
     // ponytail: default to ₹ (single-currency v1). Locale drives grouping/format;
     // swap to a settings-driven currency code when multi-currency lands (v2).
-    return NumberFormat.simpleCurrency(locale: locale ?? 'en_IN').currencySymbol;
+    return NumberFormat.simpleCurrency(
+      locale: locale ?? 'en_IN',
+    ).currencySymbol;
   }
 
   @override

@@ -19,7 +19,7 @@ class ReportHero extends StatelessWidget {
     final compare = data.changePct == null
         ? 'No prior-period spend to compare'
         : '${data.changeUp ? '↑' : '↓'} ${data.changePct!.abs().toStringAsFixed(0)}% '
-            'vs previous period (${data.previousTotal.format(locale: 'en_IN')})';
+              'vs previous period (${data.previousTotal.format(locale: 'en_IN')})';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -30,22 +30,30 @@ class ReportHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label.toUpperCase(),
-              style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
           const SizedBox(height: AppSpacing.sm),
-          Text(data.total.format(locale: 'en_IN'),
-              style: const TextStyle(
-                  fontFamily: 'Sora',
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w700)),
+          Text(
+            data.total.format(locale: 'en_IN'),
+            style: const TextStyle(
+              fontFamily: 'Sora',
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
-          Text(compare,
-              style: const TextStyle(color: Colors.white, fontSize: 12)),
+          Text(
+            compare,
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -82,13 +90,21 @@ class StatGrid extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(label, style: TextStyle(fontSize: 11, color: palette.textDim)),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: palette.textDim),
+                ),
                 const SizedBox(height: AppSpacing.xs),
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontFamily: 'Sora', fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -109,7 +125,9 @@ class TopExpensesCard extends StatelessWidget {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return AppCard(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xl, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.sm,
+      ),
       child: Column(
         children: [
           for (var i = 0; i < data.top5.length; i++)
@@ -122,13 +140,17 @@ class TopExpensesCard extends StatelessWidget {
                     height: 22,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(7)),
-                    child: Text('${i + 1}',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary)),
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
@@ -138,19 +160,26 @@ class TopExpensesCard extends StatelessWidget {
                           : (byId[data.top5[i].categoryId]?.name ?? 'Expense'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  Text(data.top5[i].amount.format(locale: 'en_IN'),
-                      style: const TextStyle(fontFamily: 'Sora', fontSize: 14)),
+                  Text(
+                    data.top5[i].amount.format(locale: 'en_IN'),
+                    style: const TextStyle(fontFamily: 'Sora', fontSize: 14),
+                  ),
                 ],
               ),
             ),
           if (data.top5.isEmpty)
             Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Text('No expenses in this period',
-                  style: TextStyle(color: palette.textDim)),
+              child: Text(
+                'No expenses in this period',
+                style: TextStyle(color: palette.textDim),
+              ),
             ),
         ],
       ),
@@ -161,8 +190,12 @@ class TopExpensesCard extends StatelessWidget {
 /// Export CSV / Export PDF buttons that generate then hand off to the OS share
 /// sheet (FR-21, FR-22). Email is one of the share targets.
 class ExportRow extends StatefulWidget {
-  const ExportRow(
-      {super.key, required this.data, required this.byId, required this.title});
+  const ExportRow({
+    super.key,
+    required this.data,
+    required this.byId,
+    required this.title,
+  });
 
   final ReportData data;
   final Map<int, CategoryRow> byId;
@@ -182,8 +215,11 @@ class _ExportRowState extends State<ExportRow> {
     try {
       final safe = widget.title.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '-');
       if (pdf) {
-        final bytes =
-            await buildPdf(widget.data, widget.byId, title: widget.title);
+        final bytes = await buildPdf(
+          widget.data,
+          widget.byId,
+          title: widget.title,
+        );
         await shareReportFile(bytes: bytes, filename: '$safe.pdf');
       } else {
         final csv = buildCsv(widget.data.expenses, widget.byId);
@@ -208,7 +244,8 @@ class _ExportRowState extends State<ExportRow> {
               side: BorderSide(color: palette.line),
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.button)),
+                borderRadius: BorderRadius.circular(AppRadius.button),
+              ),
             ),
             child: const Text('Export CSV'),
           ),
@@ -221,14 +258,18 @@ class _ExportRowState extends State<ExportRow> {
               backgroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.button)),
+                borderRadius: BorderRadius.circular(AppRadius.button),
+              ),
             ),
             child: _busy
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Export PDF'),
           ),
         ),

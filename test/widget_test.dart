@@ -52,15 +52,24 @@ void main() {
 
     await repo.add(amount: Money.parse('100'), categoryId: 1);
     await _waitUntil(
-        container, monthTotalProvider, (m) => m == Money.fromMinor(10000));
+      container,
+      monthTotalProvider,
+      (m) => m == Money.fromMinor(10000),
+    );
 
     await repo.add(amount: Money.parse('50.50'), categoryId: 2);
     await _waitUntil(
-        container, monthTotalProvider, (m) => m == Money.fromMinor(15050));
+      container,
+      monthTotalProvider,
+      (m) => m == Money.fromMinor(15050),
+    );
 
     final breakdown = container.read(categoryBreakdownProvider);
     expect(breakdown.length, 2);
-    expect(breakdown.first.$2, Money.fromMinor(10000)); // cat1 largest, sorted desc
+    expect(
+      breakdown.first.$2,
+      Money.fromMinor(10000),
+    ); // cat1 largest, sorted desc
   });
 
   test('lastUsedCategoryId tracks the most recent expense', () async {
@@ -69,8 +78,7 @@ void main() {
 
     expect(container.read(lastUsedCategoryIdProvider), isNull);
     await repo.add(amount: Money.parse('10'), categoryId: 3);
-    await _waitUntil(
-        container, lastUsedCategoryIdProvider, (id) => id == 3);
+    await _waitUntil(container, lastUsedCategoryIdProvider, (id) => id == 3);
   });
 }
 

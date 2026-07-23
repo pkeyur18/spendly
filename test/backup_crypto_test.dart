@@ -26,7 +26,9 @@ void main() {
       salt: blob.salt,
       nonce: blob.nonce,
       mac: blob.mac,
-      ciphertext: Uint8List.fromList(blob.ciphertext.map((b) => b ^ 0xFF).toList()),
+      ciphertext: Uint8List.fromList(
+        blob.ciphertext.map((b) => b ^ 0xFF).toList(),
+      ),
     );
     expect(
       () => decryptBackup(tampered, 'a password'),

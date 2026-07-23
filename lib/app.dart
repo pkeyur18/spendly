@@ -21,7 +21,8 @@ class SpendlyApp extends ConsumerStatefulWidget {
 /// `local_auto_backup.dart`) and refreshes the widget snapshot (FR-29 — the
 /// catch-all for changes that don't route through Quick Add, e.g. a restore).
 /// Also routes widget quick-add taps into Quick Add (FR-3).
-class _SpendlyAppState extends ConsumerState<SpendlyApp> with WidgetsBindingObserver {
+class _SpendlyAppState extends ConsumerState<SpendlyApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -30,7 +31,19 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp> with WidgetsBindingObse
     // running.
     HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
     HomeWidget.widgetClicked.listen(_handleWidgetUri);
-    WidgetsBinding.instance.addPostFrameCallback((_) => refreshWidgets(ref));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      refreshWidgets(ref);
+      _initNotifications();
+    });
+  }
+
+  /// Deferred off `main()`'s cold-start path (Sprint 7 perf fix) — see
+  /// main.dart. Un-awaited: nothing in the first frame depends on this
+  /// completing.
+  Future<void> _initNotifications() async {
+    final notifications = ref.read(notificationServiceProvider);
+    await notifications.init();
+    await notifications.scheduleMonthlyReport();
   }
 
   @override
@@ -70,6 +83,16 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp> with WidgetsBindingObse
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
+      // Crossfades light/dark colors on a theme switch — the prototype's one
+      // intentional motion rule (`body { transition: background .4s ease,
+      // color .4s ease }`). No other animation was designed, so this is the
+      // only motion this sprint adds (Sprint 7).
+      builder: (context, child) => AnimatedTheme(
+        data: Theme.of(context),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.ease,
+        child: child!,
+      ),
       home: const HomeScreen(),
     );
   }

@@ -33,34 +33,62 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Restore data')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 40),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          40,
+        ),
         children: [
-          GestureDetector(
-            onTap: _busy ? null : _pickFile,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
-              decoration: BoxDecoration(
-                border: Border.all(color: palette.line, width: 1.5, style: BorderStyle.solid),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                children: [
-                  const Text('📄', style: TextStyle(fontSize: 28)),
-                  const SizedBox(height: 8),
-                  Text(_preview == null ? 'Choose backup file' : _preview!.fileName,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  const SizedBox(height: 2),
-                  Text(
-                    _busy ? 'Reading…' : 'Tap to browse iCloud Drive, Google Drive, or Files',
-                    style: TextStyle(fontSize: 12, color: palette.textDim),
+          Semantics(
+            button: true,
+            label: _preview == null ? 'Choose backup file' : _preview!.fileName,
+            child: GestureDetector(
+              onTap: _busy ? null : _pickFile,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 26,
+                  horizontal: 16,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: palette.line,
+                    width: 1.5,
+                    style: BorderStyle.solid,
                   ),
-                ],
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  children: [
+                    const Text('📄', style: TextStyle(fontSize: 28)),
+                    const SizedBox(height: 8),
+                    Text(
+                      _preview == null
+                          ? 'Choose backup file'
+                          : _preview!.fileName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _busy
+                          ? 'Reading…'
+                          : 'Tap to browse iCloud Drive, Google Drive, or Files',
+                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
-            Text(_error!, style: const TextStyle(color: AppColors.red, fontSize: 13)),
+            Text(
+              _error!,
+              style: const TextStyle(color: AppColors.red, fontSize: 13),
+            ),
           ],
           if (_preview != null) ...[
             const SectionTitle('File preview'),
@@ -68,24 +96,38 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
               child: Column(
                 children: [
                   _PreviewRow('File', _preview!.fileName),
-                  _PreviewRow('Backup date', DateFormat.yMMMd().add_jm().format(_preview!.exportedAt)),
-                  _PreviewRow('Expenses', '${_preview!.expenseCount} transactions'),
-                  _PreviewRow('Date range', _dateRangeLabel(_preview!.expenseDateRange)),
-                  _PreviewRow('File size', _formatSize(_preview!.fileSizeBytes)),
+                  _PreviewRow(
+                    'Backup date',
+                    DateFormat.yMMMd().add_jm().format(_preview!.exportedAt),
+                  ),
+                  _PreviewRow(
+                    'Expenses',
+                    '${_preview!.expenseCount} transactions',
+                  ),
+                  _PreviewRow(
+                    'Date range',
+                    _dateRangeLabel(_preview!.expenseDateRange),
+                  ),
+                  _PreviewRow(
+                    'File size',
+                    _formatSize(_preview!.fileSizeBytes),
+                  ),
                 ],
               ),
             ),
             const SectionTitle('How should we restore?'),
             _RestoreModeCard(
               title: 'Merge',
-              description: "Add backup data to what's already on this device. Duplicate-safe.",
+              description:
+                  "Add backup data to what's already on this device. Duplicate-safe.",
               selected: _mode == RestoreMode.merge,
               onTap: () => setState(() => _mode = RestoreMode.merge),
             ),
             const SizedBox(height: AppSpacing.sm),
             _RestoreModeCard(
               title: 'Replace',
-              description: 'Erase current data on this device and restore only from the backup file.',
+              description:
+                  'Erase current data on this device and restore only from the backup file.',
               selected: _mode == RestoreMode.replace,
               onTap: () => setState(() => _mode = RestoreMode.replace),
             ),
@@ -105,8 +147,10 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
       _error = null;
       _preview = null;
     });
-    final result = await FilePicker.platform
-        .pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
     final path = result?.files.single.path;
     if (path == null || !mounted) return;
     await _loadFile(path);
@@ -123,7 +167,10 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
       });
     } on BackupPasswordRequiredException {
       if (!mounted) return;
-      final entered = await _askPassword(context, wrongPassword: password != null);
+      final entered = await _askPassword(
+        context,
+        wrongPassword: password != null,
+      );
       if (entered == null || !mounted) return;
       await _loadFile(path, password: entered);
       return;
@@ -141,7 +188,10 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     }
   }
 
-  Future<String?> _askPassword(BuildContext context, {required bool wrongPassword}) {
+  Future<String?> _askPassword(
+    BuildContext context, {
+    required bool wrongPassword,
+  }) {
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
@@ -154,8 +204,10 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
             if (wrongPassword)
               const Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text('Incorrect password — try again.',
-                    style: TextStyle(color: AppColors.red, fontSize: 12)),
+                child: Text(
+                  'Incorrect password — try again.',
+                  style: TextStyle(color: AppColors.red, fontSize: 12),
+                ),
               ),
             TextField(
               controller: controller,
@@ -188,7 +240,9 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     try {
       final repo = ref.read(backupRepositoryProvider);
       await executeRestore(preview.payload, _mode, repo);
-      await refreshWidgets(ref); // restore changes totals without a Quick Add write
+      await refreshWidgets(
+        ref,
+      ); // restore changes totals without a Quick Add write
       messenger.showSnackBar(const SnackBar(content: Text('Data restored')));
       navigator.pop();
     } catch (e) {
@@ -226,9 +280,11 @@ class _PreviewRow extends StatelessWidget {
         children: [
           Text(label, style: TextStyle(fontSize: 13, color: palette.textDim)),
           Flexible(
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -252,51 +308,78 @@ class _RestoreModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.button),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withValues(alpha: 0.08) : palette.card,
-          borderRadius: BorderRadius.circular(AppRadius.button),
-          border: Border.all(color: selected ? AppColors.primary : palette.line, width: 1.5),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              margin: const EdgeInsets.only(top: 2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: selected ? AppColors.primary : palette.line, width: 2),
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$title. $description',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.button),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.08)
+                : palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+            border: Border.all(
+              color: selected ? AppColors.primary : palette.line,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                margin: const EdgeInsets.only(top: 2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? AppColors.primary : palette.line,
+                    width: 2,
+                  ),
+                ),
+                child: selected
+                    ? Center(
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
-              child: selected
-                  ? Center(
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration:
-                            const BoxDecoration(shape: BoxShape.circle, color: AppColors.primary),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  const SizedBox(height: 2),
-                  Text(description,
-                      style: TextStyle(fontSize: 11, color: palette.textDim, height: 1.4)),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: palette.textDim,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

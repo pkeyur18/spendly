@@ -37,22 +37,31 @@ class AmountKeypad extends StatelessWidget {
       childAspectRatio: 1.9,
       children: [
         for (final k in keys)
-          GestureDetector(
-            onTap: () => onKey(k),
-            child: Container(
-              decoration: BoxDecoration(
-                color: palette.card,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: palette.line),
-              ),
-              alignment: Alignment.center,
-              child: k == 'del'
-                  ? const Icon(Icons.backspace_outlined, size: 20)
-                  : Text(k,
-                      style: const TextStyle(
+          Semantics(
+            button: true,
+            label: k == 'del'
+                ? 'Delete'
+                : (k == '.' ? 'Decimal point' : 'Digit $k'),
+            child: GestureDetector(
+              onTap: () => onKey(k),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: palette.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: palette.line),
+                ),
+                alignment: Alignment.center,
+                child: k == 'del'
+                    ? const Icon(Icons.backspace_outlined, size: 20)
+                    : Text(
+                        k,
+                        style: const TextStyle(
                           fontFamily: 'Sora',
                           fontSize: 20,
-                          fontWeight: FontWeight.w600)),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
             ),
           ),
       ],
@@ -72,6 +81,9 @@ class AmountDisplay extends StatelessWidget {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Center(
       child: RichText(
+        // RichText doesn't inherit the ambient MediaQuery textScaler like Text
+        // does — pass it explicitly so this honors Dynamic Type.
+        textScaler: MediaQuery.textScalerOf(context),
         text: TextSpan(
           style: TextStyle(
             fontFamily: 'Sora',
@@ -81,11 +93,18 @@ class AmountDisplay extends StatelessWidget {
           ),
           children: [
             TextSpan(
-                text: '₹',
-                style: TextStyle(color: palette.textDim, fontSize: fontSize * 0.62)),
+              text: '₹',
+              style: TextStyle(
+                color: palette.textDim,
+                fontSize: fontSize * 0.62,
+              ),
+            ),
             TextSpan(
-                text: amount,
-                style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color)),
+              text: amount,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge!.color,
+              ),
+            ),
           ],
         ),
       ),
@@ -151,21 +170,28 @@ class _AmountSheetState extends State<_AmountSheet> {
             onKey: (k) => setState(() => _amount = applyAmountKey(_amount, k)),
           ),
           const SizedBox(height: AppSpacing.md),
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(Money.parse(_amount)),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                gradient: AppColors.brandGradient,
-                borderRadius: BorderRadius.circular(AppRadius.button),
-              ),
-              alignment: Alignment.center,
-              child: const Text('Set budget',
+          Semantics(
+            button: true,
+            label: 'Set budget',
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(Money.parse(_amount)),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: AppColors.brandGradient,
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  'Set budget',
                   style: TextStyle(
-                      fontFamily: 'Sora',
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600)),
+                    fontFamily: 'Sora',
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ),
           ),
         ],

@@ -34,7 +34,10 @@ class EncryptedBlob {
   final Uint8List ciphertext;
 }
 
-Future<EncryptedBlob> encryptBackup(String plaintextJson, String password) async {
+Future<EncryptedBlob> encryptBackup(
+  String plaintextJson,
+  String password,
+) async {
   final salt = _randomBytes(16);
   final key = await _deriveKey(password, salt, kdfIterations);
   final box = await AesGcm.with256bits().encrypt(
@@ -64,8 +67,15 @@ Future<String> decryptBackup(EncryptedBlob blob, String password) async {
 }
 
 Future<SecretKey> _deriveKey(String password, List<int> salt, int iterations) {
-  final pbkdf2 = Pbkdf2(macAlgorithm: Hmac.sha256(), iterations: iterations, bits: 256);
-  return pbkdf2.deriveKey(secretKey: SecretKey(utf8.encode(password)), nonce: salt);
+  final pbkdf2 = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations: iterations,
+    bits: 256,
+  );
+  return pbkdf2.deriveKey(
+    secretKey: SecretKey(utf8.encode(password)),
+    nonce: salt,
+  );
 }
 
 final _random = Random.secure();

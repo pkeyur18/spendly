@@ -20,7 +20,9 @@ class ExpenseRepository {
     bool isRecurring = false,
     Recurrence? recurrence,
   }) {
-    return _db.into(_db.expenses).insert(
+    return _db
+        .into(_db.expenses)
+        .insert(
           ExpensesCompanion.insert(
             amountMinor: amount.minor,
             categoryId: categoryId,
@@ -45,13 +47,18 @@ class ExpenseRepository {
   }) async {
     await (_db.update(_db.expenses)..where((t) => t.id.equals(id))).write(
       ExpensesCompanion(
-        amountMinor: amount == null ? const Value.absent() : Value(amount.minor),
-        categoryId: categoryId == null ? const Value.absent() : Value(categoryId),
+        amountMinor: amount == null
+            ? const Value.absent()
+            : Value(amount.minor),
+        categoryId: categoryId == null
+            ? const Value.absent()
+            : Value(categoryId),
         date: date == null ? const Value.absent() : Value(date),
         note: note,
         paymentMethod: paymentMethod,
-        isRecurring:
-            isRecurring == null ? const Value.absent() : Value(isRecurring),
+        isRecurring: isRecurring == null
+            ? const Value.absent()
+            : Value(isRecurring),
         recurrence: recurrence,
         updatedAt: Value(DateTime.now()),
       ),
@@ -64,8 +71,11 @@ class ExpenseRepository {
   /// Expenses with date in [start, end), newest first.
   Stream<List<ExpenseRow>> watchInRange(DateTime start, DateTime end) {
     return (_db.select(_db.expenses)
-          ..where((t) => t.date.isBiggerOrEqualValue(start) &
-              t.date.isSmallerThanValue(end))
+          ..where(
+            (t) =>
+                t.date.isBiggerOrEqualValue(start) &
+                t.date.isSmallerThanValue(end),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
           ]))
@@ -101,11 +111,14 @@ class ExpenseRepository {
 
   Future<Money> totalInRange(DateTime start, DateTime end) async {
     final sum = _db.expenses.amountMinor.sum();
-    final row = await (_db.selectOnly(_db.expenses)
-          ..addColumns([sum])
-          ..where(_db.expenses.date.isBiggerOrEqualValue(start) &
-              _db.expenses.date.isSmallerThanValue(end)))
-        .getSingle();
+    final row =
+        await (_db.selectOnly(_db.expenses)
+              ..addColumns([sum])
+              ..where(
+                _db.expenses.date.isBiggerOrEqualValue(start) &
+                    _db.expenses.date.isSmallerThanValue(end),
+              ))
+            .getSingle();
     return Money.fromMinor(row.read(sum) ?? 0);
   }
 
@@ -113,8 +126,11 @@ class ExpenseRepository {
   /// per-category, top-5 and weekly trend from this single list (FR-20).
   Future<List<ExpenseRow>> listInRange(DateTime start, DateTime end) {
     return (_db.select(_db.expenses)
-          ..where((t) => t.date.isBiggerOrEqualValue(start) &
-              t.date.isSmallerThanValue(end))
+          ..where(
+            (t) =>
+                t.date.isBiggerOrEqualValue(start) &
+                t.date.isSmallerThanValue(end),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
           ]))
@@ -126,8 +142,10 @@ class ExpenseRepository {
     final sum = _db.expenses.amountMinor.sum();
     final query = _db.selectOnly(_db.expenses)
       ..addColumns([_db.expenses.categoryId, sum])
-      ..where(_db.expenses.date.isBiggerOrEqualValue(start) &
-          _db.expenses.date.isSmallerThanValue(end))
+      ..where(
+        _db.expenses.date.isBiggerOrEqualValue(start) &
+            _db.expenses.date.isSmallerThanValue(end),
+      )
       ..groupBy([_db.expenses.categoryId]);
     final rows = await query.get();
     return {
@@ -163,9 +181,9 @@ final currentMonthTotalProvider = FutureProvider<Money>(
   (ref) => ref.watch(expenseRepositoryProvider).monthTotal(DateTime.now()),
 );
 
-final currentMonthCategoryTotalsProvider = FutureProvider<Map<int, Money>>(
-  (ref) {
-    final (start, end) = monthBounds(DateTime.now());
-    return ref.watch(expenseRepositoryProvider).totalsByCategory(start, end);
-  },
-);
+final currentMonthCategoryTotalsProvider = FutureProvider<Map<int, Money>>((
+  ref,
+) {
+  final (start, end) = monthBounds(DateTime.now());
+  return ref.watch(expenseRepositoryProvider).totalsByCategory(start, end);
+});

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/async_state_views.dart';
 import '../budgets/budget_repository.dart';
 import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
@@ -35,14 +36,24 @@ class MonthlyReportScreen extends ConsumerWidget {
             tooltip: 'Custom range',
             icon: const Icon(Icons.tune_rounded),
             onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CustomReportScreen())),
+              MaterialPageRoute(builder: (_) => const CustomReportScreen()),
+            ),
           ),
         ],
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Could not load report:\n$e')),
+        loading: () => const LoadingView(),
+        error: (e, _) => ErrorView(
+          message: 'Could not load this report.',
+          onRetry: () => ref.invalidate(reportProvider((start, end))),
+        ),
         data: (data) {
+          if (data.txnCount == 0) {
+            return const EmptyView(
+              icon: Icons.receipt_long_outlined,
+              message: 'No transactions this month yet.',
+            );
+          }
           final budgetUsed = (overall == null || overall.minor <= 0)
               ? '—'
               : '${(data.total.ratioOf(overall) * 100).round()}%';
@@ -51,12 +62,14 @@ class MonthlyReportScreen extends ConsumerWidget {
             children: [
               ReportHero(label: 'Total spent', data: data),
               const SizedBox(height: AppSpacing.lg),
-              StatGrid(stats: [
-                ('Daily average', data.dailyAverage.format(locale: 'en_IN')),
-                ('Transactions', '${data.txnCount}'),
-                ('Top category', data.topCategory?.$1.name ?? '—'),
-                ('Budget used', budgetUsed),
-              ]),
+              StatGrid(
+                stats: [
+                  ('Daily average', data.dailyAverage.format(locale: 'en_IN')),
+                  ('Transactions', '${data.txnCount}'),
+                  ('Top category', data.topCategory?.$1.name ?? '—'),
+                  ('Budget used', budgetUsed),
+                ],
+              ),
               const SectionTitle('By category'),
               DonutChart(slices: data.breakdown, total: data.total),
               const SectionTitle('Top 5 expenses'),

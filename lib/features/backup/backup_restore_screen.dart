@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/db/providers.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/async_state_views.dart';
 import 'backup_export.dart';
 import 'backup_providers.dart';
 import 'local_auto_backup.dart';
@@ -15,7 +16,8 @@ class BackupRestoreScreen extends ConsumerStatefulWidget {
   const BackupRestoreScreen({super.key});
 
   @override
-  ConsumerState<BackupRestoreScreen> createState() => _BackupRestoreScreenState();
+  ConsumerState<BackupRestoreScreen> createState() =>
+      _BackupRestoreScreenState();
 }
 
 class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
@@ -23,13 +25,39 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final status = ref.watch(lastBackupStatusProvider).value;
-    final autoBackup = ref.watch(autoBackupSettingsProvider).value;
+    final statusAsync = ref.watch(lastBackupStatusProvider);
+    final autoBackupAsync = ref.watch(autoBackupSettingsProvider);
+
+    if (statusAsync.isLoading || autoBackupAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Backup & Restore')),
+        body: const LoadingView(),
+      );
+    }
+    if (statusAsync.hasError || autoBackupAsync.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Backup & Restore')),
+        body: ErrorView(
+          message: 'Couldn\'t load backup settings.',
+          onRetry: () {
+            ref.invalidate(lastBackupStatusProvider);
+            ref.invalidate(autoBackupSettingsProvider);
+          },
+        ),
+      );
+    }
+    final status = statusAsync.value;
+    final autoBackup = autoBackupAsync.value;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Backup & Restore')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 40),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          40,
+        ),
         children: [
           _StatusCard(status: status),
           const SectionTitle('Automatic backup'),
@@ -43,20 +71,31 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Auto backup',
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                          Text('Creates a new backup on a schedule',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Theme.of(context).extension<AppPalette>()!.textDim)),
+                          const Text(
+                            'Auto backup',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            'Creates a new backup on a schedule',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(
+                                context,
+                              ).extension<AppPalette>()!.textDim,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     Switch(
                       value: autoBackup?.enabled ?? false,
                       activeTrackColor: AppColors.primary,
-                      onChanged: (v) =>
-                          ref.read(autoBackupSettingsProvider.notifier).setEnabled(v),
+                      onChanged: (v) => ref
+                          .read(autoBackupSettingsProvider.notifier)
+                          .setEnabled(v),
                     ),
                   ],
                 ),
@@ -70,8 +109,9 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
                           child: _FreqChip(
                             label: _freqLabel(freq),
                             selected: autoBackup?.frequency == freq,
-                            onTap: () =>
-                                ref.read(autoBackupSettingsProvider.notifier).setFrequency(freq),
+                            onTap: () => ref
+                                .read(autoBackupSettingsProvider.notifier)
+                                .setFrequency(freq),
                           ),
                         ),
                       ),
@@ -88,7 +128,9 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
                 Text(
                   'Save a full copy of your expenses, categories, and budgets right now.',
                   style: TextStyle(
-                      fontSize: 13, color: Theme.of(context).extension<AppPalette>()!.textDim),
+                    fontSize: 13,
+                    color: Theme.of(context).extension<AppPalette>()!.textDim,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 PrimaryButton(
@@ -98,8 +140,9 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 OutlineButton(
                   label: 'Restore from a backup file',
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(builder: (_) => const RestoreScreen())),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RestoreScreen()),
+                  ),
                 ),
               ],
             ),
@@ -121,10 +164,10 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   }
 
   String _freqLabel(BackupFrequency f) => switch (f) {
-        BackupFrequency.daily => 'Daily',
-        BackupFrequency.weekly => 'Weekly',
-        BackupFrequency.monthly => 'Monthly',
-      };
+    BackupFrequency.daily => 'Daily',
+    BackupFrequency.weekly => 'Weekly',
+    BackupFrequency.monthly => 'Monthly',
+  };
 
   Future<void> _backUpNow() async {
     final password = await _askOptionalPassword(context);
@@ -134,7 +177,11 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
     try {
       final repo = ref.read(backupRepositoryProvider);
       final settings = ref.read(settingsRepositoryProvider);
-      await shareBackupFile(repo, settings, password: password.isEmpty ? null : password);
+      await shareBackupFile(
+        repo,
+        settings,
+        password: password.isEmpty ? null : password,
+      );
       ref.invalidate(lastBackupStatusProvider);
       messenger.showSnackBar(const SnackBar(content: Text('Backup created')));
     } catch (e) {
@@ -161,7 +208,9 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
             TextField(
               controller: controller,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password (optional)'),
+              decoration: const InputDecoration(
+                labelText: 'Password (optional)',
+              ),
             ),
           ],
         ),
@@ -210,7 +259,10 @@ class _StatusCard extends StatelessWidget {
                 child: Text(
                   at == null ? 'No backup yet' : 'Your data is backed up',
                   style: const TextStyle(
-                      fontFamily: 'Sora', fontWeight: FontWeight.w600, fontSize: 14),
+                    fontFamily: 'Sora',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],
@@ -220,7 +272,7 @@ class _StatusCard extends StatelessWidget {
             at == null
                 ? 'Back up now to protect your data.'
                 : 'Last backup: ${DateFormat.yMMMd().add_jm().format(at)} · '
-                    '${_formatSize(status?.lastBackupSizeBytes)}',
+                      '${_formatSize(status?.lastBackupSizeBytes)}',
             style: TextStyle(fontSize: 12, color: palette.textDim),
           ),
           if (at != null) ...[
@@ -237,12 +289,20 @@ class _StatusCard extends StatelessWidget {
                   Container(
                     width: 7,
                     height: 7,
-                    decoration: const BoxDecoration(color: AppColors.teal, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                      color: AppColors.teal,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                   const SizedBox(width: 6),
-                  const Text('Protected',
-                      style: TextStyle(
-                          color: AppColors.teal, fontSize: 12, fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Protected',
+                    style: TextStyle(
+                      color: AppColors.teal,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -261,7 +321,11 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _FreqChip extends StatelessWidget {
-  const _FreqChip({required this.label, required this.selected, required this.onTap});
+  const _FreqChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -269,22 +333,29 @@ class _FreqChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : palette.card2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AppColors.primary : palette.line),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : palette.textDim,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : palette.card2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.primary : palette.line,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : palette.textDim,
+            ),
           ),
         ),
       ),
@@ -301,19 +372,31 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          gradient: onTap == null ? null : AppColors.brandGradient,
-          color: onTap == null ? Theme.of(context).disabledColor.withValues(alpha: 0.2) : null,
-          borderRadius: BorderRadius.circular(AppRadius.button),
-        ),
-        alignment: Alignment.center,
-        child: Text(label,
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            gradient: onTap == null ? null : AppColors.brandGradient,
+            color: onTap == null
+                ? Theme.of(context).disabledColor.withValues(alpha: 0.2)
+                : null,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
             style: const TextStyle(
-                fontFamily: 'Sora', color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+              fontFamily: 'Sora',
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -328,18 +411,27 @@ class OutlineButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.button),
-          border: Border.all(color: AppColors.primary, width: 1.5),
-        ),
-        alignment: Alignment.center,
-        child: Text(label,
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.button),
+            border: Border.all(color: AppColors.primary, width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
             style: const TextStyle(
-                color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14)),
+              color: AppColors.primary,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -359,7 +451,10 @@ class _PreviewRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(fontSize: 13, color: palette.textDim)),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

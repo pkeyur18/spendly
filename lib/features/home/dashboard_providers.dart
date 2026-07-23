@@ -44,8 +44,9 @@ List<TrendBar> trendBuckets(List<ExpenseRow> expenses, int n, DateTime now) {
   final bars = <TrendBar>[];
   for (var i = n - 1; i >= 0; i--) {
     final m = DateTime(now.year, now.month - i, 1);
-    final total = sumMoney(expenses.where(
-        (e) => e.date.year == m.year && e.date.month == m.month));
+    final total = sumMoney(
+      expenses.where((e) => e.date.year == m.year && e.date.month == m.month),
+    );
     bars.add((fmt.format(m), total, i == 0));
   }
   return bars;
@@ -69,7 +70,9 @@ final categoryBreakdownProvider = Provider<List<CategorySlice>>((ref) {
 });
 
 /// Recent transactions (this month, newest first), paired with their category.
-final recentExpensesProvider = Provider<List<(ExpenseRow, CategoryRow?)>>((ref) {
+final recentExpensesProvider = Provider<List<(ExpenseRow, CategoryRow?)>>((
+  ref,
+) {
   final expenses = ref.watch(currentMonthExpensesProvider).value ?? const [];
   final byId = ref.watch(categoriesByIdProvider);
   return [for (final e in expenses.take(10)) (e, byId[e.categoryId])];

@@ -51,12 +51,22 @@ class BackupRepository {
 
       await _db.batch((b) {
         b.insertAll(
-            _db.categories, payload.categories.map((c) => c.toReplaceCompanion()));
-        b.insertAll(_db.budgets, payload.budgets.map((bg) => bg.toReplaceCompanion()));
+          _db.categories,
+          payload.categories.map((c) => c.toReplaceCompanion()),
+        );
         b.insertAll(
-            _db.expenses, payload.expenses.map((e) => e.toReplaceCompanion()));
+          _db.budgets,
+          payload.budgets.map((bg) => bg.toReplaceCompanion()),
+        );
+        b.insertAll(
+          _db.expenses,
+          payload.expenses.map((e) => e.toReplaceCompanion()),
+        );
         if (payload.settings.isNotEmpty) {
-          b.insertAll(_db.settings, payload.settings.map((s) => s.toCompanion()));
+          b.insertAll(
+            _db.settings,
+            payload.settings.map((s) => s.toCompanion()),
+          );
         }
       });
     });
@@ -79,7 +89,9 @@ class BackupRepository {
   /// individually (not batched) so each new row's assigned id can be
   /// recorded — category counts are small enough that this is fine.
   /// Returns backup-category-id -> local-category-id.
-  Future<Map<int, int>> _mergeCategories(List<BackupCategory> backupCats) async {
+  Future<Map<int, int>> _mergeCategories(
+    List<BackupCategory> backupCats,
+  ) async {
     final existing = await _db.select(_db.categories).get();
     final byNormalizedName = <String, int>{
       for (final c in existing) _normalize(c.name): c.id,
@@ -95,8 +107,9 @@ class BackupRepository {
         idMap[c.id] = matchedId;
         continue;
       }
-      final newId =
-          await _db.into(_db.categories).insert(c.toInsertCompanion(sortOrder: nextSortOrder));
+      final newId = await _db
+          .into(_db.categories)
+          .insert(c.toInsertCompanion(sortOrder: nextSortOrder));
       idMap[c.id] = newId;
       nextSortOrder++;
     }
@@ -107,7 +120,9 @@ class BackupRepository {
   /// occupied locally is left alone (merge is additive, never overwrites a
   /// budget the user has since changed).
   Future<void> _mergeBudgets(
-      List<BackupBudget> backupBudgets, Map<int, int> categoryIdMap) async {
+    List<BackupBudget> backupBudgets,
+    Map<int, int> categoryIdMap,
+  ) async {
     final existing = await _db.select(_db.budgets).get();
     final occupiedSlots = <int?>{for (final b in existing) b.categoryId};
 
@@ -129,7 +144,9 @@ class BackupRepository {
   /// Matches by content fingerprint (amount, date, mapped category, note,
   /// payment method) — the id column isn't stable across devices/reinstalls.
   Future<void> _mergeExpenses(
-      List<BackupExpense> backupExpenses, Map<int, int> categoryIdMap) async {
+    List<BackupExpense> backupExpenses,
+    Map<int, int> categoryIdMap,
+  ) async {
     final existing = await _db.select(_db.expenses).get();
     final fingerprints = <String>{
       for (final e in existing)

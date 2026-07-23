@@ -40,26 +40,37 @@ class AutoBackupSettingsNotifier extends AsyncNotifier<AutoBackupSettings> {
     final settings = ref.read(settingsRepositoryProvider);
     final enabled =
         await settings.get(SettingsRepository.autoBackupEnabledKey) == 'true';
-    final freqName = await settings.get(SettingsRepository.autoBackupFrequencyKey);
-    final frequency = BackupFrequency.values
-        .firstWhere((f) => f.name == freqName, orElse: () => BackupFrequency.weekly);
+    final freqName = await settings.get(
+      SettingsRepository.autoBackupFrequencyKey,
+    );
+    final frequency = BackupFrequency.values.firstWhere(
+      (f) => f.name == freqName,
+      orElse: () => BackupFrequency.weekly,
+    );
     return AutoBackupSettings(enabled: enabled, frequency: frequency);
   }
 
   Future<void> setEnabled(bool enabled) async {
-    final current = state.value ?? const AutoBackupSettings(
-      enabled: false,
-      frequency: BackupFrequency.weekly,
+    final current =
+        state.value ??
+        const AutoBackupSettings(
+          enabled: false,
+          frequency: BackupFrequency.weekly,
+        );
+    state = AsyncData(
+      AutoBackupSettings(enabled: enabled, frequency: current.frequency),
     );
-    state = AsyncData(AutoBackupSettings(enabled: enabled, frequency: current.frequency));
     await ref
         .read(settingsRepositoryProvider)
         .set(SettingsRepository.autoBackupEnabledKey, enabled.toString());
   }
 
   Future<void> setFrequency(BackupFrequency frequency) async {
-    final current = state.value ?? AutoBackupSettings(enabled: false, frequency: frequency);
-    state = AsyncData(AutoBackupSettings(enabled: current.enabled, frequency: frequency));
+    final current =
+        state.value ?? AutoBackupSettings(enabled: false, frequency: frequency);
+    state = AsyncData(
+      AutoBackupSettings(enabled: current.enabled, frequency: frequency),
+    );
     await ref
         .read(settingsRepositoryProvider)
         .set(SettingsRepository.autoBackupFrequencyKey, frequency.name);
@@ -68,7 +79,8 @@ class AutoBackupSettingsNotifier extends AsyncNotifier<AutoBackupSettings> {
 
 final autoBackupSettingsProvider =
     AsyncNotifierProvider<AutoBackupSettingsNotifier, AutoBackupSettings>(
-        AutoBackupSettingsNotifier.new);
+      AutoBackupSettingsNotifier.new,
+    );
 
 /// Runs the app-launch/resume due-check once per invalidation (see
 /// `app.dart`'s lifecycle observer, which invalidates this on resume).

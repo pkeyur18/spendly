@@ -15,10 +15,10 @@ extension BackupFrequencyX on BackupFrequency {
   /// Simple elapsed-duration math — no calendar-month edge cases needed for
   /// a "has it been about this long" check.
   Duration get interval => switch (this) {
-        BackupFrequency.daily => const Duration(days: 1),
-        BackupFrequency.weekly => const Duration(days: 7),
-        BackupFrequency.monthly => const Duration(days: 30),
-      };
+    BackupFrequency.daily => const Duration(days: 1),
+    BackupFrequency.weekly => const Duration(days: 7),
+    BackupFrequency.monthly => const Duration(days: 30),
+  };
 }
 
 /// ponytail: there's no background-execution package in this project
@@ -30,24 +30,43 @@ extension BackupFrequencyX on BackupFrequency {
 /// type one) and never open the share sheet — they only write a local file
 /// and update the "last backup" status; delivering it to cloud storage still
 /// needs a user tap via "Back up now".
-Future<void> runAutoBackupIfDue(BackupRepository repo, SettingsRepository settings) async {
-  final enabled = await settings.get(SettingsRepository.autoBackupEnabledKey) == 'true';
+Future<void> runAutoBackupIfDue(
+  BackupRepository repo,
+  SettingsRepository settings,
+) async {
+  final enabled =
+      await settings.get(SettingsRepository.autoBackupEnabledKey) == 'true';
   if (!enabled) return;
 
-  final freqName = await settings.get(SettingsRepository.autoBackupFrequencyKey);
-  final frequency = BackupFrequency.values
-      .firstWhere((f) => f.name == freqName, orElse: () => BackupFrequency.weekly);
+  final freqName = await settings.get(
+    SettingsRepository.autoBackupFrequencyKey,
+  );
+  final frequency = BackupFrequency.values.firstWhere(
+    (f) => f.name == freqName,
+    orElse: () => BackupFrequency.weekly,
+  );
 
   final lastAtRaw = await settings.get(SettingsRepository.lastBackupAtKey);
   final lastAt = lastAtRaw == null ? null : DateTime.tryParse(lastAtRaw);
-  final due = lastAt == null || DateTime.now().difference(lastAt) >= frequency.interval;
+  final due =
+      lastAt == null || DateTime.now().difference(lastAt) >= frequency.interval;
   if (!due) return;
 
   final bytes = await buildBackupBytes(repo);
-  final backupsDir = Directory(p.join((await getApplicationSupportDirectory()).path, 'backups'));
+  final backupsDir = Directory(
+    p.join((await getApplicationSupportDirectory()).path, 'backups'),
+  );
   await backupsDir.create(recursive: true);
-  await File(p.join(backupsDir.path, 'spendly-backup-latest.json')).writeAsBytes(bytes);
+  await File(
+    p.join(backupsDir.path, 'spendly-backup-latest.json'),
+  ).writeAsBytes(bytes);
 
-  await settings.set(SettingsRepository.lastBackupAtKey, DateTime.now().toIso8601String());
-  await settings.set(SettingsRepository.lastBackupSizeKey, bytes.length.toString());
+  await settings.set(
+    SettingsRepository.lastBackupAtKey,
+    DateTime.now().toIso8601String(),
+  );
+  await settings.set(
+    SettingsRepository.lastBackupSizeKey,
+    bytes.length.toString(),
+  );
 }

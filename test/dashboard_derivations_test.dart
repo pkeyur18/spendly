@@ -42,21 +42,27 @@ void main() {
     expect(pctSum, closeTo(1.0, 0.0001));
   });
 
-  test('trendBuckets: 6 bars, last is current month, totals land right', () async {
-    final now = DateTime(2026, 6, 15);
-    final lastMonth = DateTime(2026, 5, 10);
-    await expenses.add(amount: Money.parse('300'), categoryId: 1, date: now);
-    await expenses.add(amount: Money.parse('120'), categoryId: 1, date: lastMonth);
-    final rows =
-        await expenses.watchLastNMonths(6, now: now).first;
+  test(
+    'trendBuckets: 6 bars, last is current month, totals land right',
+    () async {
+      final now = DateTime(2026, 6, 15);
+      final lastMonth = DateTime(2026, 5, 10);
+      await expenses.add(amount: Money.parse('300'), categoryId: 1, date: now);
+      await expenses.add(
+        amount: Money.parse('120'),
+        categoryId: 1,
+        date: lastMonth,
+      );
+      final rows = await expenses.watchLastNMonths(6, now: now).first;
 
-    final bars = trendBuckets(rows, 6, now);
-    expect(bars.length, 6);
-    expect(bars.last.$3, isTrue); // current month flagged
-    expect(bars.last.$2, Money.fromMinor(30000)); // Jun 300
-    expect(bars[4].$2, Money.fromMinor(12000)); // May 120
-    expect(bars[3].$2, Money.zero); // Apr empty
-  });
+      final bars = trendBuckets(rows, 6, now);
+      expect(bars.length, 6);
+      expect(bars.last.$3, isTrue); // current month flagged
+      expect(bars.last.$2, Money.fromMinor(30000)); // Jun 300
+      expect(bars[4].$2, Money.fromMinor(12000)); // May 120
+      expect(bars[3].$2, Money.zero); // Apr empty
+    },
+  );
 
   test('empty inputs stay safe', () {
     expect(sumMoney(const []), Money.zero);

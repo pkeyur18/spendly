@@ -7,6 +7,7 @@ import '../../core/money/money.dart';
 import '../../core/notify/notifications.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
+import '../../core/widgets/async_state_views.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
@@ -43,8 +44,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _amount = e == null
         ? '0'
         : (e.amount.minor % 100 == 0
-            ? (e.amount.minor ~/ 100).toString()
-            : e.amount.major.toStringAsFixed(2));
+              ? (e.amount.minor ~/ 100).toString()
+              : e.amount.major.toStringAsFixed(2));
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
   }
 
@@ -56,8 +57,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     return Scaffold(
       body: SafeArea(
         child: categoriesAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
+          loading: () => const LoadingView(),
+          error: (e, _) => ErrorView(
+            message: 'Couldn\'t load categories.',
+            onRetry: () => ref.invalidate(activeCategoriesProvider),
+          ),
           data: (categories) {
             _applyDefaultCategory(categories);
             final selected = categories
@@ -70,7 +74,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 _titleBar(context),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
                     children: [
                       const SizedBox(height: AppSpacing.sm),
                       AmountDisplay(_amount),
@@ -79,8 +85,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       _categoryGrid(categories),
                       const SizedBox(height: AppSpacing.lg),
                       AmountKeypad(
-                        onKey: (k) =>
-                            setState(() => _amount = applyAmountKey(_amount, k)),
+                        onKey: (k) => setState(
+                          () => _amount = applyAmountKey(_amount, k),
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       _saveButton(context),
@@ -107,28 +114,41 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Widget _titleBar(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
       child: Row(
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
+            tooltip: 'Close',
             icon: const Icon(Icons.close),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(_isEdit ? 'Edit expense' : 'New expense',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            _isEdit ? 'Edit expense' : 'New expense',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ],
       ),
     );
   }
 
-  Widget _subLine(BuildContext context, CategoryRow? selected, AppPalette palette) {
+  Widget _subLine(
+    BuildContext context,
+    CategoryRow? selected,
+    AppPalette palette,
+  ) {
     final label = selected?.name ?? 'Select category';
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs),
       child: Center(
-        child: Text('$label · Today',
-            style: TextStyle(color: palette.textDim, fontSize: 13)),
+        child: Text(
+          '$label · Today',
+          style: TextStyle(color: palette.textDim, fontSize: 13),
+        ),
       ),
     );
   }
@@ -146,30 +166,43 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       itemBuilder: (context, i) {
         final c = categories[i];
         final sel = c.id == _categoryId;
-        return GestureDetector(
-          onTap: () => setState(() => _categoryId = c.id),
-          child: _CategoryTile(category: c, selected: sel),
+        return Semantics(
+          button: true,
+          selected: sel,
+          label: c.name,
+          child: GestureDetector(
+            onTap: () => setState(() => _categoryId = c.id),
+            child: _CategoryTile(category: c, selected: sel),
+          ),
         );
       },
     );
   }
 
   Widget _saveButton(BuildContext context) {
-    return GestureDetector(
-      onTap: _save,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          gradient: AppColors.brandGradient,
-          borderRadius: BorderRadius.circular(AppRadius.button),
-        ),
-        alignment: Alignment.center,
-        child: Text(_isEdit ? 'Save changes' : 'Save expense',
+    final label = _isEdit ? 'Save changes' : 'Save expense';
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: _save,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            gradient: AppColors.brandGradient,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
             style: const TextStyle(
-                fontFamily: 'Sora',
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w600)),
+              fontFamily: 'Sora',
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -186,8 +219,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final oldAmount = widget.editing?.amount ?? Money.zero;
     final repo = ref.read(expenseRepositoryProvider);
     if (_isEdit) {
-      await repo.update(widget.editing!.id,
-          amount: amount, categoryId: categoryId);
+      await repo.update(
+        widget.editing!.id,
+        amount: amount,
+        categoryId: categoryId,
+      );
     } else {
       await repo.add(amount: amount, categoryId: categoryId);
     }
@@ -197,7 +233,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final sameCategory = _isEdit && widget.editing!.categoryId == categoryId;
     final delta = sameCategory ? amount - oldAmount : amount;
     await _checkBudgetAlerts(categoryId, delta);
-    await refreshWidgets(ref); // FR-29: keep the home/lock-screen widgets current
+    await refreshWidgets(
+      ref,
+    ); // FR-29: keep the home/lock-screen widgets current
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -214,7 +252,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final catBudget = ref.read(perCategoryBudgetsProvider)[categoryId];
     if (catBudget != null) {
       final after = byCategory[categoryId] ?? Money.zero;
-      final name = ref.read(categoriesByIdProvider)[categoryId]?.name ?? 'Category';
+      final name =
+          ref.read(categoriesByIdProvider)[categoryId]?.name ?? 'Category';
       for (final pct in crossedThresholds(after - delta, after, catBudget)) {
         await notifier.showBudgetAlert(name, pct);
       }
@@ -240,32 +279,46 @@ class _CategoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    return Container(
-      decoration: BoxDecoration(
-        color: selected ? AppColors.primary.withValues(alpha: 0.10) : palette.card,
-        borderRadius: BorderRadius.circular(AppRadius.button),
-        border: Border.all(
-          color: selected ? AppColors.primary : palette.line,
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(category.icon, style: const TextStyle(fontSize: 18)),
-          const SizedBox(height: 4),
-          Text(
-            category.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? AppColors.primary : palette.textDim,
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.10)
+                : palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+            border: Border.all(
+              color: selected ? AppColors.primary : palette.line,
+              width: 1.5,
             ),
           ),
-        ],
-      ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(category.icon, style: const TextStyle(fontSize: 18)),
+              const SizedBox(height: 4),
+              Text(
+                category.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected ? AppColors.primary : palette.textDim,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Selection isn't color-only: a checkmark badge marks the selected
+        // tile too.
+        if (selected)
+          const Positioned(
+            top: 3,
+            right: 3,
+            child: Icon(Icons.check_circle, size: 14, color: AppColors.primary),
+          ),
+      ],
     );
   }
 }

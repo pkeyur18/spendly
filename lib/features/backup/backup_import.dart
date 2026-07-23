@@ -44,7 +44,10 @@ Future<BackupPreview> loadAndValidate(String path, {String? password}) async {
 }
 
 Future<void> executeRestore(
-    BackupPayload payload, RestoreMode mode, BackupRepository repo) {
+  BackupPayload payload,
+  RestoreMode mode,
+  BackupRepository repo,
+) {
   return switch (mode) {
     RestoreMode.merge => repo.mergeAll(payload),
     RestoreMode.replace => repo.replaceAll(payload),

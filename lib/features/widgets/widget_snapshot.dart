@@ -23,7 +23,8 @@ const iOSWidgetKinds = [
 /// Android Glance receiver — fully-qualified so `home_widget` finds it in the
 /// `.widget` subpackage. One responsive receiver serves all sizes. Must match
 /// the manifest registration.
-const androidWidgetReceiver = 'com.spendly.spendly.widget.SpendlyWidgetReceiver';
+const androidWidgetReceiver =
+    'com.spendly.spendly.widget.SpendlyWidgetReceiver';
 
 /// Snapshot keys the native widgets read. Kept as constants so Dart and the
 /// Swift/Kotlin sides can't silently drift apart.
@@ -56,17 +57,27 @@ Map<String, String> buildWidgetSnapshot({
   required DateTime now,
 }) {
   final hasBudget = budget != null && budget.minor > 0;
-  final pct = hasBudget ? (monthTotal.ratioOf(budget).clamp(0.0, 1.0) * 100).round() : 0;
+  final pct = hasBudget
+      ? (monthTotal.ratioOf(budget).clamp(0.0, 1.0) * 100).round()
+      : 0;
   final left = hasBudget
-      ? Money.fromMinor((budget.minor - monthTotal.minor).clamp(0, budget.minor))
+      ? Money.fromMinor(
+          (budget.minor - monthTotal.minor).clamp(0, budget.minor),
+        )
       : Money.zero;
 
   // Trend bar heights as 0-100 ints relative to the tallest month (so the
   // native mini-bars need no scaling logic). Flat month = all zero-height.
-  final maxMinor = trend.fold<int>(0, (m, b) => b.$2.minor > m ? b.$2.minor : m);
+  final maxMinor = trend.fold<int>(
+    0,
+    (m, b) => b.$2.minor > m ? b.$2.minor : m,
+  );
   final trendJson = [
     for (final (label, total, _) in trend)
-      {'label': label, 'heightPct': maxMinor == 0 ? 0 : (total.minor * 100 / maxMinor).round()},
+      {
+        'label': label,
+        'heightPct': maxMinor == 0 ? 0 : (total.minor * 100 / maxMinor).round(),
+      },
   ];
 
   final quickAddJson = [

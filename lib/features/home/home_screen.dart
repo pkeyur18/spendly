@@ -40,7 +40,13 @@ class HomeScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(9),
               ),
               alignment: Alignment.center,
-              child: const Text('₹', style: TextStyle(color: Colors.white, fontSize: 16)),
+              padding: const EdgeInsets.all(4),
+              child: const FittedBox(
+                child: Text(
+                  '₹',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
             ),
             const SizedBox(width: AppSpacing.sm),
             const Text('Spendly'),
@@ -88,6 +94,7 @@ class HomeScreen extends ConsumerWidget {
         ),
         child: FloatingActionButton(
           onPressed: () => _openQuickAdd(context),
+          tooltip: 'Add expense',
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: const Icon(Icons.add, color: Colors.white, size: 28),
@@ -102,19 +109,27 @@ class HomeScreen extends ConsumerWidget {
     final part = now.hour < 12
         ? 'morning'
         : now.hour < 17
-            ? 'afternoon'
-            : 'evening';
+        ? 'afternoon'
+        : 'evening';
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xs, AppSpacing.sm, AppSpacing.xs, AppSpacing.xl),
+        AppSpacing.xs,
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.xl,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Good $part 👋',
-              style: TextStyle(color: palette.textDim, fontSize: 13)),
+          Text(
+            'Good $part 👋',
+            style: TextStyle(color: palette.textDim, fontSize: 13),
+          ),
           const SizedBox(height: 2),
-          Text("Here's your ${DateFormat.MMMM().format(now)}",
-              style: Theme.of(context).textTheme.headlineMedium),
+          Text(
+            "Here's your ${DateFormat.MMMM().format(now)}",
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
         ],
       ),
     );
@@ -122,8 +137,10 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _emptyRecent(AppPalette palette) {
     return AppCard(
-      child: Text('No expenses yet — tap + to log one.',
-          style: TextStyle(color: palette.textDim, fontSize: 13)),
+      child: Text(
+        'No expenses yet — tap + to log one.',
+        style: TextStyle(color: palette.textDim, fontSize: 13),
+      ),
     );
   }
 
@@ -135,9 +152,9 @@ class HomeScreen extends ConsumerWidget {
   }
 
   void _openQuickAdd(BuildContext context, {ExpenseRow? editing}) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => QuickAddScreen(editing: editing)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => QuickAddScreen(editing: editing)));
   }
 }
 
@@ -172,17 +189,20 @@ class _HeroCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Spent this month',
-              style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const Text(
+            'Spent this month',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 4),
           Text(
             total.format(locale: 'en_IN'),
             style: const TextStyle(
-                fontFamily: 'Sora',
-                color: Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -1),
+              fontFamily: 'Sora',
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -1,
+            ),
           ),
           const SizedBox(height: 14),
           if (hasBudget) ...[
@@ -199,15 +219,21 @@ class _HeroCard extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('${(ratio * 100).round()}% of ${budget.format(locale: 'en_IN')} budget',
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
-                Text('${left!.format(locale: 'en_IN')} left',
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                Text(
+                  '${(ratio * 100).round()}% of ${budget.format(locale: 'en_IN')} budget',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+                Text(
+                  '${left!.format(locale: 'en_IN')} left',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
               ],
             ),
           ] else
-            const Text('Set a monthly budget in Categories → Budgets',
-                style: TextStyle(color: Colors.white70, fontSize: 12)),
+            const Text(
+              'Set a monthly budget in Categories → Budgets',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
         ],
       ),
     );
@@ -240,29 +266,46 @@ class _TransactionTile extends ConsumerWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: (category?.color ?? palette.textDim).withValues(alpha: 0.15),
+                color: (category?.color ?? palette.textDim).withValues(
+                  alpha: 0.15,
+                ),
                 borderRadius: BorderRadius.circular(AppRadius.icon),
               ),
               alignment: Alignment.center,
-              child: Text(category?.icon ?? '💸', style: const TextStyle(fontSize: 17)),
+              child: Text(
+                category?.icon ?? '💸',
+                style: const TextStyle(fontSize: 17),
+              ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(_relativeTime(expense.date),
-                      style: TextStyle(fontSize: 12, color: palette.textDim)),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    _relativeTime(expense.date),
+                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                  ),
                 ],
               ),
             ),
-            Text('-${expense.amount.format(locale: 'en_IN')}',
-                style: const TextStyle(
-                    fontFamily: 'Sora', fontWeight: FontWeight.w600, fontSize: 15)),
+            Text(
+              '-${expense.amount.format(locale: 'en_IN')}',
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
           ],
         ),
       ),
@@ -292,9 +335,15 @@ class _BottomNav extends StatelessWidget {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
 
-    Widget item(IconData icon, String label, {bool active = false, VoidCallback? onTap}) {
+    Widget item(
+      IconData icon,
+      String label, {
+      bool active = false,
+      VoidCallback? onTap,
+    }) {
       return IconButton(
         onPressed: onTap ?? () => soon(label),
+        tooltip: label,
         icon: Icon(icon, color: active ? AppColors.primary : palette.textDim),
       );
     }
@@ -307,19 +356,38 @@ class _BottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
-          item(Icons.bar_chart_rounded, 'Reports', onTap: () {
-            Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => MonthlyReportScreen(month: DateTime.now())));
-          }),
+          item(
+            Icons.bar_chart_rounded,
+            'Reports',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MonthlyReportScreen(month: DateTime.now()),
+                ),
+              );
+            },
+          ),
           const SizedBox(width: 40),
-          item(Icons.sell_rounded, 'Categories', onTap: () {
-            Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const CategoryManagerScreen()));
-          }),
-          item(Icons.settings_rounded, 'Settings', onTap: () {
-            Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const SettingsScreen()));
-          }),
+          item(
+            Icons.sell_rounded,
+            'Categories',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CategoryManagerScreen(),
+                ),
+              );
+            },
+          ),
+          item(
+            Icons.settings_rounded,
+            'Settings',
+            onTap: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            },
+          ),
         ],
       ),
     );

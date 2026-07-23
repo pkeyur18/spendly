@@ -9,7 +9,10 @@ import 'backup_repository.dart';
 /// Builds the backup file bytes (FR-33, FR-34) — plain, or password-encrypted
 /// per [password]. Pure I/O-free logic, so it's directly reusable by both the
 /// manual "Back up now" share flow and the silent auto-backup writer.
-Future<Uint8List> buildBackupBytes(BackupRepository repo, {String? password}) async {
+Future<Uint8List> buildBackupBytes(
+  BackupRepository repo, {
+  String? password,
+}) async {
   final payload = await repo.exportAll();
   final envelopeJson = await encodeEnvelope(payload, password: password);
   return Uint8List.fromList(utf8.encode(envelopeJson));
@@ -26,14 +29,26 @@ Future<void> shareBackupFile(
 }) async {
   final bytes = await buildBackupBytes(repo, password: password);
   final filename = 'spendly-backup-${_dateStamp(DateTime.now())}.json';
-  await shareReportFile(bytes: bytes, filename: filename, text: 'Spendly backup');
+  await shareReportFile(
+    bytes: bytes,
+    filename: filename,
+    text: 'Spendly backup',
+  );
   await _recordBackupStatus(settings, bytes.length);
 }
 
-Future<void> _recordBackupStatus(SettingsRepository settings, int sizeBytes) async {
+Future<void> _recordBackupStatus(
+  SettingsRepository settings,
+  int sizeBytes,
+) async {
   await settings.set(
-      SettingsRepository.lastBackupAtKey, DateTime.now().toIso8601String());
-  await settings.set(SettingsRepository.lastBackupSizeKey, sizeBytes.toString());
+    SettingsRepository.lastBackupAtKey,
+    DateTime.now().toIso8601String(),
+  );
+  await settings.set(
+    SettingsRepository.lastBackupSizeKey,
+    sizeBytes.toString(),
+  );
 }
 
 String _dateStamp(DateTime d) =>

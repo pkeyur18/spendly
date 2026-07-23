@@ -18,13 +18,19 @@ void main() {
   test('seeds 8 default categories on create (FR-8)', () async {
     final cats = await repo.watchAll().first;
     expect(cats.length, 8);
-    expect(cats.map((c) => c.name),
-        containsAll(['Food', 'Travel', 'Bills', 'Other']));
+    expect(
+      cats.map((c) => c.name),
+      containsAll(['Food', 'Travel', 'Bills', 'Other']),
+    );
     expect(cats.every((c) => c.isDefault), isTrue);
   });
 
   test('create appends after existing sortOrder', () async {
-    final id = await repo.create(name: 'Test', icon: '⭐', colorValue: 0xFF6366F1);
+    final id = await repo.create(
+      name: 'Test',
+      icon: '⭐',
+      colorValue: 0xFF6366F1,
+    );
     final cats = await repo.watchAll().first;
     final created = cats.firstWhere((c) => c.id == id);
     expect(created.sortOrder, 8); // after the 0-7 defaults

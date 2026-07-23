@@ -117,7 +117,10 @@ Future<BackupPayload> decodePayload(String jsonText, {String? password}) async {
   }
 }
 
-Future<String> _decryptEnvelope(Map<String, dynamic> envelope, String password) async {
+Future<String> _decryptEnvelope(
+  Map<String, dynamic> envelope,
+  String password,
+) async {
   try {
     final blob = EncryptedBlob(
       kdfIterations: envelope['kdfIterations'] as int,

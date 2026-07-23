@@ -46,7 +46,8 @@ class Budgets extends Table {
   IntColumn get id => integer().autoIncrement()();
 
   /// Null = overall monthly budget; set = per-category budget.
-  IntColumn get categoryId => integer().nullable().references(Categories, #id)();
+  IntColumn get categoryId =>
+      integer().nullable().references(Categories, #id)();
   IntColumn get amountMinor => integer()();
   TextColumn get period =>
       textEnum<BudgetPeriod>().withDefault(const Constant('monthly'))();
@@ -75,15 +76,15 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-          await batch((b) => b.insertAll(categories, _defaultCategories));
-        },
-        onUpgrade: (m, from, to) async {
-          // ponytail: no migrations yet at v1. Add stepwise upgrades here as
-          // schemaVersion bumps; every future version must read old backups.
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+      await batch((b) => b.insertAll(categories, _defaultCategories));
+    },
+    onUpgrade: (m, from, to) async {
+      // ponytail: no migrations yet at v1. Add stepwise upgrades here as
+      // schemaVersion bumps; every future version must read old backups.
+    },
+  );
 
   static LazyDatabase _open() {
     return LazyDatabase(() async {
