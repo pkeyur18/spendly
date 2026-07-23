@@ -86,6 +86,20 @@ class AppDatabase extends _$AppDatabase {
     },
   );
 
+  /// Wipes expenses/budgets/categories/settings (profile, theme, prefs — all
+  /// of it) and re-seeds the default categories, matching a fresh install.
+  /// Never touches backup files — those live outside this database.
+  Future<void> resetToDefaults() async {
+    await transaction(() async {
+      // Children before parents (FK order), same as BackupRepository.replaceAll.
+      await delete(expenses).go();
+      await delete(budgets).go();
+      await delete(categories).go();
+      await delete(settings).go();
+      await batch((b) => b.insertAll(categories, _defaultCategories));
+    });
+  }
+
   static LazyDatabase _open() {
     return LazyDatabase(() async {
       final dir = await getApplicationDocumentsDirectory();

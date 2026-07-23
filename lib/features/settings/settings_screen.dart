@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/db/providers.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../backup/backup_restore_screen.dart';
+import '../profile/profile_provider.dart';
+import '../profile/profile_screen.dart';
 import 'theme_mode_provider.dart';
 
 /// Settings — replaces the Sprint-4 stub. Currency/notifications rows are
@@ -14,6 +18,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeModeAsync = ref.watch(themeModeProvider);
+    final profileAsync = ref.watch(profileProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -32,6 +37,17 @@ class SettingsScreen extends ConsumerWidget {
           ),
           children: [
             _SettingsTile(
+              icon: Icons.person_outline,
+              title: 'Profile',
+              subtitle: (profileAsync.value?.name.isNotEmpty ?? false)
+                  ? profileAsync.value!.name
+                  : 'Add your details',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _SettingsTile(
               icon: Icons.brightness_6_outlined,
               title: 'Theme',
               subtitle: _themeLabel(themeMode),
@@ -46,10 +62,35 @@ class SettingsScreen extends ConsumerWidget {
                 MaterialPageRoute(builder: (_) => const BackupRestoreScreen()),
               ),
             ),
+            const SectionTitle('Danger zone'),
+            _SettingsTile(
+              icon: Icons.delete_forever_outlined,
+              iconColor: AppColors.red,
+              title: 'Reset App',
+              subtitle: 'Erase all expenses, budgets, categories, settings',
+              onTap: () => _showResetDialog(context, ref),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showResetDialog(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _ResetConfirmDialog(),
+    );
+    if (confirmed != true) return;
+
+    await ref.read(databaseProvider).resetToDefaults();
+    ref.invalidate(themeModeProvider);
+    ref.invalidate(profileProvider);
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('App has been reset')));
   }
 
   String _themeLabel(ThemeMode m) => switch (m) {
@@ -72,12 +113,14 @@ class _SettingsTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.iconColor = AppColors.primary,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +140,7 @@ class _SettingsTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: AppColors.primary),
+              Icon(icon, color: iconColor),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -122,6 +165,71 @@ class _SettingsTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Type-to-confirm gate before the destructive reset — pops `true` only once
+/// the typed text matches [_confirmWord].
+class _ResetConfirmDialog extends StatefulWidget {
+  const _ResetConfirmDialog();
+
+  static const _confirmWord = 'DELETE';
+
+  @override
+  State<_ResetConfirmDialog> createState() => _ResetConfirmDialogState();
+}
+
+class _ResetConfirmDialogState extends State<_ResetConfirmDialog> {
+  final _controller = TextEditingController();
+  bool _matches = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset App'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This permanently erases all expenses, budgets, categories, and '
+            'settings on this device. Backups are not affected. This cannot '
+            'be undone.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Type ${_ResetConfirmDialog._confirmWord} to confirm.',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _controller,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Confirmation'),
+            onChanged: (v) => setState(
+              () => _matches = v == _ResetConfirmDialog._confirmWord,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _matches ? () => Navigator.of(context).pop(true) : null,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+          child: const Text('Reset App'),
+        ),
+      ],
     );
   }
 }

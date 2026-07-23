@@ -11,6 +11,7 @@ import '../../core/widgets/app_card.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
+import '../expenses/expense_repository.dart';
 import '../expenses/quick_add_screen.dart';
 import '../reports/monthly_report_screen.dart';
 import '../settings/settings_screen.dart';
@@ -255,58 +256,93 @@ class _TransactionTile extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => QuickAddScreen(editing: expense)),
+      child: Dismissible(
+        key: ValueKey(expense.id),
+        direction: DismissDirection.endToStart,
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.red,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          child: const Icon(Icons.delete_outline, color: Colors.white),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: (category?.color ?? palette.textDim).withValues(
-                  alpha: 0.15,
+        confirmDismiss: (_) => showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete expense?'),
+            content: const Text('This can\'t be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.red,
                 ),
-                borderRadius: BorderRadius.circular(AppRadius.icon),
+                child: const Text('Delete'),
               ),
-              alignment: Alignment.center,
-              child: Text(
-                category?.icon ?? '💸',
-                style: const TextStyle(fontSize: 17),
+            ],
+          ),
+        ).then((confirmed) => confirmed ?? false),
+        onDismissed: (_) =>
+            ref.read(expenseRepositoryProvider).delete(expense.id),
+        child: AppCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => QuickAddScreen(editing: expense)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: (category?.color ?? palette.textDim).withValues(
+                    alpha: 0.15,
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.icon),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  category?.icon ?? '💸',
+                  style: const TextStyle(fontSize: 17),
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  Text(
-                    _relativeTime(expense.date),
-                    style: TextStyle(fontSize: 12, color: palette.textDim),
-                  ),
-                ],
+                    Text(
+                      _relativeTime(expense.date),
+                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              '-${expense.amount.format(locale: 'en_IN')}',
-              style: const TextStyle(
-                fontFamily: 'Sora',
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
+              Text(
+                '-${expense.amount.format(locale: 'en_IN')}',
+                style: const TextStyle(
+                  fontFamily: 'Sora',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

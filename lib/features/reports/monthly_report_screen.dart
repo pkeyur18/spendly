@@ -9,6 +9,7 @@ import '../budgets/budget_repository.dart';
 import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
+import '../profile/profile_provider.dart';
 import 'custom_report_screen.dart';
 import 'report_providers.dart';
 import 'report_widgets.dart';
@@ -27,6 +28,7 @@ class MonthlyReportScreen extends ConsumerWidget {
     final async = ref.watch(reportProvider((start, end)));
     final byId = ref.watch(categoriesByIdProvider);
     final overall = ref.watch(overallBudgetProvider).value;
+    final profile = ref.watch(profileProvider).value;
 
     return Scaffold(
       appBar: AppBar(
@@ -75,7 +77,7 @@ class MonthlyReportScreen extends ConsumerWidget {
               const SectionTitle('Top 5 expenses'),
               TopExpensesCard(data: data, byId: byId),
               const SizedBox(height: AppSpacing.xxl),
-              ExportRow(data: data, byId: byId, title: title),
+              ExportRow(data: data, byId: byId, title: title, profile: profile),
               const SizedBox(height: AppSpacing.lg),
             ],
           );

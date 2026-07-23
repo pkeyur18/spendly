@@ -8,6 +8,7 @@ import '../../core/widgets/async_state_views.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../home/widgets/trend_bars.dart';
+import '../profile/profile_provider.dart';
 import 'report_providers.dart';
 import 'report_widgets.dart';
 
@@ -86,6 +87,7 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
     final df = DateFormat('MMM d, yyyy');
     final async = ref.watch(reportProvider(_range));
     final byId = ref.watch(categoriesByIdProvider);
+    final profile = ref.watch(profileProvider).value;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Custom report')),
@@ -158,6 +160,7 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
                         byId: byId,
                         title:
                             'Report ${DateFormat('MMM d').format(_range.$1)} to ${DateFormat('MMM d').format(_range.$2.subtract(const Duration(days: 1)))}',
+                        profile: profile,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                     ],

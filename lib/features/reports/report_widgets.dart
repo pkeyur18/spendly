@@ -4,6 +4,7 @@ import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../profile/profile_provider.dart';
 import 'report_export.dart';
 import 'report_model.dart';
 
@@ -195,11 +196,13 @@ class ExportRow extends StatefulWidget {
     required this.data,
     required this.byId,
     required this.title,
+    this.profile,
   });
 
   final ReportData data;
   final Map<int, CategoryRow> byId;
   final String title;
+  final Profile? profile;
 
   @override
   State<ExportRow> createState() => _ExportRowState();
@@ -219,10 +222,15 @@ class _ExportRowState extends State<ExportRow> {
           widget.data,
           widget.byId,
           title: widget.title,
+          profile: widget.profile,
         );
         await shareReportFile(bytes: bytes, filename: '$safe.pdf');
       } else {
-        final csv = buildCsv(widget.data.expenses, widget.byId);
+        final csv = buildCsv(
+          widget.data.expenses,
+          widget.byId,
+          profile: widget.profile,
+        );
         await shareReportFile(bytes: csv.codeUnits, filename: '$safe.csv');
       }
     } catch (e) {

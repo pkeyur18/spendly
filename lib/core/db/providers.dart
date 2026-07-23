@@ -17,6 +17,11 @@ class SettingsRepository {
 
   static const themeModeKey = 'theme_mode';
 
+  // Profile (name/email/phone shown on generated reports).
+  static const profileNameKey = 'profile_name';
+  static const profileEmailKey = 'profile_email';
+  static const profilePhoneKey = 'profile_phone';
+
   // Backup bookkeeping (FR-37, FR-42) — excluded from what a backup exports,
   // so restoring one never rewrites the restoring device's own schedule/state.
   static const autoBackupEnabledKey = 'auto_backup_enabled';

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
+import 'package:spendly/features/profile/profile_provider.dart';
 import 'package:spendly/features/reports/report_export.dart';
 
 void main() {
@@ -66,5 +67,40 @@ void main() {
     );
     // Comma+quote+newline in the note -> whole field quoted, inner quotes doubled.
     expect(csv.contains('"Lunch, ""big""\nfeast"'), isTrue);
+  });
+
+  test('profile block prepended, blank profile fields skipped', () async {
+    await repo.add(
+      amount: Money.parse('10'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 1),
+    );
+    final csv = buildCsv(
+      await repo.listInRange(DateTime(2026, 3, 1), DateTime(2026, 4, 1)),
+      await byId(),
+      profile: const Profile(name: 'Ada', email: '', phone: '99999'),
+    );
+    final lines = csv.split('\r\n');
+    expect(lines[0], 'Name,Ada');
+    expect(lines[1], 'Phone,99999');
+    expect(lines[2], ''); // separator before the real header
+    expect(lines[3], 'Date,Category,Note,Amount,Payment method');
+  });
+
+  test('null/blank profile adds no extra rows', () async {
+    await repo.add(
+      amount: Money.parse('10'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 1),
+    );
+    final expenses = await repo.listInRange(
+      DateTime(2026, 3, 1),
+      DateTime(2026, 4, 1),
+    );
+    final cats = await byId();
+    final withoutProfile = buildCsv(expenses, cats);
+    final withBlankProfile = buildCsv(expenses, cats, profile: const Profile());
+    expect(withoutProfile, withBlankProfile);
+    expect(withoutProfile.split('\r\n').first, 'Date,Category,Note,Amount,Payment method');
   });
 }
