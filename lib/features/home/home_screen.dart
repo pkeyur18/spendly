@@ -9,6 +9,7 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../budgets/budget_repository.dart';
+import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
 import '../expenses/quick_add_screen.dart';
 import '../settings/theme_mode_provider.dart';
@@ -203,7 +204,7 @@ class _HeroCard extends ConsumerWidget {
               ],
             ),
           ] else
-            const Text('Set a monthly budget in Settings',
+            const Text('Set a monthly budget in Categories → Budgets',
                 style: TextStyle(color: Colors.white70, fontSize: 12)),
         ],
       ),
@@ -306,8 +307,11 @@ class _BottomNav extends StatelessWidget {
           item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
           item(Icons.bar_chart_rounded, 'Reports (Sprint 4)'),
           const SizedBox(width: 40),
-          item(Icons.sell_rounded, 'Categories (Sprint 3)'),
-          item(Icons.settings_rounded, 'Settings (Sprint 3)'),
+          item(Icons.sell_rounded, 'Categories', onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const CategoryManagerScreen()));
+          }),
+          item(Icons.settings_rounded, 'Settings (Sprint 5)'),
         ],
       ),
     );

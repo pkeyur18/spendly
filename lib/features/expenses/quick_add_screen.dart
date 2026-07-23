@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
+import '../../core/notify/notifications.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/amount_keypad.dart';
+import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
 import 'expense_repository.dart';
@@ -65,12 +68,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                     children: [
                       const SizedBox(height: AppSpacing.sm),
-                      _amountDisplay(context),
+                      AmountDisplay(_amount),
                       _subLine(context, selected, palette),
                       const SizedBox(height: AppSpacing.xl),
                       _categoryGrid(categories),
                       const SizedBox(height: AppSpacing.lg),
-                      _keypad(palette),
+                      AmountKeypad(
+                        onKey: (k) =>
+                            setState(() => _amount = applyAmountKey(_amount, k)),
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       _saveButton(context),
                       const SizedBox(height: AppSpacing.lg),
@@ -111,28 +117,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
-  Widget _amountDisplay(BuildContext context) {
-    final palette = Theme.of(context).extension<AppPalette>()!;
-    return Center(
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            fontFamily: 'Sora',
-            fontWeight: FontWeight.w700,
-            fontSize: 48,
-            letterSpacing: -2,
-          ),
-          children: [
-            TextSpan(text: '₹', style: TextStyle(color: palette.textDim, fontSize: 30)),
-            TextSpan(
-                text: _amount,
-                style: TextStyle(color: Theme.of(context).textTheme.bodyLarge!.color)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _subLine(BuildContext context, CategoryRow? selected, AppPalette palette) {
     final label = selected?.name ?? 'Select category';
     return Padding(
@@ -165,37 +149,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
-  Widget _keypad(AppPalette palette) {
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 3,
-      mainAxisSpacing: 7,
-      crossAxisSpacing: 7,
-      childAspectRatio: 1.9,
-      children: [
-        for (final k in keys)
-          GestureDetector(
-            onTap: () => _tapKey(k),
-            child: Container(
-              decoration: BoxDecoration(
-                color: palette.card,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: palette.line),
-              ),
-              alignment: Alignment.center,
-              child: k == 'del'
-                  ? const Icon(Icons.backspace_outlined, size: 20)
-                  : Text(k,
-                      style: const TextStyle(
-                          fontFamily: 'Sora', fontSize: 20, fontWeight: FontWeight.w600)),
-            ),
-          ),
-      ],
-    );
-  }
-
   Widget _saveButton(BuildContext context) {
     return GestureDetector(
       onTap: _save,
@@ -216,21 +169,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
-  void _tapKey(String k) {
-    setState(() {
-      if (k == 'del') {
-        _amount = _amount.length > 1 ? _amount.substring(0, _amount.length - 1) : '0';
-      } else if (k == '.') {
-        if (!_amount.contains('.')) _amount += '.';
-      } else {
-        // Block a 3rd decimal digit (money is 2 places).
-        final dot = _amount.indexOf('.');
-        if (dot >= 0 && _amount.length - dot > 2) return;
-        _amount = _amount == '0' ? k : _amount + k;
-      }
-    });
-  }
-
   Future<void> _save() async {
     final amount = Money.parse(_amount);
     if (amount.minor <= 0 || _categoryId == null) {
@@ -239,14 +177,51 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       );
       return;
     }
+    final categoryId = _categoryId!;
+    final oldAmount = widget.editing?.amount ?? Money.zero;
     final repo = ref.read(expenseRepositoryProvider);
     if (_isEdit) {
       await repo.update(widget.editing!.id,
-          amount: amount, categoryId: _categoryId);
+          amount: amount, categoryId: categoryId);
     } else {
-      await repo.add(amount: amount, categoryId: _categoryId!);
+      await repo.add(amount: amount, categoryId: categoryId);
     }
+    // Fire budget-threshold alerts for the affected category + overall (FR-25).
+    // Only the delta counts toward the "before → after" crossing so an edit
+    // that keeps the same category alerts on its net change.
+    final sameCategory = _isEdit && widget.editing!.categoryId == categoryId;
+    final delta = sameCategory ? amount - oldAmount : amount;
+    await _checkBudgetAlerts(categoryId, delta);
     if (mounted) Navigator.of(context).pop();
+  }
+
+  /// After a write, compare category + overall month totals against their
+  /// budgets and notify on each newly crossed 80% / 100% line.
+  Future<void> _checkBudgetAlerts(int categoryId, Money delta) async {
+    if (delta.minor <= 0) return; // only rising spend can cross a threshold
+    final expenses = ref.read(expenseRepositoryProvider);
+    final (start, end) = monthBounds(DateTime.now());
+    final byCategory = await expenses.totalsByCategory(start, end);
+    final notifier = ref.read(notificationServiceProvider);
+
+    // Per-category budget.
+    final catBudget = ref.read(perCategoryBudgetsProvider)[categoryId];
+    if (catBudget != null) {
+      final after = byCategory[categoryId] ?? Money.zero;
+      final name = ref.read(categoriesByIdProvider)[categoryId]?.name ?? 'Category';
+      for (final pct in crossedThresholds(after - delta, after, catBudget)) {
+        await notifier.showBudgetAlert(name, pct);
+      }
+    }
+
+    // Overall budget.
+    final overall = ref.read(overallBudgetProvider).value;
+    if (overall != null) {
+      final after = byCategory.values.fold(Money.zero, (a, m) => a + m);
+      for (final pct in crossedThresholds(after - delta, after, overall)) {
+        await notifier.showBudgetAlert('Overall', pct);
+      }
+    }
   }
 }
 

@@ -5,8 +5,8 @@
 
 ## Current status
 
-- **Sprint:** 2 (Home Dashboard & Quick Add) — **built, awaiting user verification**
-- **Next:** Sprint 3 (Categories & Budgets) — do NOT start until user gives go.
+- **Sprint:** 3 (Categories & Budgets + threshold notifications) — **built, awaiting user verification**
+- **Next:** Sprint 4 (Reports) — do NOT start until user gives go.
 
 ## Locked decisions (from PRD open questions)
 
@@ -20,7 +20,8 @@
 
 - Flutter 3.44.7 (latest stable) · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
 - Dependency freshness: **all direct deps latest**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
-- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart. Dev: drift_dev, build_runner, flutter_lints.
+- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0** (S3, pulls timezone transitively — unused, alerts are immediate `.show()`). Dev: drift_dev, build_runner, flutter_lints.
+- Android needs **core library desugaring** for flutter_local_notifications: `isCoreLibraryDesugaringEnabled = true` + `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")` in `android/app/build.gradle.kts`. iOS AppDelegate sets `UNUserNotificationCenter.delegate`; `POST_NOTIFICATIONS` in the manifest.
 - Fonts bundled as assets (offline-first): `assets/fonts/Sora.ttf`, `assets/fonts/Inter.ttf`.
 - Codegen: `dart run build_runner build` (generates `lib/core/db/database.g.dart`).
 
@@ -85,6 +86,27 @@ Decisions: charts via **fl_chart styled to match**; Quick Add preselects **last-
 - Budget is read-only display; budget setup UI + 80/100% notifications = Sprint 3.
 - Recent list scoped to current month (newest 10).
 - Platform apk/ios build not re-run this sprint (only Dart added, fl_chart is pure-Dart; analyze+test green). Run `flutter run` to verify on device.
+
+## Sprint 3 — done (Categories & Budgets + threshold notifications)
+
+Decisions: notifications via **flutter_local_notifications**, fire at add-time on a budget crossing; budget amounts entered via **keypad sheet** (prototype slider = read-only usage bar).
+
+- [x] Budget CRUD (FR-23,24) → `lib/features/budgets/budget_repository.dart`: `setOverall`/`setForCategory` (find-then-write upsert, no dup rows), `clearForCategory`, `watchAll`. Providers: allBudgetsProvider, perCategoryBudgetsProvider, overallBudgetProvider. Pure `crossedThresholds(before, after, budget)` (integer, exact).
+- [x] Notifications (FR-25) → `lib/core/notify/notifications.dart` (`NotificationService.init` in `main`, `showBudgetAlert`). Fired from `quick_add_screen.dart` `_save` → `_checkBudgetAlerts` on the affected category + overall, using before/after of the write delta. Add-time only (offline app: spend only changes via a write).
+- [x] Category Manager (FR-9,10,11) → `lib/features/categories/category_manager_screen.dart` (ReorderableListView, archived dimmed, drag handle) + `category_edit_sheet.dart` (rename, ~30-emoji icon picker, brand-palette color picker, archive/unarchive).
+- [x] Budget Setup (FR-23,24) → `lib/features/budgets/budget_setup_screen.dart` (overall + per-category cards, usage bar coloured green/accent/red by state, add/edit/clear).
+- [x] Shared keypad extracted → `lib/core/widgets/amount_keypad.dart` (`applyAmountKey` pure fn, `AmountKeypad`, `AmountDisplay`, `showAmountSheet`). Quick Add reuses it.
+- [x] Nav: Home bottom-nav Categories tab → CategoryManagerScreen; its appbar wallet → BudgetSetupScreen. Settings tab still stub (Sprint 5).
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **49 passed** (+ budget_repository, budget_threshold, amount_keypad).
+- `flutter build apk --debug` ✓ · `flutter build ios --debug --simulator --no-codesign` ✓ (both rebuilt — new native dep).
+
+### Deferred / notes
+- Alerts fire only on in-app writes (no background re-check) — correct for offline; no per-alert dedup store (crossing computed from before/after, fires once per real crossing).
+- `timezone` dep pulled transitively but unused (no scheduled notifications).
+- Debug screen still present (kDebugMode); real Category Manager now supersedes its category bits — left as-is, throwaway.
 
 ## How to run
 
