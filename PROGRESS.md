@@ -5,8 +5,8 @@
 
 ## Current status
 
-- **Sprint:** 1 (Core Data Layer) — **built, awaiting user verification**
-- **Next:** Sprint 2 (Home Dashboard & Quick Add) — do NOT start until user gives go.
+- **Sprint:** 2 (Home Dashboard & Quick Add) — **built, awaiting user verification**
+- **Next:** Sprint 3 (Categories & Budgets) — do NOT start until user gives go.
 
 ## Locked decisions (from PRD open questions)
 
@@ -63,6 +63,28 @@ Recurring decision: **date-math + flag only** this sprint (template→confirm re
 - Recurring: no auto-insert/scheduling yet (Sprint 3).
 - Debug screen is scaffolding; deleted when real Quick Add (S2) + Category Manager (S3) land.
 - No expense↔category join view yet (Sprint 2 need).
+
+## Sprint 2 — done (Home Dashboard & Quick Add)
+
+Decisions: charts via **fl_chart styled to match**; Quick Add preselects **last-used category**.
+
+- [x] Home dashboard (FR-12–16) → `lib/features/home/home_screen.dart`: greeting, hero gradient card (month total + budget bar / "set budget" empty state), donut, 6-mo trend, recent tiles (tap → edit). Bottom nav + FAB.
+- [x] Charts → `lib/features/home/widgets/spend_donut.dart` (PieChart+legend), `trend_bars.dart` (BarChart, current month accent). fl_chart styled to prototype.
+- [x] Quick Add (FR-2,5,6,15) → `lib/features/expenses/quick_add_screen.dart`: keypad (no OS kbd), category grid, last-used preselect, 2-dp guard, edit mode reused for tapping a transaction.
+- [x] Stream-derived dashboard providers (reactive) → `lib/features/home/dashboard_providers.dart`: monthTotal, categoryBreakdown, recent, trend, lastUsedCategoryId + pure funcs (sumMoney/buildBreakdown/trendBuckets). Adding an expense updates Home live — no manual refresh.
+- [x] Read-only overall budget → `lib/features/budgets/budget_repository.dart` (full setup = Sprint 3). Shared `lib/core/widgets/app_card.dart` (AppCard, SectionTitle).
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **36 passed** (money, recurrence, repos, dashboard derivations, provider wiring).
+
+### Gotcha recorded
+- **Never `pumpAndSettle`** a screen with live Drift streams + fl_chart — it never settles (hangs). Test reactive wiring via `ProviderContainer` instead. See `test/widget_test.dart`.
+
+### Deferred / notes
+- Budget is read-only display; budget setup UI + 80/100% notifications = Sprint 3.
+- Recent list scoped to current month (newest 10).
+- Platform apk/ios build not re-run this sprint (only Dart added, fl_chart is pure-Dart; analyze+test green). Run `flutter run` to verify on device.
 
 ## How to run
 
