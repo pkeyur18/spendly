@@ -10,14 +10,19 @@ import '../../core/widgets/amount_keypad.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
+import '../widgets/widget_refresh.dart';
 import 'expense_repository.dart';
 
 /// Fast expense entry (FR-2, FR-5): keypad + category grid, ≤3-tap save.
 /// Reused for editing (FR-6, FR-15) when [editing] is supplied.
 class QuickAddScreen extends ConsumerStatefulWidget {
-  const QuickAddScreen({super.key, this.editing});
+  const QuickAddScreen({super.key, this.editing, this.initialCategoryId});
 
   final ExpenseRow? editing;
+
+  /// Preselected category for a fresh entry (widget deep-link, FR-3). Ignored
+  /// when [editing] is set (the edited expense's own category wins).
+  final int? initialCategoryId;
 
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
@@ -40,7 +45,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         : (e.amount.minor % 100 == 0
             ? (e.amount.minor ~/ 100).toString()
             : e.amount.major.toStringAsFixed(2));
-    _categoryId = e?.categoryId;
+    _categoryId = e?.categoryId ?? widget.initialCategoryId;
   }
 
   @override
@@ -192,6 +197,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final sameCategory = _isEdit && widget.editing!.categoryId == categoryId;
     final delta = sameCategory ? amount - oldAmount : amount;
     await _checkBudgetAlerts(categoryId, delta);
+    await refreshWidgets(ref); // FR-29: keep the home/lock-screen widgets current
     if (mounted) Navigator.of(context).pop();
   }
 

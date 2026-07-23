@@ -29,6 +29,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Home-screen widget (Sprint 6, FR-26..29). Glance widget backed by
+             home_widget's shared-prefs snapshot; taps deep-link into Quick Add. -->
+        <receiver
+            android:name=".widget.SpendlyWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spendly_widget_info"/>
+        </receiver>
         <!-- flutter_local_notifications: reschedule the monthly report on reboot. -->
         <receiver
             android:exported="false"

@@ -1,5 +1,8 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    // Compose compiler — required by Glance widgets (Sprint 6).
+    id("org.jetbrains.kotlin.plugin.compose")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -34,6 +37,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // Glance widgets are Jetpack Compose (Sprint 6).
+    buildFeatures {
+        compose = true
+    }
 }
 
 kotlin {
@@ -48,4 +56,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Glance app widgets (Sprint 6).
+    implementation("androidx.glance:glance-appwidget:1.1.1")
 }

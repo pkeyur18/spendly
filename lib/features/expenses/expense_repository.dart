@@ -92,6 +92,13 @@ class ExpenseRepository {
     return totalInRange(start, end);
   }
 
+  /// Exact total for the calendar day containing [day] — feeds the "today"
+  /// widget (FR-26). Reuses the range-sum primitive with day bounds.
+  Future<Money> todayTotal([DateTime? day]) {
+    final (start, end) = dayBounds(day ?? DateTime.now());
+    return totalInRange(start, end);
+  }
+
   Future<Money> totalInRange(DateTime start, DateTime end) async {
     final sum = _db.expenses.amountMinor.sum();
     final row = await (_db.selectOnly(_db.expenses)
@@ -134,6 +141,13 @@ class ExpenseRepository {
 (DateTime, DateTime) monthBounds(DateTime month) {
   final start = DateTime(month.year, month.month, 1);
   final end = DateTime(month.year, month.month + 1, 1);
+  return (start, end);
+}
+
+/// Half-open [start, end) bounds for the calendar day containing [day].
+(DateTime, DateTime) dayBounds(DateTime day) {
+  final start = DateTime(day.year, day.month, day.day);
+  final end = start.add(const Duration(days: 1));
   return (start, end);
 }
 

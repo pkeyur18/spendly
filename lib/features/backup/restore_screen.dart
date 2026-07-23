@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../widgets/widget_refresh.dart';
 import 'backup_format.dart';
 import 'backup_import.dart';
 import 'backup_providers.dart';
@@ -187,6 +188,7 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     try {
       final repo = ref.read(backupRepositoryProvider);
       await executeRestore(preview.payload, _mode, repo);
+      await refreshWidgets(ref); // restore changes totals without a Quick Add write
       messenger.showSnackBar(const SnackBar(content: Text('Data restored')));
       navigator.pop();
     } catch (e) {
