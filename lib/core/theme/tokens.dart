@@ -31,6 +31,12 @@ class AppColors {
   static const darkTextDim = Color(0xFF8B8B9C);
   static const darkLine = Color(0xFF26262F);
 
+  // Bottom nav (own indigo-plum surface, distinct from card)
+  static const navBgLight = Color(0xFF1B1533);
+  static const navBgDark = Color(0xFF201A3D);
+  static const navIconOffLight = Color(0xFF8B84B0);
+  static const navIconOffDark = Color(0xFF9086B8);
+
   /// Hero / FAB / primary-button gradient (135deg deep → primary → pink).
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
@@ -54,18 +60,27 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.card2,
     required this.textDim,
     required this.line,
+    required this.navBackground,
+    required this.navIconInactive,
+    required this.navBorder,
   });
 
   final Color card;
   final Color card2;
   final Color textDim;
   final Color line;
+  final Color navBackground;
+  final Color navIconInactive;
+  final Color navBorder;
 
   static const light = AppPalette(
     card: AppColors.lightCard,
     card2: AppColors.lightCard2,
     textDim: AppColors.lightTextDim,
     line: AppColors.lightLine,
+    navBackground: AppColors.navBgLight,
+    navIconInactive: AppColors.navIconOffLight,
+    navBorder: Color(0x0FFFFFFF),
   );
 
   static const dark = AppPalette(
@@ -73,6 +88,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     card2: AppColors.darkCard2,
     textDim: AppColors.darkTextDim,
     line: AppColors.darkLine,
+    navBackground: AppColors.navBgDark,
+    navIconInactive: AppColors.navIconOffDark,
+    navBorder: Color(0x14FFFFFF),
   );
 
   @override
@@ -81,12 +99,18 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? card2,
     Color? textDim,
     Color? line,
+    Color? navBackground,
+    Color? navIconInactive,
+    Color? navBorder,
   }) {
     return AppPalette(
       card: card ?? this.card,
       card2: card2 ?? this.card2,
       textDim: textDim ?? this.textDim,
       line: line ?? this.line,
+      navBackground: navBackground ?? this.navBackground,
+      navIconInactive: navIconInactive ?? this.navIconInactive,
+      navBorder: navBorder ?? this.navBorder,
     );
   }
 
@@ -98,6 +122,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       card2: Color.lerp(card2, other.card2, t)!,
       textDim: Color.lerp(textDim, other.textDim, t)!,
       line: Color.lerp(line, other.line, t)!,
+      navBackground: Color.lerp(navBackground, other.navBackground, t)!,
+      navIconInactive: Color.lerp(navIconInactive, other.navIconInactive, t)!,
+      navBorder: Color.lerp(navBorder, other.navBorder, t)!,
     );
   }
 }

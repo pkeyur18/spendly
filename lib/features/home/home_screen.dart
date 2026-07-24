@@ -100,7 +100,11 @@ class HomeScreen extends ConsumerWidget {
       floatingActionButton: Container(
         decoration: BoxDecoration(
           gradient: AppColors.brandGradient,
-          borderRadius: BorderRadius.circular(19),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            width: 4,
+          ),
         ),
         child: FloatingActionButton(
           onPressed: () => _openQuickAdd(context),
@@ -174,6 +178,11 @@ class _HeroCard extends ConsumerWidget {
 
     final hasBudget = budget != null && budget.minor > 0;
     final ratio = hasBudget ? total.ratioOf(budget).clamp(0.0, 1.0) : 0.0;
+    final barColor = ratio >= 1.0
+        ? AppColors.red
+        : ratio >= 0.9
+        ? AppColors.accent
+        : Colors.white;
     final left = hasBudget
         ? Money.fromMinor((budget.minor - total.minor).clamp(0, budget.minor))
         : null;
@@ -236,7 +245,7 @@ class _HeroCard extends ConsumerWidget {
                 value: ratio,
                 minHeight: 7,
                 backgroundColor: Colors.white.withValues(alpha: 0.25),
-                valueColor: const AlwaysStoppedAnimation(Colors.white),
+                valueColor: AlwaysStoppedAnimation(barColor),
               ),
             ),
             const SizedBox(height: 8),
@@ -286,20 +295,32 @@ class _BottomNav extends StatelessWidget {
       return IconButton(
         onPressed: onTap ?? () => soon(label),
         tooltip: label,
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          fixedSize: const Size(40, 40),
+          backgroundColor: active
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.icon),
+          ),
+        ),
         icon:
             leading ??
-            Icon(icon, color: active ? AppColors.primary : palette.textDim),
+            Icon(icon, color: active ? Colors.white : palette.navIconInactive),
       );
     }
 
     return Container(
       foregroundDecoration: BoxDecoration(
-        border: Border(top: BorderSide(color: palette.line, width: 1)),
+        border: Border(top: BorderSide(color: palette.navBorder, width: 1)),
       ),
       child: BottomAppBar(
-        color: palette.card,
+        color: palette.navBackground,
+        height: 56,
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
