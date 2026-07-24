@@ -54,7 +54,7 @@ void main() {
         categoryId: catId,
         date: DateTime(2026, 7, 1),
       );
-      await budgetRepo.setOverall(Money.parse('40000'));
+      await budgetRepo.setOverall(DateTime(2026, 7, 1), Money.parse('40000'));
 
       final payload = await repo.exportAll();
 
@@ -98,7 +98,9 @@ void main() {
         categoryId: 1,
         date: DateTime(2026, 7, 5),
       );
-      await BudgetRepository(sourceDb).setForCategory(1, Money.parse('5000'));
+      await BudgetRepository(
+        sourceDb,
+      ).setForCategory(DateTime(2026, 7, 1), 1, Money.parse('5000'));
       final payload = await BackupRepository(sourceDb).exportAll();
       await sourceDb.close();
 

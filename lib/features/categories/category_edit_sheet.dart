@@ -280,49 +280,11 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
   }
 
   Future<void> _confirmDelete() async {
-    final id = widget.existing!.id;
-    final confirmed = await showDialog<bool>(
+    final resolved = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete category?'),
-        content: const Text('This can\'t be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      builder: (_) => _DeleteCategoryDialog(categoryId: widget.existing!.id),
     );
-    if (confirmed != true || !mounted) return;
-
-    final repo = ref.read(categoryRepositoryProvider);
-    final blockedCount = await repo.tryDelete(id);
-    if (!mounted) return;
-
-    if (blockedCount == null) {
-      Navigator.of(context).pop();
-      return;
-    }
-
-    final expenseWord = blockedCount == 1 ? 'expense' : 'expenses';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Can't delete — $blockedCount $expenseWord use this category"),
-        action: SnackBarAction(
-          label: 'Archive instead',
-          onPressed: () async {
-            await repo.archive(id);
-            if (mounted) Navigator.of(context).pop();
-          },
-        ),
-      ),
-    );
+    if (resolved == true && mounted) Navigator.of(context).pop();
   }
 
   Future<void> _save() async {
@@ -343,6 +305,97 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
       await repo.create(name: name, icon: _icon, colorValue: _color);
     }
     if (mounted) Navigator.of(context).pop();
+  }
+}
+
+enum _DeletePhase { confirm, deleting, blocked }
+
+/// Confirm-then-delete, morphing in place into a "can't delete" state when
+/// the category is still referenced by an expense — one continuous dialog
+/// instead of a confirm dialog followed by a separate SnackBar.
+class _DeleteCategoryDialog extends ConsumerStatefulWidget {
+  const _DeleteCategoryDialog({required this.categoryId});
+
+  final int categoryId;
+
+  @override
+  ConsumerState<_DeleteCategoryDialog> createState() =>
+      _DeleteCategoryDialogState();
+}
+
+class _DeleteCategoryDialogState extends ConsumerState<_DeleteCategoryDialog> {
+  _DeletePhase _phase = _DeletePhase.confirm;
+  int _blockedCount = 0;
+
+  Future<void> _attemptDelete() async {
+    setState(() => _phase = _DeletePhase.deleting);
+    final blockedCount = await ref
+        .read(categoryRepositoryProvider)
+        .tryDelete(widget.categoryId);
+    if (!mounted) return;
+    if (blockedCount == null) {
+      Navigator.of(context).pop(true);
+    } else {
+      setState(() {
+        _phase = _DeletePhase.blocked;
+        _blockedCount = blockedCount;
+      });
+    }
+  }
+
+  Future<void> _archiveInstead() async {
+    await ref.read(categoryRepositoryProvider).archive(widget.categoryId);
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_phase == _DeletePhase.blocked) {
+      final word = _blockedCount == 1 ? 'expense' : 'expenses';
+      return AlertDialog(
+        title: const Text("Can't delete category"),
+        content: Text(
+          '$_blockedCount $word use this category. Archive it instead to '
+          'hide it from Quick Add, or keep it as is.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep category'),
+          ),
+          FilledButton(
+            onPressed: _archiveInstead,
+            child: const Text('Archive instead'),
+          ),
+        ],
+      );
+    }
+
+    final deleting = _phase == _DeletePhase.deleting;
+    return AlertDialog(
+      title: const Text('Delete category?'),
+      content: const Text('This can\'t be undone.'),
+      actions: [
+        TextButton(
+          onPressed: deleting ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: deleting ? null : _attemptDelete,
+          style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+          child: deleting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Delete'),
+        ),
+      ],
+    );
   }
 }
 

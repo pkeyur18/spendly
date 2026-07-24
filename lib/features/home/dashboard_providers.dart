@@ -75,7 +75,7 @@ final recentExpensesProvider = Provider<List<(ExpenseRow, CategoryRow?)>>((
 ) {
   final expenses = ref.watch(currentMonthExpensesProvider).value ?? const [];
   final byId = ref.watch(categoriesByIdProvider);
-  return [for (final e in expenses.take(10)) (e, byId[e.categoryId])];
+  return [for (final e in expenses.take(5)) (e, byId[e.categoryId])];
 });
 
 /// Category of the most recent expense — Quick Add preselects it (fallback in

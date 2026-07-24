@@ -135,7 +135,11 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: _themeLabel(
                     themeModeAsync.value ?? ThemeMode.system,
                   ),
-                  onTap: () => _cycleTheme(ref),
+                  onTap: () => _openThemePicker(
+                    context,
+                    ref,
+                    themeModeAsync.value ?? ThemeMode.system,
+                  ),
                 ),
                 const _MenuRow(
                   icon: Icons.currency_rupee,
@@ -179,11 +183,46 @@ class ProfileScreen extends ConsumerWidget {
     ThemeMode.dark => 'Dark',
   };
 
-  void _cycleTheme(WidgetRef ref) {
-    final current = ref.read(themeModeProvider).value ?? ThemeMode.system;
-    const order = [ThemeMode.system, ThemeMode.light, ThemeMode.dark];
-    final next = order[(order.indexOf(current) + 1) % order.length];
-    ref.read(themeModeProvider.notifier).setMode(next);
+  Future<void> _openThemePicker(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeMode current,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
+        title: const Text('Theme'),
+        contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        content: RadioGroup<ThemeMode>(
+          groupValue: current,
+          onChanged: (value) {
+            if (value == null) return;
+            ref.read(themeModeProvider.notifier).setMode(value);
+            Navigator.of(dialogContext).pop();
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final mode in ThemeMode.values)
+                RadioListTile<ThemeMode>(
+                  value: mode,
+                  title: Text(_themeLabel(mode)),
+                  activeColor: AppColors.primary,
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

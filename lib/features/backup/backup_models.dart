@@ -188,18 +188,21 @@ class BackupBudget {
     required this.categoryId,
     required this.amountMinor,
     required this.period,
+    required this.monthKey,
   });
 
   final int id;
   final int? categoryId;
   final int amountMinor;
   final BudgetPeriod period;
+  final String monthKey;
 
   factory BackupBudget.fromRow(BudgetRow row) => BackupBudget(
     id: row.id,
     categoryId: row.categoryId,
     amountMinor: row.amountMinor,
     period: row.period,
+    monthKey: row.monthKey,
   );
 
   factory BackupBudget.fromJson(Map<String, dynamic> j) => BackupBudget(
@@ -207,6 +210,8 @@ class BackupBudget {
     categoryId: j['categoryId'] as int?,
     amountMinor: j['amountMinor'] as int,
     period: BudgetPeriod.values.byName(j['period'] as String),
+    // Older backups predate per-month budgets; treat them as the current month.
+    monthKey: j['monthKey'] as String? ?? monthKeyFor(DateTime.now()),
   );
 
   Map<String, dynamic> toJson() => {
@@ -214,6 +219,7 @@ class BackupBudget {
     'categoryId': categoryId,
     'amountMinor': amountMinor,
     'period': period.name,
+    'monthKey': monthKey,
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is null for the
@@ -223,6 +229,7 @@ class BackupBudget {
         categoryId: Value(mappedCategoryId),
         amountMinor: amountMinor,
         period: Value(period),
+        monthKey: monthKey,
       );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -231,6 +238,7 @@ class BackupBudget {
     categoryId: Value(categoryId),
     amountMinor: Value(amountMinor),
     period: Value(period),
+    monthKey: Value(monthKey),
   );
 }
 

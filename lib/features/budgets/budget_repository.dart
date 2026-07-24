@@ -5,40 +5,71 @@ import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import '../../core/money/money.dart';
 
-/// Budget CRUD (FR-23, FR-24). Overall monthly budget = the row with a null
-/// categoryId; per-category budgets have their categoryId set. Budgets table
-/// has no unique index, so upserts find-then-write to avoid duplicate rows.
+/// Budget CRUD (FR-23, FR-24), scoped per month via [monthKeyFor]. Overall
+/// monthly budget = the row with a null categoryId; per-category budgets have
+/// their categoryId set. Budgets table has no unique index, so upserts
+/// find-then-write to avoid duplicate rows.
 class BudgetRepository {
   BudgetRepository(this._db);
   final AppDatabase _db;
 
-  Stream<List<BudgetRow>> watchAll() => _db.select(_db.budgets).watch();
+  Stream<List<BudgetRow>> watchAllForMonth(DateTime month) {
+    final key = monthKeyFor(month);
+    return (_db.select(
+      _db.budgets,
+    )..where((t) => t.monthKey.equals(key))).watch();
+  }
 
   /// Overall monthly budget = the budgets row with a null categoryId.
   /// Null stream value = no budget set (drives the empty state).
-  Stream<Money?> watchOverallBudget() {
-    return (_db.select(_db.budgets)..where((t) => t.categoryId.isNull()))
+  Stream<Money?> watchOverallBudget(DateTime month) {
+    final key = monthKeyFor(month);
+    return (_db.select(_db.budgets)
+          ..where((t) => t.categoryId.isNull() & t.monthKey.equals(key)))
         .watchSingleOrNull()
         .map((row) => row == null ? null : Money.fromMinor(row.amountMinor));
   }
 
-  Future<void> setOverall(Money amount) => _upsert(null, amount);
-  Future<void> setForCategory(int categoryId, Money amount) =>
-      _upsert(categoryId, amount);
+  Future<void> setOverall(DateTime month, Money amount) =>
+      _upsert(null, month, amount);
+  Future<void> setForCategory(DateTime month, int categoryId, Money amount) =>
+      _upsert(categoryId, month, amount);
 
-  Future<void> clearForCategory(int categoryId) async {
-    await (_db.delete(
-      _db.budgets,
-    )..where((t) => t.categoryId.equals(categoryId))).go();
+  Future<void> clearForCategory(DateTime month, int categoryId) async {
+    final key = monthKeyFor(month);
+    await (_db.delete(_db.budgets)..where(
+          (t) => t.categoryId.equals(categoryId) & t.monthKey.equals(key),
+        ))
+        .go();
   }
 
-  /// Insert or update the single budget row for [categoryId] (null = overall).
-  Future<void> _upsert(int? categoryId, Money amount) async {
+  /// Copies every budget row (overall + per-category) from [fromMonth] onto
+  /// [toMonth], overwriting anything already set there — an explicit,
+  /// user-triggered action, so clobbering the target month is expected.
+  Future<void> carryForward({
+    required DateTime fromMonth,
+    required DateTime toMonth,
+  }) async {
+    final rows =
+        await (_db.select(_db.budgets)
+              ..where((t) => t.monthKey.equals(monthKeyFor(fromMonth))))
+            .get();
+    for (final row in rows) {
+      await _upsert(row.categoryId, toMonth, Money.fromMinor(row.amountMinor));
+    }
+  }
+
+  /// Insert or update the single budget row for [categoryId] (null = overall)
+  /// in [month].
+  Future<void> _upsert(int? categoryId, DateTime month, Money amount) async {
+    final key = monthKeyFor(month);
     final existing =
         await (_db.select(_db.budgets)..where(
-              (t) => categoryId == null
-                  ? t.categoryId.isNull()
-                  : t.categoryId.equals(categoryId),
+              (t) =>
+                  (categoryId == null
+                      ? t.categoryId.isNull()
+                      : t.categoryId.equals(categoryId)) &
+                  t.monthKey.equals(key),
             ))
             .getSingleOrNull();
     if (existing == null) {
@@ -48,6 +79,7 @@ class BudgetRepository {
             BudgetsCompanion.insert(
               categoryId: Value(categoryId),
               amountMinor: amount.minor,
+              monthKey: key,
             ),
           );
     } else {
@@ -75,19 +107,43 @@ final budgetRepositoryProvider = Provider<BudgetRepository>(
   (ref) => BudgetRepository(ref.watch(databaseProvider)),
 );
 
-final overallBudgetProvider = StreamProvider<Money?>(
-  (ref) => ref.watch(budgetRepositoryProvider).watchOverallBudget(),
+final overallBudgetForMonthProvider = StreamProvider.family<Money?, String>(
+  (ref, monthKey) => ref
+      .watch(budgetRepositoryProvider)
+      .watchOverallBudget(_monthFromKey(monthKey)),
 );
 
-final allBudgetsProvider = StreamProvider<List<BudgetRow>>(
-  (ref) => ref.watch(budgetRepositoryProvider).watchAll(),
+final allBudgetsForMonthProvider = StreamProvider.family<List<BudgetRow>, String>(
+  (ref, monthKey) => ref
+      .watch(budgetRepositoryProvider)
+      .watchAllForMonth(_monthFromKey(monthKey)),
 );
 
 /// Per-category budgets as a map (categoryId to amount); overall row excluded.
-final perCategoryBudgetsProvider = Provider<Map<int, Money>>((ref) {
-  final rows = ref.watch(allBudgetsProvider).value ?? const [];
-  return {
-    for (final r in rows)
-      if (r.categoryId != null) r.categoryId!: Money.fromMinor(r.amountMinor),
-  };
-});
+final perCategoryBudgetsForMonthProvider = Provider.family<Map<int, Money>, String>(
+  (ref, monthKey) {
+    final rows = ref.watch(allBudgetsForMonthProvider(monthKey)).value ?? const [];
+    return {
+      for (final r in rows)
+        if (r.categoryId != null) r.categoryId!: Money.fromMinor(r.amountMinor),
+    };
+  },
+);
+
+/// Convenience wrappers for call sites that only ever care about *now*
+/// (Quick Add threshold checks, the home dashboard, category screens) — the
+/// budget-setup screen is the only place that needs a specific month.
+final overallBudgetProvider = StreamProvider<Money?>(
+  (ref) => ref
+      .watch(budgetRepositoryProvider)
+      .watchOverallBudget(DateTime.now()),
+);
+
+final perCategoryBudgetsProvider = Provider<Map<int, Money>>(
+  (ref) => ref.watch(perCategoryBudgetsForMonthProvider(monthKeyFor(DateTime.now()))),
+);
+
+DateTime _monthFromKey(String monthKey) {
+  final parts = monthKey.split('-');
+  return DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
+}

@@ -30,7 +30,7 @@ void main() {
       categoryId: extraCatId,
       date: DateTime(2026, 7, 1),
     );
-    await budgetRepo.setOverall(Money.parse('40000'));
+    await budgetRepo.setOverall(DateTime(2026, 7, 1), Money.parse('40000'));
     await SettingsRepository(db).set(SettingsRepository.profileNameKey, 'Ada');
 
     await db.resetToDefaults();

@@ -14,6 +14,11 @@ enum Recurrence { daily, weekly, monthly }
 /// Budget window. v1 is monthly-only but stored so v2 can add others.
 enum BudgetPeriod { monthly }
 
+/// 'YYYY-MM' key a budget row is scoped to (also the family key for budget
+/// providers — a String avoids DateTime equality footguns across rebuilds).
+String monthKeyFor(DateTime month) =>
+    '${month.year}-${month.month.toString().padLeft(2, '0')}';
+
 @DataClassName('CategoryRow')
 class Categories extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -51,6 +56,9 @@ class Budgets extends Table {
   IntColumn get amountMinor => integer()();
   TextColumn get period =>
       textEnum<BudgetPeriod>().withDefault(const Constant('monthly'))();
+
+  /// 'YYYY-MM' — which month this budget applies to. See [monthKeyFor].
+  TextColumn get monthKey => text()();
 }
 
 /// Typed key/value app settings: theme mode, currency locale, auto-backup
@@ -72,7 +80,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -81,8 +89,15 @@ class AppDatabase extends _$AppDatabase {
       await batch((b) => b.insertAll(categories, _defaultCategories));
     },
     onUpgrade: (m, from, to) async {
-      // ponytail: no migrations yet at v1. Add stepwise upgrades here as
-      // schemaVersion bumps; every future version must read old backups.
+      if (from < 2) {
+        // Budgets used to be a single standing row per category; scope the
+        // pre-existing ones onto the current month so they keep working.
+        await m.addColumn(budgets, budgets.monthKey);
+        await customStatement(
+          'UPDATE budgets SET month_key = ? WHERE month_key IS NULL',
+          [monthKeyFor(DateTime.now())],
+        );
+      }
     },
   );
 

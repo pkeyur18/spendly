@@ -1,18 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
-import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
+import '../budgets/budget_setup_screen.dart';
+import '../expenses/all_transactions_screen.dart';
 import '../expenses/expense_repository.dart';
 import '../expenses/quick_add_screen.dart';
+import '../expenses/widgets/expense_tile.dart';
 import '../profile/avatar.dart';
 import '../profile/profile_provider.dart';
 import '../profile/profile_screen.dart';
@@ -81,12 +82,23 @@ class HomeScreen extends ConsumerWidget {
           const SpendDonut(),
           const SectionTitle('Last 6 months'),
           const TrendBars(),
-          const SectionTitle('Recent'),
+          SectionTitle(
+            'Recent',
+            actionLabel: 'View all',
+            onAction: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AllTransactionsScreen(
+                  initialRange: dayBounds(DateTime.now()),
+                  title: 'Today',
+                ),
+              ),
+            ),
+          ),
           if (recent.isEmpty)
             _emptyRecent(palette)
           else
             for (final (expense, category) in recent)
-              _TransactionTile(expense: expense, category: category),
+              ExpenseTile(expense: expense, category: category),
           const SizedBox(height: 80),
         ],
       ),
@@ -116,9 +128,7 @@ class HomeScreen extends ConsumerWidget {
         ? 'afternoon'
         : 'evening';
     final firstName = name.trim().split(RegExp(r'\s+')).first;
-    final greeting = firstName.isEmpty
-        ? 'Good $part'
-        : 'Good $part, $firstName';
+    final baseStyle = Theme.of(context).textTheme.headlineMedium;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xs,
@@ -126,7 +136,20 @@ class HomeScreen extends ConsumerWidget {
         AppSpacing.xs,
         AppSpacing.xl,
       ),
-      child: Text(greeting, style: Theme.of(context).textTheme.headlineMedium),
+      child: firstName.isEmpty
+          ? Text('Good $part', style: baseStyle)
+          : Text.rich(
+              TextSpan(
+                style: baseStyle,
+                children: [
+                  TextSpan(text: 'Good $part, '),
+                  TextSpan(
+                    text: firstName,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -184,9 +207,28 @@ class _HeroCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Spent this month',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Spent this month',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              IconButton(
+                tooltip: 'Set budget',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const BudgetSetupScreen()),
+                ),
+                icon: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
@@ -226,131 +268,12 @@ class _HeroCard extends ConsumerWidget {
             ),
           ] else
             const Text(
-              'Set a monthly budget in Categories → Budgets',
+              'No monthly budget set',
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
         ],
       ),
     );
-  }
-}
-
-class _TransactionTile extends ConsumerWidget {
-  const _TransactionTile({required this.expense, required this.category});
-
-  final ExpenseRow expense;
-  final CategoryRow? category;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final palette = Theme.of(context).extension<AppPalette>()!;
-    final title = expense.note?.isNotEmpty == true
-        ? expense.note!
-        : (category?.name ?? 'Expense');
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: Dismissible(
-        key: ValueKey(expense.id),
-        direction: DismissDirection.endToStart,
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: AppColors.red,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
-          child: const Icon(Icons.delete_outline, color: Colors.white),
-        ),
-        confirmDismiss: (_) => showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Delete expense?'),
-            content: const Text('This can\'t be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.red,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ).then((confirmed) => confirmed ?? false),
-        onDismissed: (_) =>
-            ref.read(expenseRepositoryProvider).delete(expense.id),
-        child: AppCard(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => QuickAddScreen(editing: expense)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: (category?.color ?? palette.textDim).withValues(
-                    alpha: 0.15,
-                  ),
-                  borderRadius: BorderRadius.circular(AppRadius.icon),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  category?.icon ?? '💸',
-                  style: const TextStyle(fontSize: 17),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      _relativeTime(expense.date),
-                      style: TextStyle(fontSize: 12, color: palette.textDim),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '-${expense.amount.format(locale: 'en_IN')}',
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _relativeTime(DateTime d) {
-    final now = DateTime.now();
-    final day = DateTime(d.year, d.month, d.day);
-    final today = DateTime(now.year, now.month, now.day);
-    final diff = today.difference(day).inDays;
-    final time = DateFormat.jm().format(d);
-    if (diff == 0) return 'Today · $time';
-    if (diff == 1) return 'Yesterday · $time';
-    return DateFormat.MMMd().format(d);
   }
 }
 

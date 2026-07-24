@@ -107,7 +107,21 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       _subLine(context, selected, palette),
                       const SizedBox(height: AppSpacing.xl),
                       _categoryGrid(categories),
-                      const SizedBox(height: AppSpacing.lg),
+                    ],
+                  ),
+                ),
+                // Keypad + save pinned to the bottom (not in the scroll view)
+                // so both stay reachable with one thumb regardless of how
+                // many categories are above.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                  ),
+                  child: Column(
+                    children: [
                       AmountKeypad(
                         onKey: (k) => setState(
                           () => _amount = applyAmountKey(_amount, k),
@@ -115,7 +129,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       _saveButton(context),
-                      const SizedBox(height: AppSpacing.lg),
                     ],
                   ),
                 ),

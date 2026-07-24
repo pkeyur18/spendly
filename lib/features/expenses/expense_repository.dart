@@ -186,6 +186,14 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>(
   (ref) => ExpenseRepository(ref.watch(databaseProvider)),
 );
 
+/// Raw expense list for a half-open [start, end) range, newest first — feeds
+/// [AllTransactionsScreen] (no need for the heavier [ReportData] there).
+final expensesInRangeProvider =
+    StreamProvider.family<List<ExpenseRow>, (DateTime, DateTime)>(
+      (ref, range) =>
+          ref.watch(expenseRepositoryProvider).watchInRange(range.$1, range.$2),
+    );
+
 final currentMonthExpensesProvider = StreamProvider<List<ExpenseRow>>(
   (ref) => ref.watch(expenseRepositoryProvider).watchMonth(DateTime.now()),
 );

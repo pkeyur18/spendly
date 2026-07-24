@@ -38,6 +38,7 @@ BackupPayload _samplePayload() => BackupPayload(
       categoryId: null,
       amountMinor: 5000000,
       period: BudgetPeriod.monthly,
+      monthKey: '2026-07',
     ),
   ],
   settings: const [BackupSetting(key: 'theme_mode', value: 'system')],

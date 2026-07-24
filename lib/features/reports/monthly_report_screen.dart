@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart' show monthKeyFor;
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../budgets/budget_repository.dart';
+import '../expenses/all_transactions_screen.dart';
 import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
@@ -27,7 +29,9 @@ class MonthlyReportScreen extends ConsumerWidget {
     final title = '${DateFormat('MMMM').format(month)} Report';
     final async = ref.watch(reportProvider((start, end)));
     final byId = ref.watch(categoriesByIdProvider);
-    final overall = ref.watch(overallBudgetProvider).value;
+    final overall = ref
+        .watch(overallBudgetForMonthProvider(monthKeyFor(month)))
+        .value;
     final profile = ref.watch(profileProvider).value;
 
     return Scaffold(
@@ -76,6 +80,20 @@ class MonthlyReportScreen extends ConsumerWidget {
               DonutChart(slices: data.breakdown, total: data.total),
               const SectionTitle('Top 5 expenses'),
               TopExpensesCard(data: data, byId: byId),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AllTransactionsScreen(
+                      initialRange: (start, end),
+                      title: title,
+                      showRangeSwitcher: true,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: const Text('View all transactions'),
+              ),
               const SizedBox(height: AppSpacing.xxl),
               ExportRow(data: data, byId: byId, title: title, profile: profile),
               const SizedBox(height: AppSpacing.lg),

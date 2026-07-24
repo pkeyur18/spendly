@@ -71,10 +71,10 @@ void main() {
     "tryDelete also clears the category's budget row when unreferenced",
     () async {
       final budgetRepo = BudgetRepository(db);
-      await budgetRepo.setForCategory(1, Money.parse('500'));
+      await budgetRepo.setForCategory(DateTime(2026, 7, 1), 1, Money.parse('500'));
       final result = await repo.tryDelete(1);
       expect(result, isNull);
-      final budgets = await budgetRepo.watchAll().first;
+      final budgets = await budgetRepo.watchAllForMonth(DateTime(2026, 7, 1)).first;
       expect(budgets.any((b) => b.categoryId == 1), isFalse);
     },
   );
