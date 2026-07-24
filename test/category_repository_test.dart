@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/money/money.dart';
+import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 
@@ -50,6 +51,33 @@ void main() {
     final all = await repo.watchAll().first;
     expect(all.firstWhere((c) => c.id == 1).isArchived, isTrue);
   });
+
+  test('tryDelete removes an unreferenced category', () async {
+    final result = await repo.tryDelete(1);
+    expect(result, isNull);
+    final all = await repo.watchAll().first;
+    expect(all.any((c) => c.id == 1), isFalse);
+  });
+
+  test('tryDelete is blocked for a category referenced by an expense', () async {
+    await ExpenseRepository(db).add(amount: Money.parse('100'), categoryId: 1);
+    final result = await repo.tryDelete(1);
+    expect(result, 1);
+    final all = await repo.watchAll().first;
+    expect(all.any((c) => c.id == 1), isTrue);
+  });
+
+  test(
+    "tryDelete also clears the category's budget row when unreferenced",
+    () async {
+      final budgetRepo = BudgetRepository(db);
+      await budgetRepo.setForCategory(1, Money.parse('500'));
+      final result = await repo.tryDelete(1);
+      expect(result, isNull);
+      final budgets = await budgetRepo.watchAll().first;
+      expect(budgets.any((b) => b.categoryId == 1), isFalse);
+    },
+  );
 
   test('reorder rewrites sortOrder', () async {
     // Reverse the first three ids.

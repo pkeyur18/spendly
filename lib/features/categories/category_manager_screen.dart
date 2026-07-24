@@ -9,11 +9,13 @@ import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
 import '../budgets/budget_repository.dart';
 import '../budgets/budget_setup_screen.dart';
+import 'archived_categories_screen.dart';
 import 'category_edit_sheet.dart';
 import 'category_repository.dart';
 
 /// Category Manager (FR-9,10,11) — prototype phone 5. Reorder via drag,
-/// tap to edit (rename/icon/color/archive), archived rows dimmed at the bottom.
+/// tap to edit (rename/icon/color/archive). Archived categories live on
+/// their own screen (see [ArchivedCategoriesScreen]).
 class CategoryManagerScreen extends ConsumerWidget {
   const CategoryManagerScreen({super.key});
 
@@ -21,11 +23,26 @@ class CategoryManagerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final categoriesAsync = ref.watch(allCategoriesProvider);
     final budgets = ref.watch(perCategoryBudgetsProvider);
+    final archivedCount =
+        categoriesAsync.value?.where((c) => c.isArchived).length ?? 0;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Categories'),
         actions: [
+          IconButton(
+            tooltip: 'Archived categories',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ArchivedCategoriesScreen(),
+              ),
+            ),
+            icon: Badge(
+              isLabelVisible: archivedCount > 0,
+              label: Text('$archivedCount'),
+              child: const Icon(Icons.archive_outlined),
+            ),
+          ),
           IconButton(
             tooltip: 'Budgets',
             onPressed: () => Navigator.of(context).push(
@@ -47,15 +64,14 @@ class CategoryManagerScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(allCategoriesProvider),
         ),
         data: (categories) {
-          if (categories.isEmpty) {
+          final active = categories.where((c) => !c.isArchived).toList();
+          if (active.isEmpty) {
             return const EmptyView(
               icon: Icons.sell_outlined,
-              message: 'No categories yet — tap + to add one.',
+              message:
+                  'No active categories — tap + to add one, or check Archived.',
             );
           }
-          // Active first (kept in sortOrder), archived after.
-          final active = categories.where((c) => !c.isArchived).toList();
-          final archived = categories.where((c) => c.isArchived).toList();
           return ReorderableListView(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
@@ -65,20 +81,9 @@ class CategoryManagerScreen extends ConsumerWidget {
             ),
             onReorderItem: (oldIndex, newIndex) =>
                 _reorder(ref, active, oldIndex, newIndex),
-            footer: Column(
-              children: [
-                for (final c in archived)
-                  _CategoryRow(
-                    key: ValueKey('archived-${c.id}'),
-                    category: c,
-                    budget: budgets[c.id],
-                    reorderIndex: null,
-                  ),
-              ],
-            ),
             children: [
               for (var i = 0; i < active.length; i++)
-                _CategoryRow(
+                CategoryListTile(
                   key: ValueKey(active[i].id),
                   category: active[i],
                   budget: budgets[active[i].id],
@@ -105,8 +110,8 @@ class CategoryManagerScreen extends ConsumerWidget {
   }
 }
 
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow({
+class CategoryListTile extends StatelessWidget {
+  const CategoryListTile({
     super.key,
     required this.category,
     required this.budget,
@@ -126,58 +131,55 @@ class _CategoryRow extends StatelessWidget {
               ? 'No budget set'
               : 'Budget: ${budget!.format(locale: 'en_IN')}/mo');
 
-    return Opacity(
-      opacity: category.isArchived ? 0.5 : 1,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: InkWell(
-          onTap: () => showCategoryEditSheet(context, existing: category),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: palette.card,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: palette.line),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: category.color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppRadius.icon),
-                  ),
-                  alignment: Alignment.center,
-                  child: CategoryGlyph(category.icon, size: 17),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: InkWell(
+        onTap: () => showCategoryEditSheet(context, existing: category),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: palette.line),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: category.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.icon),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        category.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                alignment: Alignment.center,
+                child: CategoryGlyph(category.icon, size: 17),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(fontSize: 12, color: palette.textDim),
-                      ),
-                    ],
-                  ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                    ),
+                  ],
                 ),
-                if (reorderIndex != null)
-                  ReorderableDragStartListener(
-                    index: reorderIndex!,
-                    child: Icon(Icons.drag_handle, color: palette.textDim),
-                  ),
-              ],
-            ),
+              ),
+              if (reorderIndex != null)
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(Icons.drag_handle, color: palette.textDim),
+                ),
+            ],
           ),
         ),
       ),

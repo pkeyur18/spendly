@@ -30,6 +30,29 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
 }
 
+/// Categories shown in the quick-add grid before it switches to a
+/// truncated view with a "More" tile.
+const _gridCap = 8;
+const _visibleWhenCapped = 7;
+
+/// First [visibleCount] categories, with [selectedId] swapped into the last
+/// slot if it would otherwise be cut off.
+List<CategoryRow> visibleCategoryTiles(
+  List<CategoryRow> categories,
+  int? selectedId, {
+  int visibleCount = _visibleWhenCapped,
+}) {
+  final visible = categories.take(visibleCount).toList();
+  if (selectedId != null && !visible.any((c) => c.id == selectedId)) {
+    final selected = categories
+        .where((c) => c.id == selectedId)
+        .cast<CategoryRow?>()
+        .firstOrNull;
+    if (selected != null) visible[visible.length - 1] = selected;
+  }
+  return visible;
+}
+
 class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late String _amount;
   int? _categoryId;
@@ -169,17 +192,40 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Widget _categoryGrid(List<CategoryRow> categories) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final showMore = categories.length > _gridCap;
+    final visible = showMore
+        ? visibleCategoryTiles(categories, _categoryId)
+        : categories;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: categories.length,
+      itemCount: visible.length + (showMore ? 1 : 0),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
         mainAxisSpacing: 9,
         crossAxisSpacing: 9,
       ),
       itemBuilder: (context, i) {
-        final c = categories[i];
+        if (showMore && i == visible.length) {
+          return Semantics(
+            button: true,
+            label: 'More categories',
+            child: GestureDetector(
+              onTap: () => _openCategoryPicker(categories),
+              child: _CategoryTile(
+                glyph: Icon(
+                  Icons.grid_view_rounded,
+                  size: 22,
+                  color: palette.textDim,
+                ),
+                name: 'More',
+                selected: false,
+              ),
+            ),
+          );
+        }
+        final c = visible[i];
         final sel = c.id == _categoryId;
         return Semantics(
           button: true,
@@ -187,11 +233,64 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           label: c.name,
           child: GestureDetector(
             onTap: () => setState(() => _categoryId = c.id),
-            child: _CategoryTile(category: c, selected: sel),
+            child: _CategoryTile(
+              glyph: CategoryGlyph(c.icon, size: 22),
+              name: c.name,
+              selected: sel,
+            ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _openCategoryPicker(List<CategoryRow> categories) async {
+    final chosen = await showModalBottomSheet<CategoryRow>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: Text('All categories'),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: categories.length,
+                  itemBuilder: (context, i) {
+                    final c = categories[i];
+                    return ListTile(
+                      leading: CategoryGlyph(c.icon, size: 20),
+                      title: Text(c.name),
+                      trailing: c.id == _categoryId
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: AppColors.primary,
+                              size: 18,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop(c),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen != null) setState(() => _categoryId = chosen.id);
   }
 
   Widget _saveButton(BuildContext context) {
@@ -293,9 +392,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 }
 
 class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.category, required this.selected});
+  const _CategoryTile({
+    required this.glyph,
+    required this.name,
+    required this.selected,
+  });
 
-  final CategoryRow category;
+  final Widget glyph;
+  final String name;
   final bool selected;
 
   @override
@@ -318,14 +422,14 @@ class _CategoryTile extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CategoryGlyph(category.icon, size: 18),
+              glyph,
               const SizedBox(height: 4),
               Text(
-                category.name,
+                name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   color: selected ? AppColors.primary : palette.textDim,
                 ),

@@ -215,6 +215,8 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
             if (_isEdit) ...[
               const SizedBox(height: AppSpacing.sm),
               _archiveButton(palette),
+              const SizedBox(height: AppSpacing.sm),
+              _deleteButton(),
             ],
           ],
         ),
@@ -263,6 +265,62 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
       child: Text(
         archived ? 'Unarchive' : 'Archive (hide from Quick Add)',
         style: TextStyle(color: palette.textDim),
+      ),
+    );
+  }
+
+  Widget _deleteButton() {
+    return TextButton(
+      onPressed: _confirmDelete,
+      child: const Text(
+        'Delete category',
+        style: TextStyle(color: AppColors.red),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    final id = widget.existing!.id;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete category?'),
+        content: const Text('This can\'t be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final repo = ref.read(categoryRepositoryProvider);
+    final blockedCount = await repo.tryDelete(id);
+    if (!mounted) return;
+
+    if (blockedCount == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    final expenseWord = blockedCount == 1 ? 'expense' : 'expenses';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Can't delete — $blockedCount $expenseWord use this category"),
+        action: SnackBarAction(
+          label: 'Archive instead',
+          onPressed: () async {
+            await repo.archive(id);
+            if (mounted) Navigator.of(context).pop();
+          },
+        ),
       ),
     );
   }

@@ -6,6 +6,8 @@ import '../../core/db/providers.dart';
 
 /// Category CRUD (FR-8,9,10,11). Categories are never hard-deleted while they
 /// may be referenced by past expenses — they're archived (FR-11).
+/// Unreferenced categories can also be hard-deleted via [tryDelete];
+/// referenced ones remain archive-only.
 class CategoryRepository {
   CategoryRepository(this._db);
   final AppDatabase _db;
@@ -48,6 +50,29 @@ class CategoryRepository {
   Future<void> setIcon(int id, String icon) => _update(id, icon: Value(icon));
   Future<void> archive(int id) => _update(id, isArchived: const Value(true));
   Future<void> unarchive(int id) => _update(id, isArchived: const Value(false));
+
+  /// Hard-deletes a category if nothing references it. Blocked when any
+  /// expense still points at [id] — archive is the safe path for those
+  /// (FR-11). Also clears any budget row for the category. Returns null on
+  /// success; returns the referencing expense count (> 0) if blocked.
+  Future<int?> tryDelete(int id) {
+    return _db.transaction(() async {
+      final countExpr = _db.expenses.id.count();
+      final refCount = await (_db.selectOnly(_db.expenses)
+            ..addColumns([countExpr])
+            ..where(_db.expenses.categoryId.equals(id)))
+          .map((row) => row.read(countExpr) ?? 0)
+          .getSingle();
+      if (refCount > 0) return refCount;
+      await (_db.delete(
+        _db.budgets,
+      )..where((t) => t.categoryId.equals(id))).go();
+      await (_db.delete(
+        _db.categories,
+      )..where((t) => t.id.equals(id))).go();
+      return null;
+    });
+  }
 
   /// Persist a new ordering. [orderedIds] is the full list top-to-bottom.
   Future<void> reorder(List<int> orderedIds) async {
