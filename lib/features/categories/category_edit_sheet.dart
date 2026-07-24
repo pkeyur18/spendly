@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
@@ -60,16 +61,27 @@ const _iconChoices = [
   '🧴',
 ];
 
-/// Brand palette swatches for the color picker (FR-9).
+/// Curated swatches for the color picker (FR-9) — distinct hues so
+/// categories stay visually distinguishable even with many of them.
 const _colorChoices = [
-  AppColors.primary,
-  AppColors.primaryDeep,
-  AppColors.primarySoft,
-  AppColors.accent,
-  AppColors.pink,
-  AppColors.teal,
-  AppColors.red,
-  AppColors.lightTextDim,
+  Color(0xFF3B82F6), // blue
+  Color(0xFF6366F1), // indigo
+  Color(0xFF8B5CF6), // violet
+  Color(0xFFA855F7), // purple
+  Color(0xFFD946EF), // fuchsia
+  Color(0xFFEC4899), // pink
+  Color(0xFFF43F5E), // rose
+  Color(0xFFEF4444), // red
+  Color(0xFFF97316), // orange
+  Color(0xFFF59E0B), // amber
+  Color(0xFFEAB308), // yellow
+  Color(0xFF84CC16), // lime
+  Color(0xFF22C55E), // green
+  Color(0xFF10B981), // emerald
+  Color(0xFF14B8A6), // teal
+  Color(0xFF06B6D4), // cyan
+  Color(0xFF0EA5E9), // sky
+  Color(0xFF64748B), // slate
 ];
 
 /// Add/edit a category. [existing] null = create mode. Save/archive/unarchive
@@ -102,6 +114,16 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
+    final otherCategories = ref
+        .watch(allCategoriesProvider)
+        .value
+        ?.where((c) => c.id != widget.existing?.id);
+    final usedColors = <int, String>{
+      for (final c in otherCategories ?? const <CategoryRow>[])
+        c.colorValue: c.name,
+    };
+    final isPreset = _colorChoices.any((c) => c.toARGB32() == _color);
+    final duplicateOwner = usedColors[_color];
     return Padding(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -201,35 +223,97 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                     label: 'Color option ${i + 1}',
                     child: GestureDetector(
                       onTap: () => setState(() => _color = c.toARGB32()),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: c,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _color == c.toARGB32()
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Colors.transparent,
-                            width: 2.5,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _color == c.toARGB32()
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Colors.transparent,
+                                width: 2.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            // Selection isn't color-only: a checkmark on top too.
+                            child: _color == c.toARGB32()
+                                ? Icon(
+                                    Icons.check,
+                                    size: 16,
+                                    color: c.computeLuminance() > 0.5
+                                        ? Colors.black
+                                        : Colors.white,
+                                  )
+                                : null,
                           ),
-                        ),
-                        alignment: Alignment.center,
-                        // Selection isn't color-only: a checkmark on top too.
-                        child: _color == c.toARGB32()
-                            ? Icon(
-                                Icons.check,
-                                size: 16,
-                                color: c.computeLuminance() > 0.5
-                                    ? Colors.black
-                                    : Colors.white,
-                              )
-                            : null,
+                          // Already-in-use marker, separate from selection.
+                          if (usedColors.containsKey(c.toARGB32()))
+                            Positioned(
+                              bottom: -2,
+                              right: -2,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: palette.textDim,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: palette.card,
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
+                Semantics(
+                  button: true,
+                  selected: !isPreset,
+                  label: 'Custom color',
+                  child: GestureDetector(
+                    onTap: _showCustomColorPicker,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isPreset ? palette.card : Color(_color),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: !isPreset
+                              ? Theme.of(context).colorScheme.onSurface
+                              : palette.line,
+                          width: !isPreset ? 2.5 : 1,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: isPreset
+                          ? Icon(Icons.palette_outlined, size: 16, color: palette.textDim)
+                          : Icon(
+                              Icons.check,
+                              size: 16,
+                              color: Color(_color).computeLuminance() > 0.5
+                                  ? Colors.black
+                                  : Colors.white,
+                            ),
+                    ),
+                  ),
+                ),
               ],
             ),
+            if (duplicateOwner != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Already used by $duplicateOwner',
+                style: const TextStyle(color: AppColors.red, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: AppSpacing.xl),
             _saveButton(),
             if (_isEdit) ...[
@@ -242,6 +326,36 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
         ),
       ),
     );
+  }
+
+  Future<void> _showCustomColorPicker() async {
+    Color picked = Color(_color);
+    final result = await showDialog<Color>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Custom color'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: Color(_color),
+            onColorChanged: (c) => picked = c,
+            enableAlpha: false,
+            labelTypes: const [ColorLabelType.hex],
+            pickerAreaHeightPercent: 0.7,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(picked),
+            child: const Text('Select'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) setState(() => _color = result.toARGB32());
   }
 
   Widget _saveButton() {
