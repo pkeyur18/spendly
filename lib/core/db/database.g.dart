@@ -2085,6 +2085,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ExpensesTable expenses = $ExpensesTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
+  late final Index idxExpensesDate = Index(
+    'idx_expenses_date',
+    'CREATE INDEX idx_expenses_date ON expenses (date)',
+  );
+  late final Index idxExpensesCategory = Index(
+    'idx_expenses_category',
+    'CREATE INDEX idx_expenses_category ON expenses (category_id)',
+  );
+  late final Index idxExpensesTag = Index(
+    'idx_expenses_tag',
+    'CREATE INDEX idx_expenses_tag ON expenses (tag_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2095,6 +2107,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     expenses,
     budgets,
     settings,
+    idxExpensesDate,
+    idxExpensesCategory,
+    idxExpensesTag,
   ];
 }
 

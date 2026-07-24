@@ -95,6 +95,31 @@ void main() {
     expect(rows.length, 1);
   });
 
+  test('watchInRange limit caps rows and grows page-by-page', () async {
+    for (var d = 1; d <= 250; d++) {
+      await repo.add(
+        amount: Money.parse('1'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 1).add(Duration(minutes: d)),
+      );
+    }
+    final start = DateTime(2026, 3, 1);
+    final end = DateTime(2026, 4, 1);
+
+    final page1 = await repo.watchInRange(start, end, limit: 100).first;
+    expect(page1.length, 100);
+    // Newest-first: first row is the latest date.
+    expect(page1.first.date.isAfter(page1.last.date), isTrue);
+
+    final page2 = await repo.watchInRange(start, end, limit: 200).first;
+    expect(page2.length, 200);
+    // Growing the limit is a strict prefix extension — same rows, more of them.
+    expect(page2.take(100).map((e) => e.id), page1.map((e) => e.id));
+
+    final all = await repo.watchInRange(start, end).first;
+    expect(all.length, 250); // null limit = whole range
+  });
+
   test('update and delete reflected', () async {
     final id = await repo.add(
       amount: Money.parse('100'),

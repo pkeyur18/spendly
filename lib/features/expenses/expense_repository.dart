@@ -72,18 +72,24 @@ class ExpenseRepository {
   Future<void> delete(int id) =>
       (_db.delete(_db.expenses)..where((t) => t.id.equals(id))).go();
 
-  /// Expenses with date in [start, end), newest first.
-  Stream<List<ExpenseRow>> watchInRange(DateTime start, DateTime end) {
-    return (_db.select(_db.expenses)
-          ..where(
-            (t) =>
-                t.date.isBiggerOrEqualValue(start) &
-                t.date.isSmallerThanValue(end),
-          )
-          ..orderBy([
-            (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
-          ]))
-        .watch();
+  /// Expenses with date in [start, end), newest first. Pass [limit] to cap the
+  /// rows loaded (lazy pagination for long lists); null = whole range.
+  Stream<List<ExpenseRow>> watchInRange(
+    DateTime start,
+    DateTime end, {
+    int? limit,
+  }) {
+    final query = _db.select(_db.expenses)
+      ..where(
+        (t) =>
+            t.date.isBiggerOrEqualValue(start) &
+            t.date.isSmallerThanValue(end),
+      )
+      ..orderBy([
+        (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
+      ]);
+    if (limit != null) query.limit(limit);
+    return query.watch();
   }
 
   Stream<List<ExpenseRow>> watchMonth(DateTime month) {
@@ -230,12 +236,14 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>(
   (ref) => ExpenseRepository(ref.watch(databaseProvider)),
 );
 
-/// Raw expense list for a half-open [start, end) range, newest first — feeds
-/// [AllTransactionsScreen] (no need for the heavier [ReportData] there).
+/// Raw expense list for a half-open [start, end) range, capped at a row limit,
+/// newest first — feeds [AllTransactionsScreen] (no need for the heavier
+/// [ReportData] there). The limit grows as the user scrolls (lazy pagination).
 final expensesInRangeProvider =
-    StreamProvider.family<List<ExpenseRow>, (DateTime, DateTime)>(
-      (ref, range) =>
-          ref.watch(expenseRepositoryProvider).watchInRange(range.$1, range.$2),
+    StreamProvider.family<List<ExpenseRow>, (DateTime, DateTime, int)>(
+      (ref, key) => ref
+          .watch(expenseRepositoryProvider)
+          .watchInRange(key.$1, key.$2, limit: key.$3),
     );
 
 final currentMonthExpensesProvider = StreamProvider<List<ExpenseRow>>(

@@ -31,6 +31,9 @@ class Categories extends Table {
 }
 
 @DataClassName('ExpenseRow')
+@TableIndex(name: 'idx_expenses_date', columns: {#date})
+@TableIndex(name: 'idx_expenses_category', columns: {#categoryId})
+@TableIndex(name: 'idx_expenses_tag', columns: {#tagId})
 class Expenses extends Table {
   IntColumn get id => integer().autoIncrement()();
 
@@ -95,7 +98,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -122,6 +125,20 @@ class AppDatabase extends _$AppDatabase {
         // Trip/tag grouping — additive, no data migration needed.
         await m.createTable(tags);
         await m.addColumn(expenses, expenses.tagId);
+      }
+      if (from < 5) {
+        // Index the columns every expense query filters/sorts on — existing
+        // installs were doing full table scans. Fresh installs get these via
+        // @TableIndex + createAll.
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id)',
+        );
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_expenses_tag ON expenses(tag_id)',
+        );
       }
     },
   );
