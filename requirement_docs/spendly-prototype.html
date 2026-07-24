@@ -388,6 +388,114 @@
   .lock-widget .lamt { font-family:'Sora',sans-serif; font-size: 20px; font-weight:700; margin-top:2px; }
 
   /* Backup & restore */
+  /* Onboarding */
+  .onb-hero {
+    position: relative; width: 100%; height: 130px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+  }
+  .onb-logo {
+    width: 64px; height: 64px; border-radius: 20px;
+    background: linear-gradient(135deg, var(--primary-deep), var(--primary), var(--pink));
+    display: grid; place-items: center; color: #fff; font-family: 'Sora', sans-serif; font-size: 30px; font-weight: 700;
+    box-shadow: 0 14px 30px rgba(99,102,241,0.4); z-index: 2; position: relative;
+  }
+  .onb-ring {
+    position: absolute; border-radius: 50%; border: 1.5px solid var(--primary); opacity: .18;
+  }
+  .onb-ring.r1 { width: 110px; height: 110px; }
+  .onb-ring.r2 { width: 150px; height: 150px; opacity: .1; }
+  .onb-title { text-align: center; margin-bottom: 22px; }
+  .onb-title h2 { font-family: 'Sora', sans-serif; font-size: 21px; font-weight: 700; letter-spacing: -0.3px; }
+  .onb-title p { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+
+  .onb-form { margin-bottom: 18px; }
+  .onb-label {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+    color: var(--text-dim); margin: 14px 2px 7px;
+  }
+  .onb-label .req { color: var(--pink); font-weight: 700; }
+  .onb-label .opt {
+    font-size: 10px; font-weight: 600; color: var(--text-dim); background: var(--card-2);
+    border: 1px solid var(--line); padding: 2px 7px; border-radius: 100px; text-transform: uppercase; letter-spacing: .3px;
+  }
+  .onb-input {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1.5px solid var(--line); border-radius: 15px; padding: 13px 14px;
+  }
+  .onb-input:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+  .onb-ico { font-size: 15px; flex-shrink: 0; }
+  .onb-input input {
+    border: none; outline: none; background: transparent; font-family: 'Inter', sans-serif;
+    font-size: 14px; color: var(--text); width: 100%;
+  }
+  .onb-input input::placeholder { color: var(--text-dim); opacity: .7; }
+  .onb-hint {
+    font-size: 11.5px; color: var(--text-dim); line-height: 1.6; margin-top: 14px;
+    background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  }
+  .onb-cta { opacity: .45; pointer-events: none; }
+  .onb-cta.ready { opacity: 1; pointer-events: auto; }
+  .onb-skip {
+    text-align: center; margin-top: 14px; font-size: 13px; font-weight: 600;
+    color: var(--text-dim); cursor: pointer; padding: 6px;
+  }
+  .onb-check {
+    width: 74px; height: 74px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--teal), #0D9488);
+    display: grid; place-items: center; color: #fff; font-size: 34px; font-weight: 700;
+    box-shadow: 0 14px 30px rgba(20,184,166,0.35);
+  }
+
+  /* Profile */
+  .profile-hero { text-align: center; padding: 10px 0 4px; }
+  .avatar-wrap { position: relative; width: 92px; height: 92px; margin: 0 auto 14px; }
+  .avatar {
+    width: 92px; height: 92px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-deep), var(--primary), var(--pink));
+    display: grid; place-items: center; color: #fff; font-family: 'Sora', sans-serif;
+    font-size: 32px; font-weight: 700; box-shadow: 0 12px 28px rgba(99,102,241,0.4);
+    border: 3px solid var(--bg); overflow: hidden;
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .avatar-edit {
+    position: absolute; bottom: -2px; right: -2px; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--card); border: 2.5px solid var(--bg); display: grid; place-items: center;
+    font-size: 13px; box-shadow: var(--shadow-sm); cursor: pointer;
+  }
+  .profile-hero h2 { font-family: 'Sora', sans-serif; font-size: 19px; font-weight: 700; margin-top: 2px; }
+  .profile-hero p { color: var(--text-dim); font-size: 12.5px; margin-top: 3px; }
+
+  .profile-stats { display: flex; gap: 10px; margin: 18px 0; }
+  .pstat { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px; text-align: center; box-shadow: var(--shadow-sm); }
+  .pstat b { display: block; font-family: 'Sora', sans-serif; font-size: 16px; }
+  .pstat small { font-size: 10.5px; color: var(--text-dim); }
+
+  .avatar-picker { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px; margin-bottom: 4px; }
+  .avatar-opt {
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+    color: #fff; font-family: 'Sora', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer;
+    border: 2.5px solid transparent; position: relative;
+  }
+  .avatar-opt.sel { border-color: var(--primary); }
+  .avatar-opt.sel::after {
+    content: '✓'; position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(0,0,0,0.35); border-radius: 50%; font-size: 15px;
+  }
+  .avatar-opt.upload { background: var(--card); border: 1.5px dashed var(--line); color: var(--text-dim); font-size: 17px; }
+
+  .profile-field { margin-bottom: 14px; }
+  .menu-list { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow-sm); }
+  .menu-row {
+    display: flex; align-items: center; gap: 12px; padding: 14px; border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .menu-row:last-child { border-bottom: none; }
+  .menu-row .m-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 15px; background: rgba(99,102,241,.12); flex-shrink: 0; }
+  .menu-row .m-info { flex: 1; }
+  .menu-row .m-info b { font-size: 13.5px; font-weight: 600; display: block; }
+  .menu-row .m-info small { font-size: 11px; color: var(--text-dim); }
+  .menu-row .chev { color: var(--text-dim); font-size: 14px; }
+  .menu-row.danger .m-ico { background: rgba(239,68,68,.12); }
+  .menu-row.danger b { color: var(--red); }
+
   .backup-card {
     background: var(--card); border:1px solid var(--line); border-radius: 20px; padding: 18px;
     box-shadow: var(--shadow-sm); margin-bottom: 14px;
@@ -466,15 +574,89 @@
   </div>
 
   <div class="tabs">
-    <div class="tab on" onclick="showGroup('core')">Home &amp; Add</div>
+    <div class="tab on" onclick="showGroup('onboarding')">Welcome</div>
+    <div class="tab" onclick="showGroup('core')">Home &amp; Add</div>
+    <div class="tab" onclick="showGroup('profile')">Profile</div>
     <div class="tab" onclick="showGroup('reports')">Reports</div>
     <div class="tab" onclick="showGroup('categories')">Categories &amp; Budget</div>
     <div class="tab" onclick="showGroup('widgets')">Widgets</div>
     <div class="tab" onclick="showGroup('backup')">Backup &amp; Restore</div>
   </div>
 
+  <!-- ============ GROUP: ONBOARDING ============ -->
+  <div class="group on" id="g-onboarding">
+  <div class="phones">
+
+    <!-- PHONE: WELCOME / SIGN-UP -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body" style="padding-top:6px">
+
+            <div class="onb-hero">
+              <div class="onb-logo">₹</div>
+              <div class="onb-ring r1"></div>
+              <div class="onb-ring r2"></div>
+            </div>
+
+            <div class="onb-title">
+              <h2>Welcome to Spendly</h2>
+              <p>Let's set up your profile — takes 10 seconds</p>
+            </div>
+
+            <div class="onb-form">
+              <label class="onb-label">Your name <span class="req">*</span></label>
+              <div class="onb-input">
+                <span class="onb-ico">👤</span>
+                <input type="text" id="onbName" placeholder="e.g. Aditi Sharma" oninput="validateOnboarding()">
+              </div>
+
+              <label class="onb-label">Phone number <span class="opt">optional</span></label>
+              <div class="onb-input">
+                <span class="onb-ico">📱</span>
+                <input type="tel" placeholder="+91 98765 43210">
+              </div>
+
+              <label class="onb-label">Email address <span class="opt">optional</span></label>
+              <div class="onb-input">
+                <span class="onb-ico">✉️</span>
+                <input type="email" placeholder="you@example.com">
+              </div>
+
+              <p class="onb-hint">Phone and email just help us restore your backups faster — you can always add them later in Settings.</p>
+            </div>
+
+            <button class="btn-save onb-cta" id="onbCta" disabled onclick="completeOnboarding()">Get started</button>
+            <div class="onb-skip" onclick="alert('Name is mandatory to continue. Phone and email are the only optional fields.')">Skip phone &amp; email</div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">0 · Welcome / Onboarding</div>
+    </div>
+
+    <!-- PHONE: SUCCESS TRANSITION -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;padding-top:0">
+            <div class="onb-check">✓</div>
+            <h2 style="font-family:'Sora',sans-serif;font-size:20px;margin-top:18px;">You're all set, Aditi 👋</h2>
+            <p style="color:var(--text-dim);font-size:13px;margin-top:6px;max-width:220px;">Taking you to your dashboard...</p>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">0a · Redirecting to Home</div>
+    </div>
+
+  </div>
+  </div>
+
   <!-- ============ GROUP: CORE ============ -->
-  <div class="group on" id="g-core">
+  <div class="group" id="g-core">
   <div class="phones">
 
     <!-- PHONE: HOME -->
@@ -520,7 +702,7 @@
           <div class="nav">
             <a class="active">🏠</a><a onclick="showGroup('reports')">📊</a>
             <div class="fab" onclick="alert('Opens Quick Add')">+</div>
-            <a onclick="showGroup('categories')">🏷️</a><a>⚙️</a>
+            <a onclick="showGroup('categories')">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
           </div>
         </div>
       </div>
@@ -558,6 +740,182 @@
         </div>
       </div>
       <div class="phone-label">2 · Quick Add (2-tap)</div>
+    </div>
+
+  </div>
+  </div>
+
+  <!-- ============ GROUP: PROFILE ============ -->
+  <div class="group" id="g-profile">
+  <div class="phones">
+
+    <!-- PHONE: PROFILE VIEW -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('core')">‹</div><h2>Profile</h2></div>
+
+            <div class="profile-hero">
+              <div class="avatar-wrap">
+                <div class="avatar" id="mainAvatar">AS</div>
+                <div class="avatar-edit" onclick="showGroup('avatarpicker')">✎</div>
+              </div>
+              <h2>Aditi Sharma</h2>
+              <p>aditi.sharma@email.com</p>
+            </div>
+
+            <div class="profile-stats">
+              <div class="pstat"><b>7</b><small>months tracked</small></div>
+              <div class="pstat"><b>412</b><small>expenses logged</small></div>
+              <div class="pstat"><b>8</b><small>categories</small></div>
+            </div>
+
+            <div class="sec-title" style="margin-top:4px"><h3>Account</h3></div>
+            <div class="menu-list">
+              <div class="menu-row" onclick="showGroup('editprofile')">
+                <div class="m-ico">👤</div>
+                <div class="m-info"><b>Edit profile</b><small>Name, phone, email</small></div>
+                <div class="chev">›</div>
+              </div>
+              <div class="menu-row" onclick="showGroup('avatarpicker')">
+                <div class="m-ico">🖼️</div>
+                <div class="m-info"><b>Change photo / avatar</b><small>Upload or choose a style</small></div>
+                <div class="chev">›</div>
+              </div>
+            </div>
+
+            <div class="sec-title"><h3>Preferences</h3></div>
+            <div class="menu-list">
+              <div class="menu-row">
+                <div class="m-ico">🎨</div>
+                <div class="m-info"><b>Theme</b><small>System default</small></div>
+                <div class="chev">›</div>
+              </div>
+              <div class="menu-row">
+                <div class="m-ico">💱</div>
+                <div class="m-info"><b>Currency</b><small>Indian Rupee (₹)</small></div>
+                <div class="chev">›</div>
+              </div>
+              <div class="menu-row" onclick="showGroup('backup')">
+                <div class="m-ico">☁️</div>
+                <div class="m-info"><b>Backup &amp; Restore</b><small>Last backup: today, 6:02 AM</small></div>
+                <div class="chev">›</div>
+              </div>
+            </div>
+
+            <div class="sec-title"><h3>Account actions</h3></div>
+            <div class="menu-list">
+              <div class="menu-row danger">
+                <div class="m-ico">🗑️</div>
+                <div class="m-info"><b>Delete all data</b><small>Permanent — back up first</small></div>
+                <div class="chev">›</div>
+              </div>
+            </div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a class="active">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">11 · Profile</div>
+    </div>
+
+    <!-- PHONE: EDIT PROFILE -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('profile')">‹</div><h2>Edit profile</h2></div>
+
+            <div class="profile-hero" style="padding-bottom:6px">
+              <div class="avatar-wrap">
+                <div class="avatar">AS</div>
+                <div class="avatar-edit" onclick="showGroup('avatarpicker')">✎</div>
+              </div>
+            </div>
+
+            <div class="onb-form">
+              <label class="onb-label">Your name <span class="req">*</span></label>
+              <div class="onb-input">
+                <span class="onb-ico">👤</span>
+                <input type="text" value="Aditi Sharma">
+              </div>
+
+              <label class="onb-label">Phone number <span class="opt">optional</span></label>
+              <div class="onb-input">
+                <span class="onb-ico">📱</span>
+                <input type="tel" value="+91 98765 43210">
+              </div>
+
+              <label class="onb-label">Email address <span class="opt">optional</span></label>
+              <div class="onb-input">
+                <span class="onb-ico">✉️</span>
+                <input type="email" value="aditi.sharma@email.com">
+              </div>
+            </div>
+
+            <button class="btn-save" onclick="alert('Profile updated ✓'); showGroup('profile')">Save changes</button>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a class="active">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">11a · Edit Profile</div>
+    </div>
+
+    <!-- PHONE: AVATAR PICKER -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('profile')">‹</div><h2>Choose photo</h2></div>
+
+            <div class="profile-hero" style="padding-bottom:10px">
+              <div class="avatar-wrap">
+                <div class="avatar" id="pickerAvatar">AS</div>
+              </div>
+            </div>
+
+            <div class="dropzone" onclick="alert('Opens camera / photo library')">
+              <div class="dz-ico">📷</div>
+              <b>Upload a photo</b>
+              Camera or photo library
+            </div>
+
+            <div class="sec-title" style="margin-top:2px"><h3>Or pick an avatar style</h3></div>
+            <div class="avatar-picker">
+              <div class="avatar-opt upload" onclick="alert('Opens camera / photo library')">📷</div>
+              <div class="avatar-opt sel" style="background:linear-gradient(135deg,var(--primary-deep),var(--primary),var(--pink))" onclick="pickAvatar(this,'linear-gradient(135deg,var(--primary-deep),var(--primary),var(--pink))')">AS</div>
+              <div class="avatar-opt" style="background:linear-gradient(135deg,#F59E0B,#EF4444)" onclick="pickAvatar(this,'linear-gradient(135deg,#F59E0B,#EF4444)')">AS</div>
+              <div class="avatar-opt" style="background:linear-gradient(135deg,#14B8A6,#0D9488)" onclick="pickAvatar(this,'linear-gradient(135deg,#14B8A6,#0D9488)')">AS</div>
+              <div class="avatar-opt" style="background:linear-gradient(135deg,#818CF8,#6366F1)" onclick="pickAvatar(this,'linear-gradient(135deg,#818CF8,#6366F1)')">AS</div>
+              <div class="avatar-opt" style="background:linear-gradient(135deg,#EC4899,#F472B6)" onclick="pickAvatar(this,'linear-gradient(135deg,#EC4899,#F472B6)')">AS</div>
+            </div>
+
+            <p class="onb-hint" style="margin-top:16px">No photo? We'll always show your initials on a color you pick, so the app still feels personal — this is the default for everyone until they add a real photo.</p>
+
+            <button class="btn-save" onclick="alert('Avatar saved ✓'); showGroup('profile')">Save</button>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a class="active">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">11b · Avatar Picker</div>
     </div>
 
   </div>
@@ -913,9 +1271,9 @@
   <div class="note">
     <b>How to use:</b> Use the tabs above to move between the four flows. Toggle 🌙/☀️ for theme. On Quick Add, the keypad and category chips are live. All buttons show placeholder confirmations — this is a UX prototype, not a functional build.
     <br><br>
-    <b>Screens included (matches the numbered list in the requirements doc):</b> 1) Home/Dashboard 2) Quick Add 3) Monthly Report 4) Custom Range Report 5) Category Manager 6) Budget Setup 7) Home Screen Widgets 8) Lock Screen Widget 9) Backup Settings 10) Restore Flow.
+    <b>Screens included (matches the numbered list in the requirements doc):</b> 0) Welcome/Onboarding 1) Home/Dashboard 2) Quick Add 3) Monthly Report 4) Custom Range Report 5) Category Manager 6) Budget Setup 7) Home Screen Widgets 8) Lock Screen Widget 9) Backup Settings 10) Restore Flow 11) Profile 11a) Edit Profile 11b) Avatar Picker.
     <br><br>
-    <b>New this update:</b> full backup/export/import support — manual backup, scheduled auto-backup, save-to-cloud (iCloud/Drive/Files), and a restore flow with file preview plus a Merge vs. Replace choice, so data survives an uninstall or device change.
+    <b>New this update:</b> Profile screen with an avatar/photo — tap the pencil on the avatar to open the picker, upload a real photo, or choose from colored initials-avatars (the fallback shown when no photo is set). Edit Profile lets you update name, phone, and email after onboarding. Profile also links into Backup &amp; Restore since account and data settings live together.
     <br><br>
     <b>Palette:</b> Indigo → Pink gradient (#6366F1 → #EC4899), full light/dark support.
   </div>
@@ -940,20 +1298,45 @@
     document.getElementById('qaVal').textContent = val;
   }
   function showGroup(name) {
-    // 'restore' is a sub-view of the backup tab
-    const groupId = name === 'restore' ? 'backup' : name;
+    // sub-views that live inside a parent tab group
+    const subViewMap = { restore: 'backup', editprofile: 'profile', avatarpicker: 'profile' };
+    const groupId = subViewMap[name] || name;
     document.querySelectorAll('.group').forEach(g => g.classList.remove('on'));
     document.getElementById('g-' + groupId).classList.add('on');
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-    const idx = {core:0, reports:1, categories:2, widgets:3, backup:4}[groupId];
+    const idx = {onboarding:0, core:1, profile:2, reports:3, categories:4, widgets:5, backup:6}[groupId];
     document.querySelectorAll('.tab')[idx].classList.add('on');
-    // If jumping specifically to restore, scroll the second phone into view on mobile
-    if (name === 'restore') {
+    // Scroll to the right phone within a multi-phone group when jumping to a sub-view
+    const scrollTargets = { restore: 1, editprofile: 1, avatarpicker: 2 };
+    if (scrollTargets[name] !== undefined) {
       setTimeout(() => {
-        const phones = document.querySelectorAll('#g-backup .phone-label');
-        if (phones[1]) phones[1].scrollIntoView({behavior:'smooth', block:'center'});
+        const labels = document.querySelectorAll('#g-' + groupId + ' .phone-label');
+        if (labels[scrollTargets[name]]) labels[scrollTargets[name]].scrollIntoView({behavior:'smooth', block:'center'});
       }, 50);
     }
+  }
+  function pickAvatar(el, gradient) {
+    document.querySelectorAll('.avatar-opt').forEach(a => a.classList.remove('sel'));
+    el.classList.add('sel');
+    document.getElementById('pickerAvatar').style.background = gradient;
+    document.getElementById('mainAvatar').style.background = gradient;
+  }
+  function validateOnboarding() {
+    const name = document.getElementById('onbName').value.trim();
+    const cta = document.getElementById('onbCta');
+    if (name.length > 0) {
+      cta.classList.add('ready');
+      cta.disabled = false;
+    } else {
+      cta.classList.remove('ready');
+      cta.disabled = true;
+    }
+  }
+  function completeOnboarding() {
+    const name = document.getElementById('onbName').value.trim();
+    if (!name) { alert('Name is required to continue — mandatory field per FR requirement.'); return; }
+    alert('Profile saved for ' + name + '. Redirecting to Home dashboard →');
+    showGroup('core');
   }
   function toggleSwitch(el) { el.classList.toggle('off'); }
   function selFreq(el) {

@@ -9,7 +9,11 @@ export 'backup_crypto.dart' show BackupWrongPasswordException;
 /// read/write the file. This is the FR-41 validation gate: [decodePayload]
 /// either returns a fully-parsed [BackupPayload] or throws one of the
 /// exceptions below, and always does so before any database write happens.
-const currentBackupVersion = 1;
+///
+/// v2 (FR-56) added the optional `profilePhotoBase64` payload field — a v1
+/// file simply lacks the key, which [BackupPayload.fromJson] already treats
+/// as null, so no version-keyed decode branch is needed here.
+const currentBackupVersion = 2;
 
 class BackupCorruptException implements Exception {
   const BackupCorruptException(this.reason);

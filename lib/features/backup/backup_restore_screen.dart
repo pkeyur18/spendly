@@ -170,63 +170,69 @@ class _BackupRestoreScreenState extends ConsumerState<BackupRestoreScreen> {
   };
 
   Future<void> _backUpNow() async {
-    final password = await _askOptionalPassword(context);
-    if (password == null || !mounted) return; // dialog dismissed/cancelled
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final repo = ref.read(backupRepositoryProvider);
-      final settings = ref.read(settingsRepositoryProvider);
-      await shareBackupFile(
-        repo,
-        settings,
-        password: password.isEmpty ? null : password,
-      );
-      ref.invalidate(lastBackupStatusProvider);
-      messenger.showSnackBar(const SnackBar(content: Text('Backup created')));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await performManualBackup(context, ref);
+    if (mounted) setState(() => _busy = false);
   }
+}
 
-  /// Returns null if the user cancels; otherwise the password to encrypt
-  /// with, or '' for no password (optional password protection, PRD open Q6).
-  Future<String?> _askOptionalPassword(BuildContext context) {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Back up now'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Optionally protect this backup with a password.'),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: controller,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password (optional)',
-              ),
+/// The full manual "Back up now" flow (optional-password dialog, build the
+/// file, share sheet, record status) — shared by this screen's own button and
+/// Profile's backup-first delete-all-data gate (`delete_all_data_flow.dart`).
+Future<void> performManualBackup(BuildContext context, WidgetRef ref) async {
+  final password = await _askOptionalPassword(context);
+  if (password == null || !context.mounted) return; // dialog dismissed/cancelled
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final repo = ref.read(backupRepositoryProvider);
+    final settings = ref.read(settingsRepositoryProvider);
+    await shareBackupFile(
+      repo,
+      settings,
+      password: password.isEmpty ? null : password,
+    );
+    ref.invalidate(lastBackupStatusProvider);
+    messenger.showSnackBar(const SnackBar(content: Text('Backup created')));
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
+  }
+}
+
+/// Returns null if the user cancels; otherwise the password to encrypt
+/// with, or '' for no password (optional password protection, PRD open Q6).
+Future<String?> _askOptionalPassword(BuildContext context) {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Back up now'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Optionally protect this backup with a password.'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: controller,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Password (optional)',
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('Back up'),
           ),
         ],
       ),
-    );
-  }
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+          child: const Text('Back up'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _StatusCard extends StatelessWidget {

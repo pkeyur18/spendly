@@ -1,3 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import 'backup_models.dart';
@@ -11,11 +18,17 @@ class BackupRepository {
   BackupRepository(this._db);
   final AppDatabase _db;
 
-  static const _bookkeepingKeys = {
+  /// Excluded from the generic settings export/import: backup bookkeeping
+  /// (so importing a file elsewhere never overwrites the restoring device's
+  /// own schedule/status) plus the profile photo's local file path, which is
+  /// device-specific and meaningless on another device (FR-56 — the photo
+  /// itself travels separately as [BackupPayload.profilePhotoBase64]).
+  static const _excludedSettingsKeys = {
     SettingsRepository.autoBackupEnabledKey,
     SettingsRepository.autoBackupFrequencyKey,
     SettingsRepository.lastBackupAtKey,
     SettingsRepository.lastBackupSizeKey,
+    SettingsRepository.profilePhotoPathKey,
   };
 
   /// Everything except the app's own backup bookkeeping (so importing this
@@ -32,15 +45,45 @@ class BackupRepository {
       expenses: expenses.map(BackupExpense.fromRow).toList(),
       budgets: budgets.map(BackupBudget.fromRow).toList(),
       settings: settings
-          .where((s) => !_bookkeepingKeys.contains(s.key))
+          .where((s) => !_excludedSettingsKeys.contains(s.key))
           .map(BackupSetting.fromRow)
           .toList(),
+      profilePhotoBase64: await _readProfilePhotoBase64(settings),
     );
+  }
+
+  Future<String?> _readProfilePhotoBase64(List<SettingRow> settings) async {
+    String? photoPath;
+    for (final s in settings) {
+      if (s.key == SettingsRepository.profilePhotoPathKey) {
+        photoPath = s.value;
+        break;
+      }
+    }
+    if (photoPath == null) return null;
+    final file = File(photoPath);
+    if (!await file.exists()) return null;
+    return base64Encode(await file.readAsBytes());
+  }
+
+  /// Decodes a v2 backup's photo (if any) to a fresh local file and returns
+  /// the path to store under [SettingsRepository.profilePhotoPathKey].
+  Future<String> _writeProfilePhoto(String base64Data) async {
+    final dir = await getApplicationSupportDirectory();
+    final profileDir = Directory(p.join(dir.path, 'profile'));
+    await profileDir.create(recursive: true);
+    final path = p.join(profileDir.path, 'avatar.jpg');
+    await File(path).writeAsBytes(base64Decode(base64Data));
+    return path;
   }
 
   /// Wipes all four tables, then restores exactly [payload], reusing its
   /// original ids verbatim (safe — the tables are empty by then). Wrapped in
-  /// one transaction: any failure partway through rolls back everything.
+  /// one transaction: any failure partway through rolls back everything. If
+  /// [payload] carries a v2 photo, it's written to a fresh local file and
+  /// referenced from a new `profile_photo_path` setting row (FR-56) — a v1
+  /// backup (or a v2 one with no photo set) simply leaves photo state wiped,
+  /// which correctly falls back to colored initials (FR-55).
   Future<void> replaceAll(BackupPayload payload) async {
     await _db.transaction(() async {
       // Children before parents (FK order).
@@ -69,13 +112,27 @@ class BackupRepository {
           );
         }
       });
+
+      if (payload.profilePhotoBase64 != null) {
+        final path = await _writeProfilePhoto(payload.profilePhotoBase64!);
+        await _db
+            .into(_db.settings)
+            .insertOnConflictUpdate(
+              SettingsCompanion.insert(
+                key: SettingsRepository.profilePhotoPathKey,
+                value: Value(path),
+              ),
+            );
+      }
     });
   }
 
   /// Adds [payload]'s data to what's already on the device without
   /// duplicating it — see the "Merge algorithm" section of
   /// `docs/backup-schema.md` for the natural-key matching rules and their
-  /// known ceiling. Settings are never touched by a merge. One transaction.
+  /// known ceiling. Settings (profile, theme, and — per FR-56 — the profile
+  /// photo) are never touched by a merge, same as before this sprint; only
+  /// Replace restores them. One transaction.
   Future<void> mergeAll(BackupPayload payload) async {
     await _db.transaction(() async {
       final categoryIdMap = await _mergeCategories(payload.categories);

@@ -137,6 +137,19 @@ class ExpenseRepository {
         .get();
   }
 
+  /// (date, categoryId) for every expense, live — feeds Profile's lifetime
+  /// stats (FR-51). Only these two columns, not full rows.
+  Stream<List<(DateTime, int)>> watchLifetimeStats() {
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.date, _db.expenses.categoryId]);
+    return query.watch().map(
+      (rows) => [
+        for (final r in rows)
+          (r.read(_db.expenses.date)!, r.read(_db.expenses.categoryId)!),
+      ],
+    );
+  }
+
   /// Spend per category in [start, end) — feeds the donut / reports.
   Future<Map<int, Money>> totalsByCategory(DateTime start, DateTime end) async {
     final sum = _db.expenses.amountMinor.sum();

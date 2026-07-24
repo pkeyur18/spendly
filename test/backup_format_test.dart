@@ -102,6 +102,39 @@ void main() {
     );
   });
 
+  test(
+    'a v1-shaped file (no profilePhotoBase64) still decodes correctly',
+    () async {
+      // Hand-written, shaped exactly like a pre-Sprint-10 export — the
+      // payload has no "profilePhotoBase64" key at all.
+      final v1Json = jsonEncode({
+        'spendlyBackup': true,
+        'version': 1,
+        'encrypted': false,
+        'data': _samplePayload().toJson()..remove('profilePhotoBase64'),
+      });
+
+      final decoded = await decodePayload(v1Json);
+      expect(decoded.profilePhotoBase64, isNull);
+      expect(decoded.categories.single.name, 'Food');
+      expect(decoded.expenses.single.amountMinor, 24500);
+    },
+  );
+
+  test('a v2 payload round-trips its profilePhotoBase64 field', () async {
+    final payload = BackupPayload(
+      exportedAt: DateTime(2026, 7, 23, 10, 15),
+      categories: const [],
+      expenses: const [],
+      budgets: const [],
+      settings: const [],
+      profilePhotoBase64: base64Encode(utf8.encode('fake jpeg bytes')),
+    );
+    final envelope = await encodeEnvelope(payload);
+    final decoded = await decodePayload(envelope);
+    expect(decoded.profilePhotoBase64, payload.profilePhotoBase64);
+  });
+
   test('future version is rejected before a password would ever be needed', () {
     final future = jsonEncode({
       'spendlyBackup': true,

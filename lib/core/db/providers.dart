@@ -22,6 +22,12 @@ class SettingsRepository {
   static const profileEmailKey = 'profile_email';
   static const profilePhoneKey = 'profile_phone';
 
+  // Avatar (FR-51..55). photoPath is device-specific (excluded from backup's
+  // generic settings export — see BackupRepository); avatarColorIndex is an
+  // ordinary portable setting.
+  static const profilePhotoPathKey = 'profile_photo_path';
+  static const profileAvatarColorKey = 'profile_avatar_color';
+
   // Backup bookkeeping (FR-37, FR-42) — excluded from what a backup exports,
   // so restoring one never rewrites the restoring device's own schedule/state.
   static const autoBackupEnabledKey = 'auto_backup_enabled';

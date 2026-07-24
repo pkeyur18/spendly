@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:spendly/core/db/database.dart';
+import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/backup/backup_format.dart';
 import 'package:spendly/features/backup/backup_repository.dart';
@@ -8,15 +13,29 @@ import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.path);
+  final String path;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => path;
+}
+
 void main() {
   late AppDatabase db;
   late BackupRepository repo;
+  late Directory supportDir;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = BackupRepository(db);
+    supportDir = Directory.systemTemp.createTempSync('spendly_backup_test_');
+    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
   });
-  tearDown(() => db.close());
+  tearDown(() {
+    db.close();
+    supportDir.deleteSync(recursive: true);
+  });
 
   test(
     'export then replace into a fresh db reproduces identical data',
@@ -146,6 +165,84 @@ void main() {
       Money.parse('50').minor,
     ); // the ₹999 row is gone
   });
+
+  test(
+    'export includes the profile photo; replace restores identical bytes',
+    () async {
+      final photoBytes = utf8.encode('fake jpeg bytes');
+      final sourcePhotoPath = '${supportDir.path}/source-avatar.jpg';
+      await File(sourcePhotoPath).writeAsBytes(photoBytes);
+      await SettingsRepository(
+        db,
+      ).set(SettingsRepository.profilePhotoPathKey, sourcePhotoPath);
+      await SettingsRepository(
+        db,
+      ).set(SettingsRepository.profileNameKey, 'Ada');
+
+      final payload = await repo.exportAll();
+      expect(payload.profilePhotoBase64, base64Encode(photoBytes));
+      // Device-specific path is never exported as a plain setting.
+      expect(
+        payload.settings.any(
+          (s) => s.key == SettingsRepository.profilePhotoPathKey,
+        ),
+        isFalse,
+      );
+      expect(
+        payload.settings.any(
+          (s) => s.key == SettingsRepository.profileNameKey,
+        ),
+        isTrue,
+      );
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restoredPath = await SettingsRepository(
+        freshDb,
+      ).get(SettingsRepository.profilePhotoPathKey);
+      expect(restoredPath, isNotNull);
+      expect(await File(restoredPath!).readAsBytes(), photoBytes);
+      await freshDb.close();
+    },
+  );
+
+  test(
+    'replace with no photo in the payload leaves photo state wiped',
+    () async {
+      final payload = await repo.exportAll(); // no photo ever set
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await BackupRepository(freshDb).replaceAll(payload);
+      final restoredPath = await SettingsRepository(
+        freshDb,
+      ).get(SettingsRepository.profilePhotoPathKey);
+      expect(restoredPath, isNull); // falls back to colored initials (FR-55)
+      await freshDb.close();
+    },
+  );
+
+  test(
+    'merge never restores the profile photo, same as other settings',
+    () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final photoBytes = utf8.encode('another fake jpeg');
+      final sourcePhotoPath = '${supportDir.path}/merge-avatar.jpg';
+      await File(sourcePhotoPath).writeAsBytes(photoBytes);
+      await SettingsRepository(
+        sourceDb,
+      ).set(SettingsRepository.profilePhotoPathKey, sourcePhotoPath);
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      final restoredPath = await SettingsRepository(
+        db,
+      ).get(SettingsRepository.profilePhotoPathKey);
+      expect(restoredPath, isNull);
+    },
+  );
 
   test(
     'importing a corrupted file leaves all existing data untouched',

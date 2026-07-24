@@ -254,6 +254,11 @@ class BackupSetting {
 
 /// The full exported dataset (`data` in the envelope). [exportedAt]/[counts]
 /// are informational (drive the restore preview), not load-bearing for import.
+///
+/// [profilePhotoBase64] is v2-only (FR-56, `docs/backup-schema.md`): a v1
+/// file simply has no such key, which decodes to null — the photo is the
+/// only piece of profile data that couldn't already ride along as a generic
+/// [BackupSetting] (a local file path isn't portable across devices).
 class BackupPayload {
   const BackupPayload({
     required this.exportedAt,
@@ -261,6 +266,7 @@ class BackupPayload {
     required this.expenses,
     required this.budgets,
     required this.settings,
+    this.profilePhotoBase64,
   });
 
   final DateTime exportedAt;
@@ -268,6 +274,7 @@ class BackupPayload {
   final List<BackupExpense> expenses;
   final List<BackupBudget> budgets;
   final List<BackupSetting> settings;
+  final String? profilePhotoBase64;
 
   (DateTime, DateTime)? get expenseDateRange {
     if (expenses.isEmpty) return null;
@@ -294,6 +301,7 @@ class BackupPayload {
     settings: (j['settings'] as List)
         .map((e) => BackupSetting.fromJson(e as Map<String, dynamic>))
         .toList(),
+    profilePhotoBase64: j['profilePhotoBase64'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -307,5 +315,6 @@ class BackupPayload {
     'expenses': expenses.map((e) => e.toJson()).toList(),
     'budgets': budgets.map((b) => b.toJson()).toList(),
     'settings': settings.map((s) => s.toJson()).toList(),
+    if (profilePhotoBase64 != null) 'profilePhotoBase64': profilePhotoBase64,
   };
 }

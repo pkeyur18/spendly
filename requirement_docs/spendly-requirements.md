@@ -1,6 +1,6 @@
 # Spendly — Product Requirements Document
 
-**Version:** 1.1 · **Date:** July 22, 2026
+**Version:** 1.3 · **Date:** July 22, 2026
 **Product:** Cross-platform personal expense tracker (iOS + Android)
 
 ---
@@ -47,7 +47,18 @@ Single-user app. No login required for local-only use; optional account for clou
 
 ## 5. Functional Requirements
 
-### 5.1 Add Expense
+### 5.1 Onboarding
+| ID | Requirement |
+|---|---|
+| FR-44 | On first launch, user sees a Welcome screen before reaching the Home dashboard |
+| FR-45 | User must provide a **name** to proceed (mandatory field) |
+| FR-46 | User may optionally provide a **phone number** and/or **email address** |
+| FR-47 | The "Get started" action stays disabled until the mandatory name field is filled |
+| FR-48 | On completion, user is redirected directly to the Home dashboard — no further setup steps required before first use |
+| FR-49 | Name, phone, and email (if provided) are stored locally and are included in the backup file (FR-33) so they're restored along with expense data |
+| FR-50 | Onboarding only appears once, on first launch; it does not reappear on subsequent app opens unless local data is cleared or restored fresh |
+
+### 5.2 Add Expense
 | ID | Requirement |
 |---|---|
 | FR-1 | User can add an expense with: amount (required), category (required), date (defaults to today), note (optional), payment method (optional) |
@@ -58,7 +69,7 @@ Single-user app. No login required for local-only use; optional account for clou
 | FR-6 | User can edit or delete any past expense |
 | FR-7 | User can mark an expense as recurring (daily/weekly/monthly) |
 
-### 5.2 Categories
+### 5.3 Categories
 | ID | Requirement |
 |---|---|
 | FR-8 | App ships with default categories (Food, Travel, Shopping, Bills, Entertainment, Health, Home, Other) |
@@ -66,7 +77,7 @@ Single-user app. No login required for local-only use; optional account for clou
 | FR-10 | User can set an icon per category from an icon set |
 | FR-11 | User can archive (not delete) a category still referenced by past expenses |
 
-### 5.3 Dashboard / Home
+### 5.4 Dashboard / Home
 | ID | Requirement |
 |---|---|
 | FR-12 | Home screen shows total spent in the current month |
@@ -75,7 +86,7 @@ Single-user app. No login required for local-only use; optional account for clou
 | FR-15 | Home screen shows the most recent transactions with quick access to edit |
 | FR-16 | Optional budget bar shows % of a set monthly budget used |
 
-### 5.4 Reports
+### 5.5 Reports
 | ID | Requirement |
 |---|---|
 | FR-17 | System auto-generates a report at the end of each calendar month |
@@ -85,14 +96,14 @@ Single-user app. No login required for local-only use; optional account for clou
 | FR-21 | User can export a report as PDF or CSV |
 | FR-22 | User can share a report via the OS share sheet |
 
-### 5.5 Budgets (v1 lightweight)
+### 5.6 Budgets (v1 lightweight)
 | ID | Requirement |
 |---|---|
 | FR-23 | User can set an overall monthly budget |
 | FR-24 | User can set a per-category budget |
 | FR-25 | User is notified when a category crosses 80% and 100% of its budget |
 
-### 5.6 Widgets
+### 5.7 Widgets
 | ID | Requirement |
 |---|---|
 | FR-26 | Small widget: today's total spend + mini trend |
@@ -100,14 +111,14 @@ Single-user app. No login required for local-only use; optional account for clou
 | FR-28 | Medium widget: month total + budget bar + quick-add row |
 | FR-29 | Widgets refresh automatically after any new expense is added, from any source |
 
-### 5.7 Data & Sync
+### 5.8 Data & Sync
 | ID | Requirement |
 |---|---|
 | FR-30 | All data stored locally by default (offline-first) |
 | FR-31 | Optional cloud backup/sync tied to an account |
 | FR-32 | Data export (CSV) available at any time from Settings |
 
-### 5.8 Backup, Export & Import
+### 5.9 Backup, Export & Import
 | ID | Requirement |
 |---|---|
 | FR-33 | User can export a full backup of all app data (expenses, categories, budgets, settings) as a single file |
@@ -121,6 +132,18 @@ Single-user app. No login required for local-only use; optional account for clou
 | FR-41 | App validates the backup file before import and shows a clear error if the file is corrupted, unreadable, or from an incompatible future version, without altering existing data |
 | FR-42 | App shows the timestamp and file size of the most recent successful backup in Settings, so the user knows their data is protected |
 | FR-43 | Backup/restore works fully offline for local file export/import; only the "save to cloud" destination step requires network access |
+
+### 5.10 Profile
+| ID | Requirement |
+|---|---|
+| FR-51 | User has a Profile screen showing their name, email, and avatar/photo, plus lifetime usage stats (months tracked, expenses logged, categories used) |
+| FR-52 | User can edit their name, phone, and email at any time from Profile |
+| FR-53 | User can set a profile picture by uploading a photo (camera or photo library) |
+| FR-54 | User can instead choose a colored initials-avatar from a preset palette, if they don't want to upload a photo |
+| FR-55 | If no photo or avatar color has been chosen, the app shows a colored initials-avatar by default, generated from the user's name — never a blank/broken image state |
+| FR-56 | Profile picture (photo or chosen avatar color) is included in the backup file (FR-33) and restored along with other profile data (FR-49) |
+| FR-57 | Profile screen links directly to Backup & Restore and Theme/Currency settings, since these are all part of the same account-level settings cluster |
+| FR-58 | "Delete all data" is accessible from Profile, clearly marked as destructive, and prompts the user to back up first before proceeding |
 
 ---
 
@@ -140,6 +163,12 @@ Single-user app. No login required for local-only use; optional account for clou
 ## 7. Information Architecture
 
 ```
+Welcome / Onboarding (first launch only)
+├── Name (mandatory)
+├── Phone (optional)
+├── Email (optional)
+└── → redirects to Home
+
 Home (Dashboard)
 ├── This month summary + budget bar
 ├── Category chart
@@ -155,6 +184,14 @@ Reports
 Categories
 ├── Manage list (add/edit/reorder/archive)
 └── Per-category budget
+
+Profile
+├── Avatar / photo (upload or colored initials)
+├── Name, phone, email (editable)
+├── Lifetime stats (months tracked, expenses, categories)
+├── → Backup & Restore
+├── → Theme & Currency
+└── Delete all data (destructive, prompts backup first)
 
 Settings
 ├── Monthly budget
@@ -173,6 +210,7 @@ Settings
 
 ## 8. Screen List (see accompanying interactive prototype)
 
+0. **Welcome / Onboarding** — name (mandatory), phone and email (optional), redirects to Home on completion
 1. **Home / Dashboard** — month total, donut chart, trend bars, recent transactions
 2. **Quick Add** — keypad + category grid, in-app fast entry
 3. **Reports — Monthly** — auto-generated end-of-month summary
@@ -182,6 +220,9 @@ Settings
 7. **Home Screen Widgets** — small (today), small (quick-add), medium (combo)
 8. **Lock Screen Widget** (iOS) — minimal glanceable total
 9. **Backup & Restore** — manual/auto backup status, save-to-cloud, and restore-from-file with Merge/Replace choice
+10. **Profile** — avatar/photo, name/email display, lifetime stats, links to account settings
+11. **Edit Profile** — update name, phone, email
+12. **Avatar Picker** — upload a photo or choose a colored initials-avatar
 
 ---
 

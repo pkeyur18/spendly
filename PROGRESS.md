@@ -5,7 +5,7 @@
 
 ## Current status
 
-- **Sprint:** 7 (Polish & Accessibility) — **built, awaiting user verification (real VoiceOver/TalkBack pass, Dynamic Type at largest setting, cold-start stopwatch timing)**
+- **Sprint:** 7 (Polish & Accessibility) — **built, awaiting user verification (real VoiceOver/TalkBack pass, Dynamic Type at largest setting, cold-start stopwatch timing)**. Since that entry was written, a run of ad-hoc work landed without PROGRESS.md updates (see "Catch-up" section below) — onboarding, a bare Profile screen, and three small fixes — followed by the full **Sprint 10 (Ad-Hoc) — Profile** sprint (FR-51–58), done now at the user's explicit request even though the sprint plan calls for it as a fast-follow after Sprint 9. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
 - **Next:** Sprint 8 (Beta & Hardening) — TestFlight/Internal Testing builds, crash reporting + opt-in analytics, a week-long bug bash, edge cases (currency-locale mid-month, date/time changes, cross-version restore, 1000+ transactions).
 - **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the app) rather than writing natively in-widget — see Sprint 6 section below for the full tradeoff.
 
@@ -19,11 +19,42 @@
 - **Backup encryption (PRD Q6):** optional password protection (AES-256-GCM + PBKDF2), user's choice per backup — not mandatory, not always-on.
 - **Auto-backup default frequency (PRD Q7):** weekly (matches the prototype's pre-selected chip). Daily/monthly also selectable.
 
+## Catch-up — work that shipped without a PROGRESS.md entry
+
+Five commits (`0b23fe4` iOS widget app-group fix, `4f0c24c` new app icon,
+`4c40ec5` category-grid layout fix, `7fe95f7` bare profile screen,
+`dd6724f` reports-live-update/app-icon/widget-deep-link fixes) plus
+uncommitted onboarding work all landed after the Sprint 7 entry above was
+written, with no corresponding PROGRESS.md update. Recorded now, retroactively:
+
+- **Onboarding (FR-44–50)** → `lib/features/onboarding/welcome_screen.dart`.
+  Name (mandatory, gates "Get started"), phone/email (optional). Saves
+  through the same `profileProvider` Sprint 10 builds on — it never
+  navigates itself; `app.dart`'s `home:` watches `profileProvider` and shows
+  `WelcomeScreen` vs `HomeScreen` based on whether `profile.name` is empty.
+  This *is* the FR-50 "first launch only" gate — there's no separate
+  onboarding-complete flag.
+- **Bare Profile screen (FR-49, FR-52 partial)** → `profile_provider.dart`
+  (`Profile{name,email,phone}` over the generic `Settings` k/v table) +
+  a 3-`TextField` `ProfileScreen`, reachable from a "Profile" tile inside the
+  (now-removed, see Sprint 10) Settings screen. Also wired into report
+  CSV/PDF export (`report_export.dart`) and `resetToDefaults()`
+  (`test/reset_test.dart`).
+- **`dd6724f`** — reports weren't live-updating (`reportProvider` was a
+  `FutureProvider`, not reactive to new expenses; changed to `StreamProvider`
+  over `watchInRange`); app icon was cropped (regenerated via
+  `flutter_launcher_icons` from `assets/logo/app_logo.png`); widget deep-link
+  URL scheme registration added to `ios/Runner/Info.plist`
+  (`CFBundleURLTypes` → `spendly://`).
+- **Verification:** not independently re-verified as part of this catch-up —
+  covered by Sprint 10's `flutter analyze`/`flutter test`/build-sanity pass
+  below, since Sprint 10 builds directly on this code.
+
 ## Stack / tooling
 
 - Flutter 3.44.7 (latest stable) · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
 - Dependency freshness: **all direct deps latest, except where noted below**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
-- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** (S4 export), **flutter_timezone ^5.1** + **timezone ^0.11** (S4, for `zonedSchedule`), **cryptography ^2.9** (S5 — AES-GCM + PBKDF2 for optional backup password), **home_widget ^0.9.3** (S6 — shared-store bridge to iOS WidgetKit / Android Glance). Dev: drift_dev, build_runner, flutter_lints.
+- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** (S4 export), **flutter_timezone ^5.1** + **timezone ^0.11** (S4, for `zonedSchedule`), **cryptography ^2.9** (S5 — AES-GCM + PBKDF2 for optional backup password), **home_widget ^0.9.3** (S6 — shared-store bridge to iOS WidgetKit / Android Glance), **image_picker ^1.2.3** (S10 — camera/gallery for the profile photo, FR-53), **characters** (S10 — grapheme-safe initials logic in `avatar.dart` uses `String.characters`, provided today via `flutter/material.dart`'s re-export; pinned as an explicit direct dependency anyway since it was already resolvable transitively, at ^1.4.1, so the import stays valid even if that re-export path ever changes). Dev: drift_dev, build_runner, flutter_lints, **path_provider_platform_interface** (S10 — fakes `getApplicationSupportPath()` in `backup_repository_test.dart` so the photo round-trip test never touches a real platform channel).
 - **iOS deployment target is 26.0 (all 6 build configs in `project.pbxproj`) — explicit user override of the PRD's iOS 16+ target, not a technical requirement.** `home_widget`'s CocoaPod only needed 14.0 (that was the S6 fix, done first); the user then explicitly asked to bump further to 26.0 (Apple's current/latest release), fully aware this restricts the whole app to devices already on iOS 26 and excludes iOS 16-25 users entirely — **flagged to the user before applying, confirmed intentional.** If a future session needs to widen the install base again, 14.0 is the real floor (`home_widget`'s minimum); the lock-screen widget code is separately gated `@available(iOS 16.0, *)` in Swift regardless of deployment target.
 - **Android Glance widgets need the Compose compiler Gradle plugin** (`org.jetbrains.kotlin.plugin.compose`, pinned to the same version as `org.jetbrains.kotlin.android`, 2.3.20) plus `buildFeatures { compose = true }` and `androidx.glance:glance-appwidget:1.1.1` in `android/app/build.gradle.kts`/`settings.gradle.kts`. Without the compose plugin, Glance's `@Composable` functions fail to compile.
 - **share_plus pinned to ^12.0.2 (downgraded from ^13.2 in S4) — deliberate, do not bump casually.** `share_plus ^13.2.1` requires `win32 ^6.0.1`; every `file_picker` version compatible with this project's Android toolchain (see below) requires `win32 ^5.9.0`. The two can't coexist above `share_plus 12.x`. Verified `share_plus 12.0.2`'s `ShareParams`/`SharePlus.instance.share` API is unchanged from 13.x — `report_export.dart`'s `shareReportFile` needed no changes. Re-check this constraint before bumping either package.
@@ -218,6 +249,128 @@ Two read-only audits (screen-reader/Dynamic Type/color-blind gaps, and cold-star
 - **This is build-level verification only**, same caveat as Sprint 6. Nobody has yet: run a real VoiceOver (iOS) or TalkBack (Android) pass through every screen; set Dynamic Type to its largest accessibility setting and confirmed no clipped/overlapping text (especially the two chart widgets' 1.3x-clamped labels and the keypad); stopwatch-timed a real cold start or a real widget-tap-to-QuickAddScreen open on a device/simulator. Treat the build/analyze/test green as necessary, not sufficient — this is exactly the kind of gap that only shows up interactively.
 - The 1.3x textScaler clamp inside `spend_donut.dart`/`trend_bars.dart` is a deliberate, bounded ceiling — if it ever feels too restrictive, the fix is to raise `maxScaleFactor` there, not to remove the clamp (the charts' fixed pixel dimensions can't reflow like a list).
 - `AppCard`'s `InkWell`-based `onTap` now carries `Semantics(button: true)` but no explicit `label:` — its callers already surround it with descriptive visible text (e.g. a transaction's title + amount), so screen readers get that context from the descendant text nodes rather than a hand-written label. If a future `AppCard` caller has no descendant text, it should pass its own `Semantics(label:)` wrapper rather than relying on this.
+
+## Sprint 10 (Ad-Hoc) — done (Profile, FR-51–58)
+
+Run at the user's explicit request as a fast-follow pulled forward, not in
+the normal 0→9 sequence (the sprint plan calls for it after Sprint 9/launch).
+Builds directly on the pre-existing bare Profile screen/provider (see
+"Catch-up" section above) rather than starting from scratch — that work
+already covered FR-49 and part of FR-52; this sprint added everything else.
+
+User-approved decisions (asked up front, before writing code):
+- **Added `image_picker`** as a new dependency for camera/gallery upload
+  (FR-53) — resolved cleanly (`1.2.3`) against the pinned `share_plus`/
+  `file_picker` versions, no conflict.
+- **Profile screen replaces the old bare `SettingsScreen`** as the
+  bottom-nav gear destination, folding Theme-cycle, Backup & Restore, and
+  the destructive reset into Profile's own menu — matches the PRD screen
+  list (no separate "Settings" screen exists in it) and the prototype (gear
+  icon is shown active *on* the Profile screen, phone 10). `settings_screen.dart`
+  is deleted.
+- **Currency row is read-only** (shows "Indian Rupee (₹)", no tap target) —
+  multi-currency is already locked out-of-scope-v2 (PRD Q1), nothing to
+  configure yet.
+
+- [x] **Avatar data model** — no Drift schema bump needed. `Profile`
+  (`profile_provider.dart`) gained `photoPath`/`avatarColorIndex`, stored as
+  two more plain rows in the existing generic `Settings` table (new keys
+  `profile_photo_path`, `profile_avatar_color` in `SettingsRepository`) —
+  same pattern as the existing name/email/phone fields.
+- [x] **Avatar logic (FR-54, FR-55)** → `lib/features/profile/avatar.dart`:
+  `avatarGradients` (5 presets, colors lifted verbatim from the prototype's
+  `.avatar-opt` swatches — index 0 is the default), pure `initialsFor(name)`
+  (grapheme-safe via `String.characters`, never throws, never returns
+  something unrenderable — handles blank/single-word/multi-word/emoji names),
+  and the shared `ProfileAvatar` widget (photo via `Image.file` if
+  `photoPath` is set and the file exists, else colored initials) — the one
+  render path used everywhere an avatar appears, so there's no
+  blank/broken-image state anywhere.
+- [x] **Lifetime stats (FR-51)** → `lib/features/profile/lifetime_stats.dart`:
+  pure `computeLifetimeStats` (distinct months, expense count, distinct
+  categories used) over `ExpenseRepository.watchLifetimeStats()` (a new
+  query selecting only `date`+`categoryId`, not full rows) — stream-derived
+  like the existing dashboard providers, so it updates live.
+- [x] **Profile hub screen (FR-51, FR-57)** → rewrote
+  `lib/features/profile/profile_screen.dart`: hero avatar + edit-pencil
+  badge, 3-stat row, then grouped menu sections — *Account* (Edit profile,
+  Change photo/avatar), *Preferences* (Theme — tap-cycles, same logic
+  Settings used; Currency — read-only), *Account actions* (Delete all data).
+- [x] **Edit Profile (FR-52)** → new `edit_profile_screen.dart`, extracted
+  from the old bare `ProfileScreen`'s form (name/phone/email + Save), with
+  the avatar+pencil now at top linking to the Avatar Picker.
+- [x] **Avatar Picker (FR-53, FR-54)** → new `avatar_picker_screen.dart`:
+  upload dropzone (`image_picker`, bottom-sheet choice of camera/gallery,
+  image copied to `<applicationSupportDirectory>/profile/avatar.jpg`,
+  single file, overwritten each pick — no history) + horizontal row of the 5
+  color swatches, selection state, Save.
+- [x] **Delete all data, backup-gated (FR-58)** → new
+  `lib/features/profile/delete_all_data_flow.dart`: tapping the row shows
+  *"Back up your data first?"* (Back up now / Continue without backing up /
+  Cancel) before the pre-existing type-"DELETE"-to-confirm dialog
+  (`ResetConfirmDialog`, moved here from the old Settings screen unchanged).
+  "Back up now" reuses `performManualBackup`, extracted from
+  `backup_restore_screen.dart`'s own button handler so both screens share
+  one code path (optional-password dialog → share sheet → status record).
+- [x] **Backup schema v2 (FR-56)** → the one genuinely new backup-layer
+  piece. Name/email/phone/avatarColorIndex were already plain `Settings`
+  rows and already flowed into backups with no schema change; the photo is
+  a local file, which JSON can't reference portably across devices. Added
+  optional `profilePhotoBase64` to `BackupPayload`
+  (`backup_models.dart`); bumped `currentBackupVersion` to **2**
+  (`backup_format.dart`) — no version-keyed decode branch needed, since a
+  v1 file simply lacks the key and `fromJson` already reads that as null.
+  `BackupRepository.exportAll()` excludes `profile_photo_path` from the
+  generic settings export (device-specific, meaningless elsewhere) and
+  base64-encodes the photo file's bytes into the payload if one exists.
+  `replaceAll()` decodes it (if present) to a fresh local file and writes a
+  new `profile_photo_path` setting row; if absent (v1 file, or a v2 file
+  with no photo), photo state is left wiped, correctly falling back to
+  colored initials. **`mergeAll()` deliberately does not touch the photo** —
+  consistent with its pre-existing, documented behavior that merge never
+  touches settings at all (so name/email/phone weren't restored on merge
+  before this sprint either; the photo follows the same rule for
+  consistency, not a new restriction). `docs/backup-schema.md` updated with
+  a new "v2 — profile photo" section.
+- [x] **iOS permissions** → `NSCameraUsageDescription` +
+  `NSPhotoLibraryUsageDescription` added to `ios/Runner/Info.plist` for
+  `image_picker`. Android needed no manifest change beyond the plugin's own
+  merge.
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **110 passed** (+ `avatar_test` 9, `lifetime_stats_test` 4,
+  3 new `profile_provider_test` cases, 2 new `backup_format_test` cases, 3
+  new `backup_repository_test` cases covering the v2 photo round-trip via a
+  faked `PathProviderPlatform` — no real platform channel touched).
+- `flutter build apk --debug` ✓ (KGP warning unchanged from Sprint 6/7 —
+  pre-existing, not a regression; `image_picker` isn't in the flagged-plugins
+  list) · `flutter build ios --debug --simulator --no-codesign` ✓ (new
+  `image_picker` native dep + `Info.plist` permission strings both build
+  clean).
+
+### Deferred / notes — real manual verification NOT yet done, needs the user
+- **This is build-level verification only**, same caveat as Sprints 6/7.
+  Nobody has yet: tapped the gear icon and confirmed the new Profile screen
+  renders correctly in both themes; edited name/phone/email and confirmed it
+  reflects immediately; picked a color swatch and a real photo (simulator
+  camera roll) and confirmed the avatar updates immediately everywhere it
+  appears; confirmed a brand-new/reset profile shows colored initials with
+  no broken-image flash; confirmed the backup-first dialog actually appears
+  before the type-DELETE dialog; exported a backup with a photo set,
+  inspected the JSON for `version: 2` + `profilePhotoBase64`, and restored it
+  onto a reset app; confirmed a genuine pre-Sprint-10 (`version: 1`) backup
+  file still restores correctly. See the plan's Verification section for the
+  full walkthrough steps.
+- Currency row is intentionally non-interactive (see decision above) —
+  revisit once an actual currency feature is scoped.
+- `image_picker`'s picked-photo max size is capped at 800×800 /
+  quality 85 in `avatar_picker_screen.dart` — a deliberate, undocumented-in-PRD
+  ceiling to keep the single avatar file small; raise if a sharper avatar is
+  ever needed.
+- No photo history — picking a new photo overwrites
+  `profile/avatar.jpg` in place. Fine for a single-avatar-per-user model;
+  would need a real migration if past photos ever needed to be kept.
 
 ## How to run
 

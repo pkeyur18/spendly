@@ -13,8 +13,10 @@ import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
 import '../expenses/expense_repository.dart';
 import '../expenses/quick_add_screen.dart';
+import '../profile/avatar.dart';
+import '../profile/profile_provider.dart';
+import '../profile/profile_screen.dart';
 import '../reports/monthly_report_screen.dart';
-import '../settings/settings_screen.dart';
 import '../settings/theme_mode_provider.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
@@ -28,6 +30,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final recent = ref.watch(recentExpensesProvider);
+    final profile = ref.watch(profileProvider).value;
 
     return Scaffold(
       appBar: AppBar(
@@ -72,7 +75,7 @@ class HomeScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         children: [
-          _greeting(context, palette),
+          _greeting(context, palette, profile?.name ?? ''),
           const _HeroCard(),
           const SectionTitle('Where it went'),
           const SpendDonut(),
@@ -101,17 +104,18 @@ class HomeScreen extends ConsumerWidget {
           child: const Icon(Icons.add, color: Colors.white, size: 28),
         ),
       ),
-      bottomNavigationBar: _BottomNav(palette: palette),
+      bottomNavigationBar: _BottomNav(palette: palette, profile: profile),
     );
   }
 
-  Widget _greeting(BuildContext context, AppPalette palette) {
+  Widget _greeting(BuildContext context, AppPalette palette, String name) {
     final now = DateTime.now();
     final part = now.hour < 12
         ? 'morning'
         : now.hour < 17
         ? 'afternoon'
         : 'evening';
+    final greeting = name.isEmpty ? 'Good $part 👋' : 'Good $part, $name 👋';
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xs,
@@ -119,20 +123,7 @@ class HomeScreen extends ConsumerWidget {
         AppSpacing.xs,
         AppSpacing.xl,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Good $part 👋',
-            style: TextStyle(color: palette.textDim, fontSize: 13),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            "Here's your ${DateFormat.MMMM().format(now)}",
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-        ],
-      ),
+      child: Text(greeting, style: Theme.of(context).textTheme.headlineMedium),
     );
   }
 
@@ -361,9 +352,10 @@ class _TransactionTile extends ConsumerWidget {
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.palette});
+  const _BottomNav({required this.palette, required this.profile});
 
   final AppPalette palette;
+  final Profile? profile;
 
   @override
   Widget build(BuildContext context) {
@@ -376,11 +368,14 @@ class _BottomNav extends StatelessWidget {
       String label, {
       bool active = false,
       VoidCallback? onTap,
+      Widget? leading,
     }) {
       return IconButton(
         onPressed: onTap ?? () => soon(label),
         tooltip: label,
-        icon: Icon(icon, color: active ? AppColors.primary : palette.textDim),
+        icon:
+            leading ??
+            Icon(icon, color: active ? AppColors.primary : palette.textDim),
       );
     }
 
@@ -416,12 +411,19 @@ class _BottomNav extends StatelessWidget {
             },
           ),
           item(
-            Icons.settings_rounded,
-            'Settings',
+            Icons.account_circle_rounded,
+            'Profile',
+            leading: ProfileAvatar(
+              name: profile?.name ?? '',
+              photoPath: profile?.photoPath,
+              avatarColorIndex: profile?.avatarColorIndex,
+              size: 26,
+              fontSize: 11,
+            ),
             onTap: () {
               Navigator.of(
                 context,
-              ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
           ),
         ],

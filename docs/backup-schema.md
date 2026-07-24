@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 1,
+  "version": 2,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 1,
+  "version": 2,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -79,8 +79,11 @@ unencrypted case.
     { "id": 1, "categoryId": null, "amountMinor": 5000000, "period": "monthly" }
   ],
   "settings": [
-    { "key": "theme_mode", "value": "system" }
-  ]
+    { "key": "theme_mode", "value": "system" },
+    { "key": "profile_name", "value": "Aditi Sharma" },
+    { "key": "profile_avatar_color", "value": "1" }
+  ],
+  "profilePhotoBase64": "<base64, omitted entirely if no photo is set>"
 }
 ```
 
@@ -101,7 +104,34 @@ Rules:
 - `settings` excludes the app's own backup-bookkeeping keys
   (`auto_backup_enabled`, `auto_backup_frequency`, `last_backup_at`,
   `last_backup_size`) — importing a backup must never rewrite the restoring
-  device's own backup schedule or status.
+  device's own backup schedule or status — plus `profile_photo_path` (v2,
+  see below), which is a local file path and meaningless on another device.
+  Ordinary profile fields (`profile_name`, `profile_email`, `profile_phone`,
+  `profile_avatar_color`) are plain settings rows and always included.
+
+## v2 — profile photo (FR-56)
+
+Sprint 10 added a Profile screen with a real-photo option, stored as a local
+file (`profile_photo_path` setting → file on disk), not inline in the
+database. A file path can't travel in a backup the way an ordinary setting
+value can, so v2 adds one optional payload field instead:
+
+- `profilePhotoBase64` (string, optional) — the photo file's bytes,
+  base64-encoded. Omitted entirely when no photo is set (colored-initials
+  avatar or no avatar at all), so a payload with no photo is
+  indistinguishable from a v1 payload on this field.
+- A v1 file has no `profilePhotoBase64` key at all, which
+  `BackupPayload.fromJson` reads as `null` — no version-keyed decode branch
+  was needed, per the additive-only rule above. This is why the bump to
+  `version: 2` didn't require touching `decodePayload`'s logic, only the
+  `currentBackupVersion` constant.
+- **Replace** decodes it (if present) to a fresh local file and writes a new
+  `profile_photo_path` setting row pointing at it. If absent (v1 file, or a
+  v2 file with no photo), photo state is simply left wiped — the avatar
+  correctly falls back to colored initials (FR-55).
+- **Merge never touches settings at all** (unchanged from v1 — see "Merge
+  algorithm" below), so a merged backup's photo, like its name/email/phone,
+  is never applied to the target device; only Replace restores profile data.
 
 ## Merge algorithm (no UUID column — natural-key matching)
 
