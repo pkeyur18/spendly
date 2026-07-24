@@ -115,7 +115,10 @@ class HomeScreen extends ConsumerWidget {
         : now.hour < 17
         ? 'afternoon'
         : 'evening';
-    final greeting = name.isEmpty ? 'Good $part 👋' : 'Good $part, $name 👋';
+    final firstName = name.trim().split(RegExp(r'\s+')).first;
+    final greeting = firstName.isEmpty
+        ? 'Good $part'
+        : 'Good $part, $firstName';
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xs,
