@@ -43,7 +43,7 @@ void main() {
     expect(expenses, isEmpty);
     expect(budgets, isEmpty);
     expect(settings, isEmpty);
-    expect(categories.length, 8); // the shipped default categories
+    expect(categories.length, 18); // the shipped default categories
     expect(categories.every((c) => c.isDefault), isTrue);
   });
 }

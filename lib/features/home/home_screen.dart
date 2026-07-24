@@ -18,7 +18,6 @@ import '../profile/avatar.dart';
 import '../profile/profile_provider.dart';
 import '../profile/profile_screen.dart';
 import '../reports/monthly_report_screen.dart';
-import '../settings/theme_mode_provider.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
 import 'widgets/trend_bars.dart';
@@ -66,11 +65,6 @@ class HomeScreen extends ConsumerWidget {
               ),
               icon: const Icon(Icons.bug_report_outlined),
             ),
-          IconButton(
-            tooltip: 'Theme',
-            onPressed: () => _cycleTheme(ref),
-            icon: const Icon(Icons.brightness_6_outlined),
-          ),
         ],
       ),
       body: ListView(
@@ -160,13 +154,6 @@ class HomeScreen extends ConsumerWidget {
         style: TextStyle(color: palette.textDim, fontSize: 13),
       ),
     );
-  }
-
-  void _cycleTheme(WidgetRef ref) {
-    final current = ref.read(themeModeProvider).value ?? ThemeMode.system;
-    const order = [ThemeMode.system, ThemeMode.light, ThemeMode.dark];
-    final next = order[(order.indexOf(current) + 1) % order.length];
-    ref.read(themeModeProvider.notifier).setMode(next);
   }
 
   void _openQuickAdd(BuildContext context, {ExpenseRow? editing}) {

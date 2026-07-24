@@ -14,6 +14,7 @@ import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../widgets/widget_refresh.dart';
 import 'expense_repository.dart';
+import 'widgets/expense_tile.dart' show relativeDayLabel;
 
 /// Fast expense entry (FR-2, FR-5): keypad + category grid, ≤3-tap save.
 /// Reused for editing (FR-6, FR-15) when [editing] is supplied.
@@ -34,6 +35,18 @@ class QuickAddScreen extends ConsumerStatefulWidget {
 /// truncated view with a "More" tile.
 const _gridCap = 8;
 const _visibleWhenCapped = 7;
+
+/// How far back an expense can be backdated.
+const _backdateWindowDays = 90;
+
+/// [firstDate, lastDate] bounds for the backdate picker: up to
+/// [_backdateWindowDays] days before [now], never a future date.
+(DateTime, DateTime) backdatePickerBounds(DateTime now) {
+  return (
+    now.subtract(const Duration(days: _backdateWindowDays)),
+    DateTime(now.year, now.month, now.day),
+  );
+}
 
 /// First [visibleCount] categories, with [selectedId] swapped into the last
 /// slot if it would otherwise be cut off.
@@ -56,6 +69,7 @@ List<CategoryRow> visibleCategoryTiles(
 class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late String _amount;
   int? _categoryId;
+  late DateTime _selectedDate;
   bool _defaulted = false;
 
   bool get _isEdit => widget.editing != null;
@@ -71,6 +85,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               ? (e.amount.minor ~/ 100).toString()
               : e.amount.major.toStringAsFixed(2));
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
+    _selectedDate = e?.date ?? DateTime.now();
   }
 
   @override
@@ -105,6 +120,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       AmountDisplay(_amount),
                       _subLine(context, selected, palette),
+                      const SizedBox(height: AppSpacing.sm),
+                      Center(child: _dateChip(context, palette)),
                       const SizedBox(height: AppSpacing.xl),
                       _categoryGrid(categories),
                     ],
@@ -197,11 +214,53 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       padding: const EdgeInsets.only(top: AppSpacing.xs),
       child: Center(
         child: Text(
-          '$label · Today',
+          label,
           style: TextStyle(color: palette.textDim, fontSize: 13),
         ),
       ),
     );
+  }
+
+  /// Backdating chip: shows the selected date, tap opens a bounded picker
+  /// (today back to 90 days ago, no future dates).
+  Widget _dateChip(BuildContext context, AppPalette palette) {
+    return Semantics(
+      button: true,
+      label: 'Expense date, ${relativeDayLabel(_selectedDate)}',
+      child: GestureDetector(
+        onTap: _pickDate,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: palette.card,
+            border: Border.all(color: palette.line),
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 14, color: palette.textDim),
+              const SizedBox(width: 6),
+              Text(
+                relativeDayLabel(_selectedDate),
+                style: TextStyle(color: palette.textDim, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final (firstDate, lastDate) = backdatePickerBounds(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Widget _categoryGrid(List<CategoryRow> categories) {
@@ -357,9 +416,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         widget.editing!.id,
         amount: amount,
         categoryId: categoryId,
+        date: _selectedDate,
       );
     } else {
-      await repo.add(amount: amount, categoryId: categoryId);
+      await repo.add(
+        amount: amount,
+        categoryId: categoryId,
+        date: _selectedDate,
+      );
     }
     // Fire budget-threshold alerts for the affected category + overall (FR-25).
     // Only the delta counts toward the "before → after" crossing so an edit
@@ -378,12 +442,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Future<void> _checkBudgetAlerts(int categoryId, Money delta) async {
     if (delta.minor <= 0) return; // only rising spend can cross a threshold
     final expenses = ref.read(expenseRepositoryProvider);
-    final (start, end) = monthBounds(DateTime.now());
+    final (start, end) = monthBounds(_selectedDate);
     final byCategory = await expenses.totalsByCategory(start, end);
     final notifier = ref.read(notificationServiceProvider);
+    final monthKey = monthKeyFor(_selectedDate);
 
     // Per-category budget.
-    final catBudget = ref.read(perCategoryBudgetsProvider)[categoryId];
+    final catBudget =
+        ref.read(perCategoryBudgetsForMonthProvider(monthKey))[categoryId];
     if (catBudget != null) {
       final after = byCategory[categoryId] ?? Money.zero;
       final name =
@@ -394,7 +460,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
 
     // Overall budget.
-    final overall = ref.read(overallBudgetProvider).value;
+    final overall = ref.read(overallBudgetForMonthProvider(monthKey)).value;
     if (overall != null) {
       final after = byCategory.values.fold(Money.zero, (a, m) => a + m);
       for (final pct in crossedThresholds(after - delta, after, overall)) {

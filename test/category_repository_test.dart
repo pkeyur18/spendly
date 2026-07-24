@@ -16,12 +16,12 @@ void main() {
   });
   tearDown(() => db.close());
 
-  test('seeds 8 default categories on create (FR-8)', () async {
+  test('seeds 18 default categories on create (FR-8)', () async {
     final cats = await repo.watchAll().first;
-    expect(cats.length, 8);
+    expect(cats.length, 18);
     expect(
       cats.map((c) => c.name),
-      containsAll(['Food', 'Travel', 'Bills', 'Other']),
+      containsAll(['Food', 'Travel', 'Bills', 'Other', 'EMI / Loan']),
     );
     expect(cats.every((c) => c.isDefault), isTrue);
   });
@@ -34,7 +34,7 @@ void main() {
     );
     final cats = await repo.watchAll().first;
     final created = cats.firstWhere((c) => c.id == id);
-    expect(created.sortOrder, 8); // after the 0-7 defaults
+    expect(created.sortOrder, 18); // after the 0-17 defaults
   });
 
   test('archive hides from active but keeps the row (FR-11)', () async {

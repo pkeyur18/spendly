@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../expenses/all_transactions_screen.dart' show groupExpensesByDay;
+import '../expenses/widgets/expense_tile.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../home/widgets/trend_bars.dart';
@@ -154,6 +156,13 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
                       TrendBarsView(bars: data.weekly),
                       const SectionTitle('By category'),
                       DonutChart(slices: data.breakdown, total: data.total),
+                      const SectionTitle('Transactions'),
+                      for (final entry
+                          in groupExpensesByDay(data.expenses).entries) ...[
+                        DayGroupHeader(entry.key),
+                        for (final e in entry.value)
+                          ExpenseTile(expense: e, category: byId[e.categoryId]),
+                      ],
                       const SizedBox(height: AppSpacing.xxl),
                       ExportRow(
                         data: data,

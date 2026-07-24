@@ -21,6 +21,35 @@ String relativeDayLabel(DateTime d) {
   return DateFormat.MMMd().format(d);
 }
 
+/// Day-group header ("Today"/"Yesterday"/calendar date) above a bucket of
+/// [ExpenseTile]s. Shared by [AllTransactionsScreen] and the custom report.
+class DayGroupHeader extends StatelessWidget {
+  const DayGroupHeader(this.day, {super.key});
+
+  final DateTime day;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xs,
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      child: Text(
+        relativeDayLabel(day),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: palette.textDim,
+        ),
+      ),
+    );
+  }
+}
+
 /// One expense row: category icon, title, relative time, amount. Tap to edit,
 /// swipe to delete with confirmation. Shared by the Home "Recent" list and
 /// [AllTransactionsScreen].

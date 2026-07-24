@@ -75,15 +75,15 @@ void main() {
   );
 
   test(
-    'merge into a freshly-seeded db does not duplicate the 8 defaults',
+    'merge into a freshly-seeded db does not duplicate the defaults',
     () async {
       final payload = await repo
-          .exportAll(); // 8 default categories, nothing else
+          .exportAll(); // default categories, nothing else
 
       await repo.mergeAll(payload);
 
       final categories = await db.select(db.categories).get();
-      expect(categories.length, 8); // still 8, not 16
+      expect(categories.length, 18); // still 18, not 36
     },
   );
 

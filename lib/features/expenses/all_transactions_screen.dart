@@ -85,7 +85,6 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AppPalette>()!;
     final async = ref.watch(expensesInRangeProvider(_range));
     final byId = ref.watch(categoriesByIdProvider);
     final monthMode = widget.showRangeSwitcher && _isCalendarMonth(_range);
@@ -137,22 +136,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
               for (final entry in groups.entries) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xs,
-                    AppSpacing.md,
-                    AppSpacing.xs,
-                    AppSpacing.sm,
-                  ),
-                  child: Text(
-                    relativeDayLabel(entry.key),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: palette.textDim,
-                    ),
-                  ),
-                ),
+                DayGroupHeader(entry.key),
                 for (final e in entry.value)
                   ExpenseTile(expense: e, category: byId[e.categoryId]),
               ],

@@ -80,7 +80,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -97,6 +97,11 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE budgets SET month_key = ? WHERE month_key IS NULL',
           [monthKeyFor(DateTime.now())],
         );
+      }
+      if (from < 3) {
+        // New default categories added post-launch; append to existing
+        // installs instead of only seeding them on fresh installs/reset.
+        await batch((b) => b.insertAll(categories, _newCategoriesV3));
       }
     },
   );
@@ -125,25 +130,50 @@ class AppDatabase extends _$AppDatabase {
 }
 
 /// Ships-with-the-app categories (FR-8). Icons + colors match the prototype.
-final List<CategoriesCompanion> _defaultCategories = () {
-  const specs = <(String, String, int)>[
-    ('Food', '🍔', 0xFF6366F1), // primary
-    ('Travel', '🚕', 0xFFF59E0B), // accent
-    ('Shopping', '🛒', 0xFF6366F1), // primary
-    ('Bills', '🧾', 0xFF14B8A6), // teal
-    ('Entertainment', '🎬', 0xFFEC4899), // pink
-    ('Health', '💊', 0xFF14B8A6), // teal
-    ('Home', '🏠', 0xFF6366F1), // primary
-    ('Other', '📦', 0xFF6B6B7B), // text-dim
-  ];
+/// First 8 shipped in v1; the rest were added in schema v3 and are also
+/// backfilled onto existing installs via [_newCategoriesV3] (see migration).
+const _defaultCategorySpecs = <(String, String, int)>[
+  ('Food', '🍔', 0xFF6366F1), // primary
+  ('Travel', '🚕', 0xFFF59E0B), // accent
+  ('Shopping', '🛒', 0xFF6366F1), // primary
+  ('Bills', '🧾', 0xFF14B8A6), // teal
+  ('Entertainment', '🎬', 0xFFEC4899), // pink
+  ('Health', '💊', 0xFF14B8A6), // teal
+  ('Home', '🏠', 0xFF6366F1), // primary
+  ('Other', '📦', 0xFF6B6B7B), // text-dim
+  ('EMI / Loan', '🏦', 0xFF4F46E5), // primaryDeep
+  ('Online Shopping', '🛍️', 0xFFEC4899), // pink
+  ('Groceries', '🍎', 0xFF14B8A6), // teal
+  ('Fuel', '⛽', 0xFFF59E0B), // accent
+  ('Insurance', '🛡️', 0xFF6366F1), // primary
+  ('Subscriptions', '📺', 0xFFEC4899), // pink
+  ('Education', '🎓', 0xFF818CF8), // primarySoft
+  ('Personal Care', '🧴', 0xFF14B8A6), // teal
+  ('Fitness', '🏋️', 0xFFF59E0B), // accent
+  ('Gifts & Donations', '🎁', 0xFF6366F1), // primary
+];
+
+List<CategoriesCompanion> _categoriesFrom(
+  List<(String, String, int)> specs, {
+  int startIndex = 0,
+}) {
   return [
     for (var i = 0; i < specs.length; i++)
       CategoriesCompanion.insert(
         name: specs[i].$1,
         icon: specs[i].$2,
         colorValue: specs[i].$3,
-        sortOrder: Value(i),
+        sortOrder: Value(startIndex + i),
         isDefault: const Value(true),
       ),
   ];
-}();
+}
+
+final List<CategoriesCompanion> _defaultCategories = _categoriesFrom(
+  _defaultCategorySpecs,
+);
+
+final List<CategoriesCompanion> _newCategoriesV3 = _categoriesFrom(
+  _defaultCategorySpecs.sublist(8),
+  startIndex: 8,
+);

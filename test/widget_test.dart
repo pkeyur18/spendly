@@ -38,11 +38,11 @@ void main() {
     await container.read(currentMonthExpensesProvider.future);
   }
 
-  test('empty state: zero total, no budget, 8 seeded categories', () async {
+  test('empty state: zero total, no budget, 18 seeded categories', () async {
     await primeStreams();
     expect(container.read(monthTotalProvider), Money.zero);
     expect(container.read(categoryBreakdownProvider), isEmpty);
-    expect(container.read(categoriesByIdProvider).length, 8);
+    expect(container.read(categoriesByIdProvider).length, 18);
     expect(container.read(overallBudgetProvider).value, isNull);
   });
 
