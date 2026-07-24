@@ -1,6 +1,8 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
+import 'package:spendly/core/money/money.dart';
+import 'package:spendly/features/expenses/expense_repository.dart';
 import 'package:spendly/features/tags/tag_repository.dart';
 
 void main() {
@@ -54,5 +56,24 @@ void main() {
     final tag = (await repo.watchAll().first).single;
     expect(tag.name, 'Japan Trip 2026');
     expect(tag.colorValue, 0xFF14B8A6);
+  });
+
+  test('delete removes the tag but leaves its expenses, untagged', () async {
+    final id = await repo.create(name: 'Japan Trip', colorValue: 0xFF6366F1);
+    final expenseId = await ExpenseRepository(db).add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 1),
+      tagId: id,
+    );
+
+    await repo.delete(id);
+
+    final tags = await repo.watchAll().first;
+    expect(tags.any((t) => t.id == id), isFalse);
+
+    final expenses = await db.select(db.expenses).get();
+    final expense = expenses.firstWhere((e) => e.id == expenseId);
+    expect(expense.tagId, isNull);
   });
 }

@@ -5,8 +5,11 @@ import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 
 /// Tag CRUD — user-defined grouping across categories (e.g. a vacation trip).
-/// Tags are never hard-deleted while referenced by past expenses; they're
-/// archived instead, mirroring [CategoryRepository]'s archive-not-delete rule.
+/// Archive hides a tag from the picker without touching anything. Delete is
+/// always allowed (unlike [CategoryRepository.tryDelete], which blocks when
+/// referenced) — a tag is optional metadata on an expense, so deleting one
+/// just clears `tagId` on whatever expenses carried it; the expenses
+/// themselves are never touched.
 class TagRepository {
   TagRepository(this._db);
   final AppDatabase _db;
@@ -36,6 +39,17 @@ class TagRepository {
       _update(id, colorValue: Value(colorValue));
   Future<void> archive(int id) => _update(id, isArchived: const Value(true));
   Future<void> unarchive(int id) => _update(id, isArchived: const Value(false));
+
+  /// Deletes the tag; any expense carrying it silently drops back to
+  /// untagged. One transaction so the untag-then-delete is atomic.
+  Future<void> delete(int id) {
+    return _db.transaction(() async {
+      await (_db.update(_db.expenses)..where((t) => t.tagId.equals(id))).write(
+        const ExpensesCompanion(tagId: Value(null)),
+      );
+      await (_db.delete(_db.tags)..where((t) => t.id.equals(id))).go();
+    });
+  }
 
   Future<void> _update(
     int id, {

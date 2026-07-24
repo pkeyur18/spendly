@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import 'tag_repository.dart';
 
-/// Add/edit a trip/tag. [existing] null = create mode. Save/archive/unarchive
-/// go through [TagRepository]; archive never deletes, mirroring categories.
+/// Add/edit a trip/tag. [existing] null = create mode. Archive hides it from
+/// the picker; Delete removes the trip and silently untags its expenses
+/// (never deletes them) — see [TagRepository.delete].
 class TagEditSheet extends ConsumerStatefulWidget {
   const TagEditSheet({super.key, this.existing});
 
@@ -110,6 +112,8 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
             if (_isEdit) ...[
               const SizedBox(height: AppSpacing.sm),
               _archiveButton(palette),
+              const SizedBox(height: AppSpacing.sm),
+              _deleteButton(),
             ],
           ],
         ),
@@ -160,6 +164,43 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
         style: TextStyle(color: palette.textDim),
       ),
     );
+  }
+
+  Widget _deleteButton() {
+    return TextButton(
+      onPressed: _confirmDelete,
+      child: const Text('Delete trip', style: TextStyle(color: AppColors.red)),
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          title: const Text('Delete trip?'),
+          content: const Text(
+            "Expenses tagged to this trip aren't deleted — they just lose "
+            'this trip tag.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(tagRepositoryProvider).delete(widget.existing!.id);
+    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _save() async {
