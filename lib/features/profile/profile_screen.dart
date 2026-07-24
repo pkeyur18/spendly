@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
@@ -190,37 +191,40 @@ class ProfileScreen extends ConsumerWidget {
   ) {
     return showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
-        title: const Text('Theme'),
-        contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        content: RadioGroup<ThemeMode>(
-          groupValue: current,
-          onChanged: (value) {
-            if (value == null) return;
-            ref.read(themeModeProvider.notifier).setMode(value);
-            Navigator.of(dialogContext).pop();
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final mode in ThemeMode.values)
-                RadioListTile<ThemeMode>(
-                  value: mode,
-                  title: Text(_themeLabel(mode)),
-                  activeColor: AppColors.primary,
-                ),
-            ],
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+          title: const Text('Theme'),
+          contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          content: RadioGroup<ThemeMode>(
+            groupValue: current,
+            onChanged: (value) {
+              if (value == null) return;
+              ref.read(themeModeProvider.notifier).setMode(value);
+              Navigator.of(dialogContext).pop();
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final mode in ThemeMode.values)
+                  RadioListTile<ThemeMode>(
+                    value: mode,
+                    title: Text(_themeLabel(mode)),
+                    activeColor: AppColors.primary,
+                  ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
       ),
     );
   }

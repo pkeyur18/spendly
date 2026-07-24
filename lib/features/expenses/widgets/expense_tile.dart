@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/db/row_extensions.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../expense_repository.dart';
@@ -82,22 +83,25 @@ class ExpenseTile extends ConsumerWidget {
         ),
         confirmDismiss: (_) => showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Delete expense?'),
-            content: const Text('This can\'t be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.red,
+          builder: (dialogContext) => Theme(
+            data: AppTheme.boldDialogActions(dialogContext),
+            child: AlertDialog(
+              title: const Text('Delete expense?'),
+              content: const Text('This can\'t be undone.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
                 ),
-                child: const Text('Delete'),
-              ),
-            ],
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.red,
+                  ),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
           ),
         ).then((confirmed) => confirmed ?? false),
         onDismissed: (_) =>

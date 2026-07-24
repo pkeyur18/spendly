@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/providers.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
@@ -204,33 +205,36 @@ Future<String?> _askOptionalPassword(BuildContext context) {
   final controller = TextEditingController();
   return showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Back up now'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Optionally protect this backup with a password.'),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: controller,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Password (optional)',
+    builder: (dialogContext) => Theme(
+      data: AppTheme.boldDialogActions(dialogContext),
+      child: AlertDialog(
+        title: const Text('Back up now'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Optionally protect this backup with a password.'),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password (optional)',
+              ),
             ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Back up'),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-          child: const Text('Back up'),
-        ),
-      ],
     ),
   );
 }

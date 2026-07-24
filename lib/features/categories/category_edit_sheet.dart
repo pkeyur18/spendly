@@ -3,6 +3,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/category_glyph.dart';
 import 'category_repository.dart';
@@ -332,27 +333,30 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
     Color picked = Color(_color);
     final result = await showDialog<Color>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Custom color'),
-        content: SingleChildScrollView(
-          child: ColorPicker(
-            pickerColor: Color(_color),
-            onColorChanged: (c) => picked = c,
-            enableAlpha: false,
-            labelTypes: const [ColorLabelType.hex],
-            pickerAreaHeightPercent: 0.7,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          title: const Text('Custom color'),
+          content: SingleChildScrollView(
+            child: ColorPicker(
+              pickerColor: Color(_color),
+              onColorChanged: (c) => picked = c,
+              enableAlpha: false,
+              labelTypes: const [ColorLabelType.hex],
+              pickerAreaHeightPercent: 0.7,
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(picked),
+              child: const Text('Select'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(picked),
-            child: const Text('Select'),
-          ),
-        ],
       ),
     );
     if (result != null) setState(() => _color = result.toARGB32());
@@ -486,49 +490,57 @@ class _DeleteCategoryDialogState extends ConsumerState<_DeleteCategoryDialog> {
   Widget build(BuildContext context) {
     if (_phase == _DeletePhase.blocked) {
       final word = _blockedCount == 1 ? 'expense' : 'expenses';
-      return AlertDialog(
-        title: const Text("Can't delete category"),
-        content: Text(
-          '$_blockedCount $word use this category. Archive it instead to '
-          'hide it from Quick Add, or keep it as is.',
+      return Theme(
+        data: AppTheme.boldDialogActions(context),
+        child: AlertDialog(
+          title: const Text("Can't delete category"),
+          content: Text(
+            '$_blockedCount $word use this category. Archive it instead to '
+            'hide it from Quick Add, or keep it as is.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep category'),
+            ),
+            FilledButton(
+              onPressed: _archiveInstead,
+              child: const Text('Archive instead'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep category'),
-          ),
-          FilledButton(
-            onPressed: _archiveInstead,
-            child: const Text('Archive instead'),
-          ),
-        ],
       );
     }
 
     final deleting = _phase == _DeletePhase.deleting;
-    return AlertDialog(
-      title: const Text('Delete category?'),
-      content: const Text('This can\'t be undone.'),
-      actions: [
-        TextButton(
-          onPressed: deleting ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: deleting ? null : _attemptDelete,
-          style: FilledButton.styleFrom(backgroundColor: AppColors.red),
-          child: deleting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text('Delete'),
-        ),
-      ],
+    return Theme(
+      data: AppTheme.boldDialogActions(context),
+      child: AlertDialog(
+        title: const Text('Delete category?'),
+        content: const Text('This can\'t be undone.'),
+        actions: [
+          TextButton(
+            onPressed: deleting
+                ? null
+                : () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: deleting ? null : _attemptDelete,
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: deleting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 }

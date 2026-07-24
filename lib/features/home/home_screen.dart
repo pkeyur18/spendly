@@ -180,7 +180,7 @@ class _HeroCard extends ConsumerWidget {
     final ratio = hasBudget ? total.ratioOf(budget).clamp(0.0, 1.0) : 0.0;
     final barColor = ratio >= 1.0
         ? AppColors.red
-        : ratio >= 0.9
+        : ratio >= 0.8
         ? AppColors.accent
         : Colors.white;
     final left = hasBudget

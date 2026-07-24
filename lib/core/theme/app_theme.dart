@@ -13,6 +13,21 @@ class AppTheme {
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
 
+  /// Wrap an [AlertDialog] with this to bold its action buttons without
+  /// affecting buttons elsewhere in the app.
+  static ThemeData boldDialogActions(BuildContext context) {
+    const bold = TextStyle(fontWeight: FontWeight.bold);
+    final theme = Theme.of(context);
+    return theme.copyWith(
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(textStyle: bold),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(textStyle: bold),
+      ),
+    );
+  }
+
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
@@ -52,6 +67,20 @@ class AppTheme {
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: text,
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        titleTextStyle: TextStyle(
+          fontFamily: _display,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: isDark ? text : Colors.black,
+        ),
+        contentTextStyle: TextStyle(
+          fontFamily: _body,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: isDark ? text : Colors.black,
         ),
       ),
     );

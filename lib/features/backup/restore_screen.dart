@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../widgets/widget_refresh.dart';
@@ -195,38 +196,42 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Password required'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (wrongPassword)
-              const Padding(
-                padding: EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text(
-                  'Incorrect password — try again.',
-                  style: TextStyle(color: AppColors.red, fontSize: 12),
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          title: const Text('Password required'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (wrongPassword)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(
+                    'Incorrect password — try again.',
+                    style: TextStyle(color: AppColors.red, fontSize: 12),
+                  ),
                 ),
+              TextField(
+                controller: controller,
+                obscureText: true,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Password'),
               ),
-            TextField(
-              controller: controller,
-              obscureText: true,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Password'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Unlock'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: const Text('Unlock'),
-          ),
-        ],
       ),
     );
   }
