@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -71,6 +72,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   int? _categoryId;
   late DateTime _selectedDate;
   bool _defaulted = false;
+  final _noteController = TextEditingController();
 
   bool get _isEdit => widget.editing != null;
 
@@ -86,6 +88,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               : e.amount.major.toStringAsFixed(2));
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
     _selectedDate = e?.date ?? DateTime.now();
+    _noteController.text = e?.note ?? '';
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
   }
 
   @override
@@ -122,7 +131,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       _subLine(context, selected, palette),
                       const SizedBox(height: AppSpacing.sm),
                       Center(child: _dateChip(context, palette)),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: AppSpacing.md),
+                      _noteField(context, palette),
+                      const SizedBox(height: AppSpacing.lg),
                       _categoryGrid(categories),
                     ],
                   ),
@@ -247,6 +258,29 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _noteField(BuildContext context, AppPalette palette) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: palette.card,
+        border: Border.all(color: palette.line),
+        borderRadius: BorderRadius.circular(AppRadius.button),
+      ),
+      child: TextField(
+        controller: _noteController,
+        textCapitalization: TextCapitalization.sentences,
+        maxLength: 140,
+        style: TextStyle(fontSize: 13, color: palette.textDim),
+        decoration: const InputDecoration(
+          isDense: true,
+          border: InputBorder.none,
+          hintText: 'Add a note',
+          counterText: '',
         ),
       ),
     );
@@ -410,6 +444,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
     final categoryId = _categoryId!;
     final oldAmount = widget.editing?.amount ?? Money.zero;
+    final note = _noteController.text.trim();
     final repo = ref.read(expenseRepositoryProvider);
     if (_isEdit) {
       await repo.update(
@@ -417,12 +452,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
+        note: Value(note.isEmpty ? null : note),
       );
     } else {
       await repo.add(
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
+        note: note.isEmpty ? null : note,
       );
     }
     // Fire budget-threshold alerts for the affected category + overall (FR-25).

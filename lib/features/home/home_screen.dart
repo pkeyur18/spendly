@@ -292,54 +292,59 @@ class _BottomNav extends StatelessWidget {
       );
     }
 
-    return BottomAppBar(
-      color: palette.card,
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
-          item(
-            Icons.bar_chart_rounded,
-            'Reports',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => MonthlyReportScreen(month: DateTime.now()),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 40),
-          item(
-            Icons.sell_rounded,
-            'Categories',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CategoryManagerScreen(),
-                ),
-              );
-            },
-          ),
-          item(
-            Icons.account_circle_rounded,
-            'Profile',
-            leading: ProfileAvatar(
-              name: profile?.name ?? '',
-              photoPath: profile?.photoPath,
-              avatarColorIndex: profile?.avatarColorIndex,
-              size: 26,
-              fontSize: 11,
+    return Container(
+      foregroundDecoration: BoxDecoration(
+        border: Border(top: BorderSide(color: palette.line, width: 1)),
+      ),
+      child: BottomAppBar(
+        color: palette.card,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
+            item(
+              Icons.bar_chart_rounded,
+              'Reports',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MonthlyReportScreen(month: DateTime.now()),
+                  ),
+                );
+              },
             ),
-            onTap: () {
-              Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
-            },
-          ),
-        ],
+            const SizedBox(width: 40),
+            item(
+              Icons.sell_rounded,
+              'Categories',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CategoryManagerScreen(),
+                  ),
+                );
+              },
+            ),
+            item(
+              Icons.account_circle_rounded,
+              'Profile',
+              leading: ProfileAvatar(
+                name: profile?.name ?? '',
+                photoPath: profile?.photoPath,
+                avatarColorIndex: profile?.avatarColorIndex,
+                size: 26,
+                fontSize: 11,
+              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
