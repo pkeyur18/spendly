@@ -13,6 +13,8 @@ import '../../core/widgets/category_glyph.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
+import '../tags/tag_edit_sheet.dart';
+import '../tags/tag_repository.dart';
 import '../widgets/widget_refresh.dart';
 import 'expense_repository.dart';
 import 'widgets/expense_tile.dart' show relativeDayLabel;
@@ -70,6 +72,7 @@ List<CategoryRow> visibleCategoryTiles(
 class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late String _amount;
   int? _categoryId;
+  int? _tagId;
   late DateTime _selectedDate;
   bool _defaulted = false;
   final _noteController = TextEditingController();
@@ -87,6 +90,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               ? (e.amount.minor ~/ 100).toString()
               : e.amount.major.toStringAsFixed(2));
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
+    _tagId = e?.tagId;
     _selectedDate = e?.date ?? DateTime.now();
     _noteController.text = e?.note ?? '';
   }
@@ -130,7 +134,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       AmountDisplay(_amount),
                       _subLine(context, selected, palette),
                       const SizedBox(height: AppSpacing.sm),
-                      Center(child: _dateChip(context, palette)),
+                      Center(
+                        child: Wrap(
+                          spacing: AppSpacing.sm,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            _dateChip(context, palette),
+                            _tripChip(context, palette),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       _noteField(context, palette),
                       const SizedBox(height: AppSpacing.lg),
@@ -250,7 +263,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.calendar_today_outlined, size: 14, color: palette.textDim),
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 14,
+                color: palette.textDim,
+              ),
               const SizedBox(width: 6),
               Text(
                 relativeDayLabel(_selectedDate),
@@ -262,6 +279,151 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ),
     );
   }
+
+  /// Trip/tag chip: shows the selected tag or "Add trip", tap opens a picker
+  /// of active tags. Orthogonal to category — see [Expenses.tagId].
+  Widget _tripChip(BuildContext context, AppPalette palette) {
+    final tags = ref.watch(activeTagsProvider).value ?? const <TagRow>[];
+    final selected = tags
+        .where((t) => t.id == _tagId)
+        .cast<TagRow?>()
+        .firstOrNull;
+    return Semantics(
+      button: true,
+      label: selected == null ? 'Add trip' : 'Trip, ${selected.name}',
+      child: GestureDetector(
+        onTap: () => _openTagPicker(tags),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: palette.card,
+            border: Border.all(
+              color: selected == null
+                  ? palette.line
+                  : Color(selected.colorValue),
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.card_travel_outlined,
+                size: 14,
+                color: selected == null
+                    ? palette.textDim
+                    : Color(selected.colorValue),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                selected?.name ?? 'Add trip',
+                style: TextStyle(color: palette.textDim, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTagPicker(List<TagRow> tags) async {
+    final chosen = await showModalBottomSheet<int?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: Text('Trip'),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: tags.length + 2,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.add,
+                          size: 20,
+                          color: AppColors.primary,
+                        ),
+                        title: const Text(
+                          '+ New trip',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          final newId = await showTagEditSheet(context);
+                          if (newId != null && mounted) {
+                            setState(() => _tagId = newId);
+                          }
+                        },
+                      );
+                    }
+                    if (i == 1) {
+                      return ListTile(
+                        leading: const Icon(Icons.close, size: 20),
+                        title: const Text('No trip'),
+                        trailing: _tagId == null
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: AppColors.primary,
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop<int?>(_noTripChoice),
+                      );
+                    }
+                    final t = tags[i - 2];
+                    return ListTile(
+                      leading: Icon(
+                        Icons.card_travel_outlined,
+                        size: 20,
+                        color: Color(t.colorValue),
+                      ),
+                      title: Text(t.name),
+                      trailing: t.id == _tagId
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: AppColors.primary,
+                              size: 18,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop<int?>(t.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    // Dismissing without a choice (backdrop tap / back) also yields null,
+    // same as picking "No trip" — distinguish via a sentinel so dismissal
+    // never wipes an existing selection.
+    if (chosen == null || !mounted) return;
+    setState(() => _tagId = chosen == _noTripChoice ? null : chosen);
+  }
+
+  static const _noTripChoice = -1;
 
   Widget _noteField(BuildContext context, AppPalette palette) {
     return Container(
@@ -356,7 +518,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
       ),
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
@@ -453,6 +617,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         categoryId: categoryId,
         date: _selectedDate,
         note: Value(note.isEmpty ? null : note),
+        tagId: Value(_tagId),
       );
     } else {
       await repo.add(
@@ -460,6 +625,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         categoryId: categoryId,
         date: _selectedDate,
         note: note.isEmpty ? null : note,
+        tagId: _tagId,
       );
     }
     // Fire budget-threshold alerts for the affected category + overall (FR-25).
@@ -485,8 +651,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final monthKey = monthKeyFor(_selectedDate);
 
     // Per-category budget.
-    final catBudget =
-        ref.read(perCategoryBudgetsForMonthProvider(monthKey))[categoryId];
+    final catBudget = ref.read(
+      perCategoryBudgetsForMonthProvider(monthKey),
+    )[categoryId];
     if (catBudget != null) {
       final after = byCategory[categoryId] ?? Money.zero;
       final name =

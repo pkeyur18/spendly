@@ -62,28 +62,8 @@ const _iconChoices = [
   '🧴',
 ];
 
-/// Curated swatches for the color picker (FR-9) — distinct hues so
-/// categories stay visually distinguishable even with many of them.
-const _colorChoices = [
-  Color(0xFF3B82F6), // blue
-  Color(0xFF6366F1), // indigo
-  Color(0xFF8B5CF6), // violet
-  Color(0xFFA855F7), // purple
-  Color(0xFFD946EF), // fuchsia
-  Color(0xFFEC4899), // pink
-  Color(0xFFF43F5E), // rose
-  Color(0xFFEF4444), // red
-  Color(0xFFF97316), // orange
-  Color(0xFFF59E0B), // amber
-  Color(0xFFEAB308), // yellow
-  Color(0xFF84CC16), // lime
-  Color(0xFF22C55E), // green
-  Color(0xFF10B981), // emerald
-  Color(0xFF14B8A6), // teal
-  Color(0xFF06B6D4), // cyan
-  Color(0xFF0EA5E9), // sky
-  Color(0xFF64748B), // slate
-];
+/// Curated swatches for the color picker (FR-9) — see [AppColors.swatchPalette].
+const _colorChoices = AppColors.swatchPalette;
 
 /// Add/edit a category. [existing] null = create mode. Save/archive/unarchive
 /// go through [CategoryRepository]; archive never deletes (FR-11).
@@ -295,7 +275,11 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                       ),
                       alignment: Alignment.center,
                       child: isPreset
-                          ? Icon(Icons.palette_outlined, size: 16, color: palette.textDim)
+                          ? Icon(
+                              Icons.palette_outlined,
+                              size: 16,
+                              color: palette.textDim,
+                            )
                           : Icon(
                               Icons.check,
                               size: 16,
@@ -520,9 +504,7 @@ class _DeleteCategoryDialogState extends ConsumerState<_DeleteCategoryDialog> {
         content: const Text('This can\'t be undone.'),
         actions: [
           TextButton(
-            onPressed: deleting
-                ? null
-                : () => Navigator.of(context).pop(false),
+            onPressed: deleting ? null : () => Navigator.of(context).pop(false),
             child: const Text('Cancel'),
           ),
           FilledButton(

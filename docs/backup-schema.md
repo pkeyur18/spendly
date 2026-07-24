@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 2,
+  "version": 3,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 2,
+  "version": 3,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -49,7 +49,7 @@ unencrypted case.
 ```json
 {
   "exportedAt": "2026-07-23T10:15:00.000Z",
-  "counts": { "expenses": 1204, "categories": 10, "budgets": 3 },
+  "counts": { "expenses": 1204, "categories": 10, "budgets": 3, "tags": 1 },
   "categories": [
     {
       "id": 1,
@@ -71,6 +71,7 @@ unencrypted case.
       "paymentMethod": "UPI",
       "isRecurring": false,
       "recurrence": null,
+      "tagId": 1,
       "createdAt": "2026-07-01T09:03:11.000Z",
       "updatedAt": "2026-07-01T09:03:11.000Z"
     }
@@ -81,9 +82,12 @@ unencrypted case.
   "settings": [
     { "key": "theme_mode", "value": "system" },
     { "key": "profile_name", "value": "Aditi Sharma" },
-    { "key": "profile_avatar_color", "value": "1" }
+    { "key": "profile_avatar_color", "value": "1" },
+    { "key": "profile_photo_base64", "value": "<base64, key absent entirely if no photo is set>" }
   ],
-  "profilePhotoBase64": "<base64, omitted entirely if no photo is set>"
+  "tags": [
+    { "id": 1, "name": "Japan Trip 2026", "colorValue": 1667510321, "isArchived": false }
+  ]
 }
 ```
 
@@ -104,34 +108,54 @@ Rules:
 - `settings` excludes the app's own backup-bookkeeping keys
   (`auto_backup_enabled`, `auto_backup_frequency`, `last_backup_at`,
   `last_backup_size`) — importing a backup must never rewrite the restoring
-  device's own backup schedule or status — plus `profile_photo_path` (v2,
-  see below), which is a local file path and meaningless on another device.
-  Ordinary profile fields (`profile_name`, `profile_email`, `profile_phone`,
-  `profile_avatar_color`) are plain settings rows and always included.
+  device's own backup schedule or status. Ordinary profile fields
+  (`profile_name`, `profile_email`, `profile_phone`, `profile_avatar_color`,
+  `profile_photo_base64`) are plain settings rows and always included.
 
 ## v2 — profile photo (FR-56)
 
-Sprint 10 added a Profile screen with a real-photo option, stored as a local
-file (`profile_photo_path` setting → file on disk), not inline in the
-database. A file path can't travel in a backup the way an ordinary setting
-value can, so v2 adds one optional payload field instead:
+Sprint 10 added a Profile screen with a real-photo option. The photo's bytes
+are stored base64-encoded directly in the `profile_photo_base64` setting —
+same row-store as every other profile field, so it's an ordinary
+`BackupSetting` like the rest, with no extra payload plumbing needed.
 
-- `profilePhotoBase64` (string, optional) — the photo file's bytes,
-  base64-encoded. Omitted entirely when no photo is set (colored-initials
-  avatar or no avatar at all), so a payload with no photo is
-  indistinguishable from a v1 payload on this field.
-- A v1 file has no `profilePhotoBase64` key at all, which
-  `BackupPayload.fromJson` reads as `null` — no version-keyed decode branch
-  was needed, per the additive-only rule above. This is why the bump to
-  `version: 2` didn't require touching `decodePayload`'s logic, only the
-  `currentBackupVersion` constant.
-- **Replace** decodes it (if present) to a fresh local file and writes a new
-  `profile_photo_path` setting row pointing at it. If absent (v1 file, or a
-  v2 file with no photo), photo state is simply left wiped — the avatar
-  correctly falls back to colored initials (FR-55).
+(Earlier versions of this app stored the photo as a local file, referenced
+by a `profile_photo_path` setting — that path wasn't portable across
+devices, so v2's *original* implementation carried the photo as a separate
+top-level `profilePhotoBase64` payload field instead. That field has since
+been folded into `settings` now that the value itself — image bytes, not a
+path — is portable. `BackupPayload.fromJson` still recognizes the legacy
+top-level key on old exported files and folds it into `settings` on read, so
+old v2 backups continue to restore their photo correctly.)
+
+- **Replace** restores `profile_photo_base64` the same as any other setting
+  row — no special-casing. If absent (no photo was set), photo state is
+  simply left wiped — the avatar correctly falls back to colored initials
+  (FR-55).
 - **Merge never touches settings at all** (unchanged from v1 — see "Merge
   algorithm" below), so a merged backup's photo, like its name/email/phone,
   is never applied to the target device; only Replace restores profile data.
+
+## v3 — trip/tag tracking
+
+Trips (e.g. a vacation) can be tracked separately from the overall budget:
+each expense optionally carries a `tagId`, orthogonal to its `categoryId` —
+tagging doesn't change any category, budget, or date-range total, it's
+purely an additional grouping. v3 adds:
+
+- `tags` (array, top-level payload field, same shape as `categories` but
+  without `icon`/`sortOrder`/`isDefault`) — every trip/tag on the source
+  device.
+- `tagId` (int, nullable, on each expense) — the backup-file id of the tag
+  it was assigned to, or `null` if untagged.
+- A pre-v3 file has neither key. `BackupPayload.fromJson` reads a missing
+  `tags` as `[]`; `BackupExpense.fromJson` reads a missing `tagId` as `null`
+  — same additive, no-version-branch pattern as v2's photo field.
+- **Replace** wipes and restores `tags` the same way as `categories`
+  (original ids reused verbatim, inserted before `expenses` for FK order).
+- **Merge** matches tags by normalized name, exactly like categories (see
+  below), and remaps each expense's `tagId` through that map the same way
+  `categoryId` is remapped.
 
 ## Merge algorithm (no UUID column — natural-key matching)
 
@@ -151,6 +175,7 @@ keys do it with zero schema change:
 - **Budgets** — matched by `(mappedCategoryId)` (`null` = overall); a slot
   already occupied locally is left alone (merge is additive, never clobbers
   a budget the user has since changed).
+- **Tags** — matched by normalized name, same rule as categories.
 
 **Known ceiling** (ponytail: ship this, ceiling is real): renaming a
 category between backup and restore breaks name-matching — it inserts a
@@ -165,9 +190,9 @@ for rows written before the migration.
 
 Runs inside a single Drift transaction so a failure partway through rolls
 back automatically, never leaving partial data: delete `expenses` → delete
-`budgets` → delete `categories` (child-to-parent FK order), then batch-insert
-categories, budgets, expenses (reusing original ids), then delete+batch-insert
-`settings`.
+`tags` → delete `budgets` → delete `categories` (child-to-parent FK order),
+then batch-insert categories, tags, budgets, expenses (reusing original ids),
+then delete+batch-insert `settings`.
 
 ## Validation (FR-41)
 

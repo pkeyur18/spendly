@@ -12,6 +12,7 @@ import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../profile/profile_provider.dart';
+import '../tags/tag_report_screen.dart';
 import 'custom_report_screen.dart';
 import 'report_providers.dart';
 import 'report_widgets.dart';
@@ -38,6 +39,13 @@ class MonthlyReportScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(title),
         actions: [
+          IconButton(
+            tooltip: 'Trips',
+            icon: const Icon(Icons.card_travel_outlined),
+            onPressed: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const TagReportScreen())),
+          ),
           IconButton(
             tooltip: 'Custom range',
             icon: const Icon(Icons.tune_rounded),

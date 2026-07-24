@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/core/money/money.dart';
@@ -12,29 +10,18 @@ import 'package:spendly/features/backup/backup_repository.dart';
 import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
-
-class _FakePathProviderPlatform extends PathProviderPlatform {
-  _FakePathProviderPlatform(this.path);
-  final String path;
-
-  @override
-  Future<String?> getApplicationSupportPath() async => path;
-}
+import 'package:spendly/features/tags/tag_repository.dart';
 
 void main() {
   late AppDatabase db;
   late BackupRepository repo;
-  late Directory supportDir;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     repo = BackupRepository(db);
-    supportDir = Directory.systemTemp.createTempSync('spendly_backup_test_');
-    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
   });
   tearDown(() {
     db.close();
-    supportDir.deleteSync(recursive: true);
   });
 
   test(
@@ -169,42 +156,36 @@ void main() {
   });
 
   test(
-    'export includes the profile photo; replace restores identical bytes',
+    'export includes the profile photo as an ordinary setting; replace restores identical bytes',
     () async {
       final photoBytes = utf8.encode('fake jpeg bytes');
-      final sourcePhotoPath = '${supportDir.path}/source-avatar.jpg';
-      await File(sourcePhotoPath).writeAsBytes(photoBytes);
-      await SettingsRepository(
-        db,
-      ).set(SettingsRepository.profilePhotoPathKey, sourcePhotoPath);
+      await SettingsRepository(db).set(
+        SettingsRepository.profilePhotoBase64Key,
+        base64Encode(photoBytes),
+      );
       await SettingsRepository(
         db,
       ).set(SettingsRepository.profileNameKey, 'Ada');
 
       final payload = await repo.exportAll();
-      expect(payload.profilePhotoBase64, base64Encode(photoBytes));
-      // Device-specific path is never exported as a plain setting.
       expect(
-        payload.settings.any(
-          (s) => s.key == SettingsRepository.profilePhotoPathKey,
-        ),
-        isFalse,
+        payload.settings.singleWhere(
+          (s) => s.key == SettingsRepository.profilePhotoBase64Key,
+        ).value,
+        base64Encode(photoBytes),
       );
       expect(
-        payload.settings.any(
-          (s) => s.key == SettingsRepository.profileNameKey,
-        ),
+        payload.settings.any((s) => s.key == SettingsRepository.profileNameKey),
         isTrue,
       );
 
       final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
       await BackupRepository(freshDb).replaceAll(payload);
 
-      final restoredPath = await SettingsRepository(
+      final restoredBase64 = await SettingsRepository(
         freshDb,
-      ).get(SettingsRepository.profilePhotoPathKey);
-      expect(restoredPath, isNotNull);
-      expect(await File(restoredPath!).readAsBytes(), photoBytes);
+      ).get(SettingsRepository.profilePhotoBase64Key);
+      expect(restoredBase64, base64Encode(photoBytes));
       await freshDb.close();
     },
   );
@@ -216,10 +197,10 @@ void main() {
 
       final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
       await BackupRepository(freshDb).replaceAll(payload);
-      final restoredPath = await SettingsRepository(
+      final restoredBase64 = await SettingsRepository(
         freshDb,
-      ).get(SettingsRepository.profilePhotoPathKey);
-      expect(restoredPath, isNull); // falls back to colored initials (FR-55)
+      ).get(SettingsRepository.profilePhotoBase64Key);
+      expect(restoredBase64, isNull); // falls back to colored initials (FR-55)
       await freshDb.close();
     },
   );
@@ -229,22 +210,84 @@ void main() {
     () async {
       final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
       final photoBytes = utf8.encode('another fake jpeg');
-      final sourcePhotoPath = '${supportDir.path}/merge-avatar.jpg';
-      await File(sourcePhotoPath).writeAsBytes(photoBytes);
-      await SettingsRepository(
-        sourceDb,
-      ).set(SettingsRepository.profilePhotoPathKey, sourcePhotoPath);
+      await SettingsRepository(sourceDb).set(
+        SettingsRepository.profilePhotoBase64Key,
+        base64Encode(photoBytes),
+      );
       final payload = await BackupRepository(sourceDb).exportAll();
       await sourceDb.close();
 
       await repo.mergeAll(payload);
 
-      final restoredPath = await SettingsRepository(
+      final restoredBase64 = await SettingsRepository(
         db,
-      ).get(SettingsRepository.profilePhotoPathKey);
-      expect(restoredPath, isNull);
+      ).get(SettingsRepository.profilePhotoBase64Key);
+      expect(restoredBase64, isNull);
     },
   );
+
+  test(
+    'export then replace into a fresh db preserves tags and expense.tagId',
+    () async {
+      final tagRepo = TagRepository(db);
+      final expRepo = ExpenseRepository(db);
+      final tagId = await tagRepo.create(
+        name: 'Japan Trip',
+        colorValue: 0xFF6366F1,
+      );
+      await expRepo.add(
+        amount: Money.parse('100'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 1),
+        tagId: tagId,
+      );
+      await expRepo.add(
+        amount: Money.parse('50'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 2),
+      ); // untagged
+
+      final payload = await repo.exportAll();
+      expect(payload.tags.single.name, 'Japan Trip');
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final tags = await freshDb.select(freshDb.tags).get();
+      final expenses = await freshDb.select(freshDb.expenses).get();
+      expect(tags.single.name, 'Japan Trip');
+      expect(
+        expenses.firstWhere((e) => e.amountMinor == 10000).tagId,
+        tags.single.id,
+      );
+      expect(expenses.firstWhere((e) => e.amountMinor == 5000).tagId, isNull);
+      await freshDb.close();
+    },
+  );
+
+  test('merging the same backup twice does not duplicate tags, and maps '
+      'tagged expenses onto the local tag', () async {
+    final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final sourceTagId = await TagRepository(
+      sourceDb,
+    ).create(name: 'Japan Trip', colorValue: 0xFF6366F1);
+    await ExpenseRepository(sourceDb).add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 7, 5),
+      tagId: sourceTagId,
+    );
+    final payload = await BackupRepository(sourceDb).exportAll();
+    await sourceDb.close();
+
+    await repo.mergeAll(payload);
+    await repo.mergeAll(payload); // run twice
+
+    final tags = await db.select(db.tags).get();
+    final expenses = await db.select(db.expenses).get();
+    expect(tags.length, 1); // not duplicated on the repeat merge
+    expect(expenses.single.tagId, tags.single.id);
+  });
 
   test(
     'importing a corrupted file leaves all existing data untouched',

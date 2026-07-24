@@ -42,8 +42,23 @@ class Expenses extends Table {
   TextColumn get paymentMethod => text().nullable()();
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
   TextColumn get recurrence => textEnum<Recurrence>().nullable()();
+
+  /// Optional grouping across categories (e.g. a vacation trip) — orthogonal
+  /// to [categoryId], which an expense keeps regardless of its tag.
+  IntColumn get tagId => integer().nullable().references(Tags, #id)();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+/// User-defined grouping for expenses (trips, home renovation, ...) —
+/// orthogonal to [Categories]. See [Expenses.tagId].
+@DataClassName('TagRow')
+class Tags extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 40)();
+  IntColumn get colorValue => integer()(); // ARGB int
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 @DataClassName('BudgetRow')
@@ -72,7 +87,7 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Categories, Expenses, Budgets, Settings])
+@DriftDatabase(tables: [Categories, Expenses, Budgets, Settings, Tags])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
@@ -80,7 +95,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -103,6 +118,11 @@ class AppDatabase extends _$AppDatabase {
         // installs instead of only seeding them on fresh installs/reset.
         await batch((b) => b.insertAll(categories, _newCategoriesV3));
       }
+      if (from < 4) {
+        // Trip/tag grouping — additive, no data migration needed.
+        await m.createTable(tags);
+        await m.addColumn(expenses, expenses.tagId);
+      }
     },
   );
 
@@ -113,6 +133,7 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       // Children before parents (FK order), same as BackupRepository.replaceAll.
       await delete(expenses).go();
+      await delete(tags).go();
       await delete(budgets).go();
       await delete(categories).go();
       await delete(settings).go();

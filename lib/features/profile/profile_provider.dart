@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/providers.dart';
@@ -9,7 +13,7 @@ class Profile {
     this.name = '',
     this.email = '',
     this.phone = '',
-    this.photoPath,
+    this.photoBytes,
     this.avatarColorIndex,
   });
 
@@ -17,9 +21,11 @@ class Profile {
   final String email;
   final String phone;
 
-  /// Local file path to an uploaded photo (FR-53). Takes precedence over
-  /// [avatarColorIndex] when rendering — see `avatar.dart`.
-  final String? photoPath;
+  /// Uploaded photo's raw bytes (FR-53), stored as base64 in [Settings] —
+  /// same row-store as every other profile field, so it survives exactly as
+  /// reliably as they do. Takes precedence over [avatarColorIndex] when
+  /// rendering — see `avatar.dart`.
+  final Uint8List? photoBytes;
 
   /// Index into `avatarGradients` (FR-54); null = default gradient (index 0).
   final int? avatarColorIndex;
@@ -30,15 +36,15 @@ class Profile {
     String? name,
     String? email,
     String? phone,
-    String? photoPath,
-    bool clearPhotoPath = false,
+    Uint8List? photoBytes,
+    bool clearPhotoBytes = false,
     int? avatarColorIndex,
     bool clearAvatarColorIndex = false,
   }) => Profile(
     name: name ?? this.name,
     email: email ?? this.email,
     phone: phone ?? this.phone,
-    photoPath: clearPhotoPath ? null : (photoPath ?? this.photoPath),
+    photoBytes: clearPhotoBytes ? null : (photoBytes ?? this.photoBytes),
     avatarColorIndex: clearAvatarColorIndex
         ? null
         : (avatarColorIndex ?? this.avatarColorIndex),
@@ -54,9 +60,7 @@ class ProfileNotifier extends AsyncNotifier<Profile> {
     final name = await settings.get(SettingsRepository.profileNameKey);
     final email = await settings.get(SettingsRepository.profileEmailKey);
     final phone = await settings.get(SettingsRepository.profilePhoneKey);
-    final photoPath = await settings.get(
-      SettingsRepository.profilePhotoPathKey,
-    );
+    final photoBytes = await _readOrMigratePhoto(settings);
     final colorRaw = await settings.get(
       SettingsRepository.profileAvatarColorKey,
     );
@@ -64,9 +68,39 @@ class ProfileNotifier extends AsyncNotifier<Profile> {
       name: name ?? '',
       email: email ?? '',
       phone: phone ?? '',
-      photoPath: photoPath,
+      photoBytes: photoBytes,
       avatarColorIndex: colorRaw == null ? null : int.tryParse(colorRaw),
     );
+  }
+
+  /// Reads the photo from its current base64 key. Falls back to a one-time
+  /// migration from the legacy on-disk-file-path key for installs upgrading
+  /// from before this photo was stored as bytes in [Settings] directly.
+  Future<Uint8List?> _readOrMigratePhoto(SettingsRepository settings) async {
+    final base64Data = await settings.get(
+      SettingsRepository.profilePhotoBase64Key,
+    );
+    if (base64Data != null) return base64Decode(base64Data);
+
+    final legacyPath = await settings.get(
+      SettingsRepository.profilePhotoPathKey,
+    );
+    if (legacyPath == null) return null;
+
+    final file = File(legacyPath);
+    if (!await file.exists()) {
+      await settings.set(SettingsRepository.profilePhotoPathKey, null);
+      return null;
+    }
+
+    final bytes = await file.readAsBytes();
+    await settings.set(
+      SettingsRepository.profilePhotoBase64Key,
+      base64Encode(bytes),
+    );
+    await settings.set(SettingsRepository.profilePhotoPathKey, null);
+    await file.delete();
+    return bytes;
   }
 
   Future<void> save(Profile profile) async {
@@ -76,8 +110,8 @@ class ProfileNotifier extends AsyncNotifier<Profile> {
     await settings.set(SettingsRepository.profileEmailKey, profile.email);
     await settings.set(SettingsRepository.profilePhoneKey, profile.phone);
     await settings.set(
-      SettingsRepository.profilePhotoPathKey,
-      profile.photoPath,
+      SettingsRepository.profilePhotoBase64Key,
+      profile.photoBytes == null ? null : base64Encode(profile.photoBytes!),
     );
     await settings.set(
       SettingsRepository.profileAvatarColorKey,

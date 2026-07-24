@@ -86,7 +86,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   children: [
                     ProfileAvatar(
                       name: profile.name,
-                      photoPath: profile.photoPath,
+                      photoBytes: profile.photoBytes,
                       avatarColorIndex: profile.avatarColorIndex,
                     ),
                     Positioned(

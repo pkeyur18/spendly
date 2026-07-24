@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show Value;
 
 import '../../core/db/database.dart';
+import '../../core/db/providers.dart' show SettingsRepository;
 
 /// JSON-safe DTOs for the backup format (`docs/backup-schema.md`). Kept
 /// separate from the Drift row classes so the on-disk JSON shape is pinned
@@ -79,6 +80,56 @@ class BackupCategory {
   );
 }
 
+class BackupTag {
+  const BackupTag({
+    required this.id,
+    required this.name,
+    required this.colorValue,
+    required this.isArchived,
+  });
+
+  final int id;
+  final String name;
+  final int colorValue;
+  final bool isArchived;
+
+  factory BackupTag.fromRow(TagRow row) => BackupTag(
+    id: row.id,
+    name: row.name,
+    colorValue: row.colorValue,
+    isArchived: row.isArchived,
+  );
+
+  factory BackupTag.fromJson(Map<String, dynamic> j) => BackupTag(
+    id: j['id'] as int,
+    name: j['name'] as String,
+    colorValue: j['colorValue'] as int,
+    isArchived: j['isArchived'] as bool,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'colorValue': colorValue,
+    'isArchived': isArchived,
+  };
+
+  /// Merge: new row, id auto-assigned.
+  TagsCompanion toInsertCompanion() => TagsCompanion.insert(
+    name: name,
+    colorValue: colorValue,
+    isArchived: Value(isArchived),
+  );
+
+  /// Replace: tables are wiped first, so the original id is reused verbatim.
+  TagsCompanion toReplaceCompanion() => TagsCompanion(
+    id: Value(id),
+    name: Value(name),
+    colorValue: Value(colorValue),
+    isArchived: Value(isArchived),
+  );
+}
+
 class BackupExpense {
   const BackupExpense({
     required this.id,
@@ -89,6 +140,7 @@ class BackupExpense {
     required this.paymentMethod,
     required this.isRecurring,
     required this.recurrence,
+    required this.tagId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -101,6 +153,11 @@ class BackupExpense {
   final String? paymentMethod;
   final bool isRecurring;
   final Recurrence? recurrence;
+
+  /// Backup-file id of the trip/tag this expense carried, or null. Resolved
+  /// to a local tag id via the tag-id map on merge/replace — see
+  /// [BackupRepository].
+  final int? tagId;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -113,6 +170,7 @@ class BackupExpense {
     paymentMethod: row.paymentMethod,
     isRecurring: row.isRecurring,
     recurrence: row.recurrence,
+    tagId: row.tagId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   );
@@ -128,6 +186,8 @@ class BackupExpense {
     recurrence: j['recurrence'] == null
         ? null
         : Recurrence.values.byName(j['recurrence'] as String),
+    // Pre-trip-feature backups have no "tagId" key; absent = untagged.
+    tagId: j['tagId'] as int?,
     createdAt: DateTime.parse(j['createdAt'] as String),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
   );
@@ -141,24 +201,29 @@ class BackupExpense {
     'paymentMethod': paymentMethod,
     'isRecurring': isRecurring,
     'recurrence': recurrence?.name,
+    'tagId': tagId,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
-  /// category id the backup's categoryId was resolved to.
-  ExpensesCompanion toInsertCompanion({required int mappedCategoryId}) =>
-      ExpensesCompanion.insert(
-        amountMinor: amountMinor,
-        categoryId: mappedCategoryId,
-        date: date,
-        note: Value(note),
-        paymentMethod: Value(paymentMethod),
-        isRecurring: Value(isRecurring),
-        recurrence: Value(recurrence),
-        createdAt: Value(createdAt),
-        updatedAt: Value(updatedAt),
-      );
+  /// category id the backup's categoryId was resolved to; [mappedTagId] is
+  /// the local tag id the backup's tagId was resolved to (null if untagged).
+  ExpensesCompanion toInsertCompanion({
+    required int mappedCategoryId,
+    required int? mappedTagId,
+  }) => ExpensesCompanion.insert(
+    amountMinor: amountMinor,
+    categoryId: mappedCategoryId,
+    date: date,
+    note: Value(note),
+    paymentMethod: Value(paymentMethod),
+    isRecurring: Value(isRecurring),
+    recurrence: Value(recurrence),
+    tagId: Value(mappedTagId),
+    createdAt: Value(createdAt),
+    updatedAt: Value(updatedAt),
+  );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
   ExpensesCompanion toReplaceCompanion() => ExpensesCompanion(
@@ -170,6 +235,7 @@ class BackupExpense {
     paymentMethod: Value(paymentMethod),
     isRecurring: Value(isRecurring),
     recurrence: Value(recurrence),
+    tagId: Value(tagId),
     createdAt: Value(createdAt),
     updatedAt: Value(updatedAt),
   );
@@ -262,11 +328,6 @@ class BackupSetting {
 
 /// The full exported dataset (`data` in the envelope). [exportedAt]/[counts]
 /// are informational (drive the restore preview), not load-bearing for import.
-///
-/// [profilePhotoBase64] is v2-only (FR-56, `docs/backup-schema.md`): a v1
-/// file simply has no such key, which decodes to null — the photo is the
-/// only piece of profile data that couldn't already ride along as a generic
-/// [BackupSetting] (a local file path isn't portable across devices).
 class BackupPayload {
   const BackupPayload({
     required this.exportedAt,
@@ -274,7 +335,7 @@ class BackupPayload {
     required this.expenses,
     required this.budgets,
     required this.settings,
-    this.profilePhotoBase64,
+    required this.tags,
   });
 
   final DateTime exportedAt;
@@ -282,7 +343,7 @@ class BackupPayload {
   final List<BackupExpense> expenses;
   final List<BackupBudget> budgets;
   final List<BackupSetting> settings;
-  final String? profilePhotoBase64;
+  final List<BackupTag> tags;
 
   (DateTime, DateTime)? get expenseDateRange {
     if (expenses.isEmpty) return null;
@@ -295,22 +356,45 @@ class BackupPayload {
     return (min, max);
   }
 
-  factory BackupPayload.fromJson(Map<String, dynamic> j) => BackupPayload(
-    exportedAt: DateTime.parse(j['exportedAt'] as String),
-    categories: (j['categories'] as List)
-        .map((e) => BackupCategory.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    expenses: (j['expenses'] as List)
-        .map((e) => BackupExpense.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    budgets: (j['budgets'] as List)
-        .map((e) => BackupBudget.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    settings: (j['settings'] as List)
+  factory BackupPayload.fromJson(Map<String, dynamic> j) {
+    final settings = (j['settings'] as List)
         .map((e) => BackupSetting.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    profilePhotoBase64: j['profilePhotoBase64'] as String?,
-  );
+        .toList();
+    // Legacy v2 backups carried the photo in its own top-level key instead
+    // of as an ordinary setting — fold it in so old exports still restore.
+    final legacyPhoto = j['profilePhotoBase64'] as String?;
+    if (legacyPhoto != null &&
+        !settings.any(
+          (s) => s.key == SettingsRepository.profilePhotoBase64Key,
+        )) {
+      settings.add(
+        BackupSetting(
+          key: SettingsRepository.profilePhotoBase64Key,
+          value: legacyPhoto,
+        ),
+      );
+    }
+
+    return BackupPayload(
+      exportedAt: DateTime.parse(j['exportedAt'] as String),
+      categories: (j['categories'] as List)
+          .map((e) => BackupCategory.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      expenses: (j['expenses'] as List)
+          .map((e) => BackupExpense.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      budgets: (j['budgets'] as List)
+          .map((e) => BackupBudget.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      settings: settings,
+      // Pre-trip-feature backups have no "tags" key at all.
+      tags: j['tags'] == null
+          ? const []
+          : (j['tags'] as List)
+                .map((e) => BackupTag.fromJson(e as Map<String, dynamic>))
+                .toList(),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'exportedAt': exportedAt.toIso8601String(),
@@ -318,11 +402,12 @@ class BackupPayload {
       'expenses': expenses.length,
       'categories': categories.length,
       'budgets': budgets.length,
+      'tags': tags.length,
     },
     'categories': categories.map((c) => c.toJson()).toList(),
     'expenses': expenses.map((e) => e.toJson()).toList(),
     'budgets': budgets.map((b) => b.toJson()).toList(),
     'settings': settings.map((s) => s.toJson()).toList(),
-    if (profilePhotoBase64 != null) 'profilePhotoBase64': profilePhotoBase64,
+    'tags': tags.map((t) => t.toJson()).toList(),
   };
 }

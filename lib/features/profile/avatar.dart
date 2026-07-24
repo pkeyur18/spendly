@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -47,21 +47,21 @@ class ProfileAvatar extends StatelessWidget {
   const ProfileAvatar({
     super.key,
     required this.name,
-    this.photoPath,
+    this.photoBytes,
     this.avatarColorIndex,
     this.size = 92,
     this.fontSize = 32,
   });
 
   final String name;
-  final String? photoPath;
+  final Uint8List? photoBytes;
   final int? avatarColorIndex;
   final double size;
   final double fontSize;
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = photoPath != null && File(photoPath!).existsSync();
+    final hasPhoto = photoBytes != null;
     return Container(
       width: size,
       height: size,
@@ -79,8 +79,8 @@ class ProfileAvatar extends StatelessWidget {
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       child: hasPhoto
-          ? Image.file(
-              File(photoPath!),
+          ? Image.memory(
+              photoBytes!,
               width: size,
               height: size,
               fit: BoxFit.cover,

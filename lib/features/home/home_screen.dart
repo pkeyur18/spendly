@@ -353,7 +353,7 @@ class _BottomNav extends StatelessWidget {
               'Profile',
               leading: ProfileAvatar(
                 name: profile?.name ?? '',
-                photoPath: profile?.photoPath,
+                photoBytes: profile?.photoBytes,
                 avatarColorIndex: profile?.avatarColorIndex,
                 size: 26,
                 fontSize: 11,

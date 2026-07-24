@@ -1,10 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
@@ -24,7 +23,7 @@ class AvatarPickerScreen extends ConsumerStatefulWidget {
 }
 
 class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
-  String? _photoPath;
+  Uint8List? _photoBytes;
   int? _colorIndex;
   bool _seeded = false;
   bool _saving = false;
@@ -32,7 +31,7 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
   void _seed(Profile profile) {
     if (_seeded) return;
     _seeded = true;
-    _photoPath = profile.photoPath;
+    _photoBytes = profile.photoBytes;
     _colorIndex = profile.avatarColorIndex;
   }
 
@@ -69,14 +68,10 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
     );
     if (picked == null || !mounted) return;
 
-    final dir = await getApplicationSupportDirectory();
-    final profileDir = Directory(p.join(dir.path, 'profile'));
-    await profileDir.create(recursive: true);
-    final savedPath = p.join(profileDir.path, 'avatar.jpg');
-    await File(picked.path).copy(savedPath);
+    final bytes = await File(picked.path).readAsBytes();
 
     setState(() {
-      _photoPath = savedPath;
+      _photoBytes = bytes;
       _colorIndex = null;
     });
   }
@@ -84,7 +79,7 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
   void _pickColor(int index) {
     setState(() {
       _colorIndex = index;
-      _photoPath = null;
+      _photoBytes = null;
     });
   }
 
@@ -96,8 +91,8 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
         .read(profileProvider.notifier)
         .save(
           current.copyWith(
-            photoPath: _photoPath,
-            clearPhotoPath: _photoPath == null,
+            photoBytes: _photoBytes,
+            clearPhotoBytes: _photoBytes == null,
             avatarColorIndex: _colorIndex,
             clearAvatarColorIndex: _colorIndex == null,
           ),
@@ -134,7 +129,7 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
               Center(
                 child: ProfileAvatar(
                   name: profile.name,
-                  photoPath: _photoPath,
+                  photoBytes: _photoBytes,
                   avatarColorIndex: _colorIndex,
                 ),
               ),
@@ -189,7 +184,7 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
                         padding: const EdgeInsets.only(right: AppSpacing.sm),
                         child: _ColorSwatch(
                           index: i,
-                          selected: _photoPath == null && (_colorIndex ?? 0) == i,
+                          selected: _photoBytes == null && (_colorIndex ?? 0) == i,
                           onTap: () => _pickColor(i),
                         ),
                       ),

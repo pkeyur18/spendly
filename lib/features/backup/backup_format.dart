@@ -10,10 +10,17 @@ export 'backup_crypto.dart' show BackupWrongPasswordException;
 /// either returns a fully-parsed [BackupPayload] or throws one of the
 /// exceptions below, and always does so before any database write happens.
 ///
-/// v2 (FR-56) added the optional `profilePhotoBase64` payload field — a v1
-/// file simply lacks the key, which [BackupPayload.fromJson] already treats
-/// as null, so no version-keyed decode branch is needed here.
-const currentBackupVersion = 2;
+/// v2 (FR-56) added the profile photo to the payload as a top-level
+/// `profilePhotoBase64` field. It now instead travels as an ordinary
+/// `settings` row (base64 bytes, portable across devices);
+/// [BackupPayload.fromJson] folds a legacy top-level key into `settings` on
+/// read for backward compatibility, so old v2 files still restore correctly.
+///
+/// v3 added trip/tag tracking: the `tags` payload field and `tagId` on each
+/// expense. Same additive pattern — an older file simply lacks both keys,
+/// which [BackupPayload.fromJson]/[BackupExpense.fromJson] read as an empty
+/// list / null respectively.
+const currentBackupVersion = 3;
 
 class BackupCorruptException implements Exception {
   const BackupCorruptException(this.reason);

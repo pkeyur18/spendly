@@ -1,10 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:drift/drift.dart' show Value;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import 'backup_models.dart';
@@ -18,17 +11,14 @@ class BackupRepository {
   BackupRepository(this._db);
   final AppDatabase _db;
 
-  /// Excluded from the generic settings export/import: backup bookkeeping
-  /// (so importing a file elsewhere never overwrites the restoring device's
-  /// own schedule/status) plus the profile photo's local file path, which is
-  /// device-specific and meaningless on another device (FR-56 — the photo
-  /// itself travels separately as [BackupPayload.profilePhotoBase64]).
+  /// Excluded from the generic settings export/import: backup bookkeeping,
+  /// so importing a file elsewhere never overwrites the restoring device's
+  /// own schedule/status.
   static const _excludedSettingsKeys = {
     SettingsRepository.autoBackupEnabledKey,
     SettingsRepository.autoBackupFrequencyKey,
     SettingsRepository.lastBackupAtKey,
     SettingsRepository.lastBackupSizeKey,
-    SettingsRepository.profilePhotoPathKey,
   };
 
   /// Everything except the app's own backup bookkeeping (so importing this
@@ -38,6 +28,7 @@ class BackupRepository {
     final expenses = await _db.select(_db.expenses).get();
     final budgets = await _db.select(_db.budgets).get();
     final settings = await _db.select(_db.settings).get();
+    final tags = await _db.select(_db.tags).get();
 
     return BackupPayload(
       exportedAt: DateTime.now(),
@@ -48,46 +39,21 @@ class BackupRepository {
           .where((s) => !_excludedSettingsKeys.contains(s.key))
           .map(BackupSetting.fromRow)
           .toList(),
-      profilePhotoBase64: await _readProfilePhotoBase64(settings),
+      tags: tags.map(BackupTag.fromRow).toList(),
     );
-  }
-
-  Future<String?> _readProfilePhotoBase64(List<SettingRow> settings) async {
-    String? photoPath;
-    for (final s in settings) {
-      if (s.key == SettingsRepository.profilePhotoPathKey) {
-        photoPath = s.value;
-        break;
-      }
-    }
-    if (photoPath == null) return null;
-    final file = File(photoPath);
-    if (!await file.exists()) return null;
-    return base64Encode(await file.readAsBytes());
-  }
-
-  /// Decodes a v2 backup's photo (if any) to a fresh local file and returns
-  /// the path to store under [SettingsRepository.profilePhotoPathKey].
-  Future<String> _writeProfilePhoto(String base64Data) async {
-    final dir = await getApplicationSupportDirectory();
-    final profileDir = Directory(p.join(dir.path, 'profile'));
-    await profileDir.create(recursive: true);
-    final path = p.join(profileDir.path, 'avatar.jpg');
-    await File(path).writeAsBytes(base64Decode(base64Data));
-    return path;
   }
 
   /// Wipes all four tables, then restores exactly [payload], reusing its
   /// original ids verbatim (safe — the tables are empty by then). Wrapped in
-  /// one transaction: any failure partway through rolls back everything. If
-  /// [payload] carries a v2 photo, it's written to a fresh local file and
-  /// referenced from a new `profile_photo_path` setting row (FR-56) — a v1
-  /// backup (or a v2 one with no photo set) simply leaves photo state wiped,
-  /// which correctly falls back to colored initials (FR-55).
+  /// one transaction: any failure partway through rolls back everything. The
+  /// profile photo travels as an ordinary `settings` row (base64 bytes under
+  /// [SettingsRepository.profilePhotoBase64Key]), so it round-trips with no
+  /// special handling.
   Future<void> replaceAll(BackupPayload payload) async {
     await _db.transaction(() async {
       // Children before parents (FK order).
       await _db.delete(_db.expenses).go();
+      await _db.delete(_db.tags).go();
       await _db.delete(_db.budgets).go();
       await _db.delete(_db.categories).go();
       await _db.delete(_db.settings).go();
@@ -97,6 +63,7 @@ class BackupRepository {
           _db.categories,
           payload.categories.map((c) => c.toReplaceCompanion()),
         );
+        b.insertAll(_db.tags, payload.tags.map((t) => t.toReplaceCompanion()));
         b.insertAll(
           _db.budgets,
           payload.budgets.map((bg) => bg.toReplaceCompanion()),
@@ -112,32 +79,21 @@ class BackupRepository {
           );
         }
       });
-
-      if (payload.profilePhotoBase64 != null) {
-        final path = await _writeProfilePhoto(payload.profilePhotoBase64!);
-        await _db
-            .into(_db.settings)
-            .insertOnConflictUpdate(
-              SettingsCompanion.insert(
-                key: SettingsRepository.profilePhotoPathKey,
-                value: Value(path),
-              ),
-            );
-      }
     });
   }
 
   /// Adds [payload]'s data to what's already on the device without
   /// duplicating it — see the "Merge algorithm" section of
   /// `docs/backup-schema.md` for the natural-key matching rules and their
-  /// known ceiling. Settings (profile, theme, and — per FR-56 — the profile
-  /// photo) are never touched by a merge, same as before this sprint; only
+  /// known ceiling. Settings (profile, theme, and the profile photo — an
+  /// ordinary setting like the rest) are never touched by a merge; only
   /// Replace restores them. One transaction.
   Future<void> mergeAll(BackupPayload payload) async {
     await _db.transaction(() async {
       final categoryIdMap = await _mergeCategories(payload.categories);
+      final tagIdMap = await _mergeTags(payload.tags);
       await _mergeBudgets(payload.budgets, categoryIdMap);
-      await _mergeExpenses(payload.expenses, categoryIdMap);
+      await _mergeExpenses(payload.expenses, categoryIdMap, tagIdMap);
     });
   }
 
@@ -173,6 +129,28 @@ class BackupRepository {
     return idMap;
   }
 
+  /// Matches by normalized name, same rule as [_mergeCategories] — tags have
+  /// no sort order, so new ones are simply inserted. Returns
+  /// backup-tag-id -> local-tag-id.
+  Future<Map<int, int>> _mergeTags(List<BackupTag> backupTags) async {
+    final existing = await _db.select(_db.tags).get();
+    final byNormalizedName = <String, int>{
+      for (final t in existing) _normalize(t.name): t.id,
+    };
+
+    final idMap = <int, int>{};
+    for (final t in backupTags) {
+      final matchedId = byNormalizedName[_normalize(t.name)];
+      if (matchedId != null) {
+        idMap[t.id] = matchedId;
+        continue;
+      }
+      final newId = await _db.into(_db.tags).insert(t.toInsertCompanion());
+      idMap[t.id] = newId;
+    }
+    return idMap;
+  }
+
   /// Matches by (mapped categoryId) slot — null = overall. A slot already
   /// occupied locally is left alone (merge is additive, never overwrites a
   /// budget the user has since changed).
@@ -203,6 +181,7 @@ class BackupRepository {
   Future<void> _mergeExpenses(
     List<BackupExpense> backupExpenses,
     Map<int, int> categoryIdMap,
+    Map<int, int> tagIdMap,
   ) async {
     final existing = await _db.select(_db.expenses).get();
     final fingerprints = <String>{
@@ -216,7 +195,13 @@ class BackupRepository {
       if (mappedCategoryId == null) continue; // orphan safety net
       final fp = e.fingerprint(mappedCategoryId: mappedCategoryId);
       if (!fingerprints.add(fp)) continue; // already present (or dup in file)
-      toInsert.add(e.toInsertCompanion(mappedCategoryId: mappedCategoryId));
+      final mappedTagId = e.tagId == null ? null : tagIdMap[e.tagId];
+      toInsert.add(
+        e.toInsertCompanion(
+          mappedCategoryId: mappedCategoryId,
+          mappedTagId: mappedTagId,
+        ),
+      );
     }
     if (toInsert.isNotEmpty) {
       await _db.batch((batch) => batch.insertAll(_db.expenses, toInsert));

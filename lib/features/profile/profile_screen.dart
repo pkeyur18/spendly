@@ -54,7 +54,7 @@ class ProfileScreen extends ConsumerWidget {
                     children: [
                       ProfileAvatar(
                         name: profile.name,
-                        photoPath: profile.photoPath,
+                        photoBytes: profile.photoBytes,
                         avatarColorIndex: profile.avatarColorIndex,
                       ),
                       Positioned(

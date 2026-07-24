@@ -19,6 +19,7 @@ class ExpenseRepository {
     String? paymentMethod,
     bool isRecurring = false,
     Recurrence? recurrence,
+    int? tagId,
   }) {
     return _db
         .into(_db.expenses)
@@ -31,6 +32,7 @@ class ExpenseRepository {
             paymentMethod: Value(paymentMethod),
             isRecurring: Value(isRecurring),
             recurrence: Value(recurrence),
+            tagId: Value(tagId),
           ),
         );
   }
@@ -44,6 +46,7 @@ class ExpenseRepository {
     Value<String?> paymentMethod = const Value.absent(),
     bool? isRecurring,
     Value<Recurrence?> recurrence = const Value.absent(),
+    Value<int?> tagId = const Value.absent(),
   }) async {
     await (_db.update(_db.expenses)..where((t) => t.id.equals(id))).write(
       ExpensesCompanion(
@@ -60,6 +63,7 @@ class ExpenseRepository {
             ? const Value.absent()
             : Value(isRecurring),
         recurrence: recurrence,
+        tagId: tagId,
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -166,6 +170,46 @@ class ExpenseRepository {
         r.read(_db.expenses.categoryId)!: Money.fromMinor(r.read(sum) ?? 0),
     };
   }
+
+  /// Expenses tagged with [tagId] (e.g. all spend on one trip), newest first.
+  Stream<List<ExpenseRow>> watchByTag(int tagId) {
+    return (_db.select(_db.expenses)
+          ..where((t) => t.tagId.equals(tagId))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
+          ]))
+        .watch();
+  }
+
+  /// Live count of expenses carrying [tagId] — feeds the Tags report list;
+  /// `.watch()` (not `.get()`) so it re-emits on every write, same as
+  /// [watchByTag] and unlike the one-shot `totalsByCategory`.
+  Stream<int> watchCountByTag(int tagId) {
+    final countExpr = _db.expenses.id.count();
+    return (_db.selectOnly(_db.expenses)
+          ..addColumns([countExpr])
+          ..where(_db.expenses.tagId.equals(tagId)))
+        .map((row) => row.read(countExpr) ?? 0)
+        .watchSingle();
+  }
+
+  /// Live lifetime spend per tag — feeds the Tags report list. Untagged
+  /// expenses (tagId null) are excluded, not grouped under a null key.
+  /// `.watch()` so the list stays current after tagging/untagging/adding an
+  /// expense, instead of only refreshing on next screen mount.
+  Stream<Map<int, Money>> watchTotalsByTag() {
+    final sum = _db.expenses.amountMinor.sum();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.tagId, sum])
+      ..where(_db.expenses.tagId.isNotNull())
+      ..groupBy([_db.expenses.tagId]);
+    return query.watch().map(
+      (rows) => {
+        for (final r in rows)
+          r.read(_db.expenses.tagId)!: Money.fromMinor(r.read(sum) ?? 0),
+      },
+    );
+  }
 }
 
 /// Half-open [start, end) bounds for the calendar month containing [month].
@@ -208,3 +252,13 @@ final currentMonthCategoryTotalsProvider = FutureProvider<Map<int, Money>>((
   final (start, end) = monthBounds(DateTime.now());
   return ref.watch(expenseRepositoryProvider).totalsByCategory(start, end);
 });
+
+/// Live lifetime spend per tag — feeds the Tags report list.
+final tagTotalsProvider = StreamProvider<Map<int, Money>>(
+  (ref) => ref.watch(expenseRepositoryProvider).watchTotalsByTag(),
+);
+
+/// Live expense count for one tag — feeds the Tags report list.
+final tagExpenseCountProvider = StreamProvider.family<int, int>(
+  (ref, tagId) => ref.watch(expenseRepositoryProvider).watchCountByTag(tagId),
+);

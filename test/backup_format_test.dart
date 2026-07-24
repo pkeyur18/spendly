@@ -28,8 +28,17 @@ BackupPayload _samplePayload() => BackupPayload(
       paymentMethod: 'UPI',
       isRecurring: false,
       recurrence: null,
+      tagId: 1,
       createdAt: DateTime(2026, 7, 1, 9, 3),
       updatedAt: DateTime(2026, 7, 1, 9, 3),
+    ),
+  ],
+  tags: const [
+    BackupTag(
+      id: 1,
+      name: 'Japan Trip',
+      colorValue: 0xFF6366F1,
+      isArchived: false,
     ),
   ],
   budgets: const [
@@ -104,37 +113,92 @@ void main() {
   });
 
   test(
-    'a v1-shaped file (no profilePhotoBase64) still decodes correctly',
+    'a v1-shaped file (no photo setting at all) still decodes correctly',
     () async {
-      // Hand-written, shaped exactly like a pre-Sprint-10 export — the
-      // payload has no "profilePhotoBase64" key at all.
       final v1Json = jsonEncode({
         'spendlyBackup': true,
         'version': 1,
         'encrypted': false,
-        'data': _samplePayload().toJson()..remove('profilePhotoBase64'),
+        'data': _samplePayload().toJson(),
       });
 
       final decoded = await decodePayload(v1Json);
-      expect(decoded.profilePhotoBase64, isNull);
+      expect(
+        decoded.settings.any((s) => s.key == 'profile_photo_base64'),
+        isFalse,
+      );
       expect(decoded.categories.single.name, 'Food');
       expect(decoded.expenses.single.amountMinor, 24500);
     },
   );
 
-  test('a v2 payload round-trips its profilePhotoBase64 field', () async {
+  test(
+    'a backup with no "tags" key (pre-trip-feature) still decodes correctly',
+    () async {
+      final v1Json = jsonEncode({
+        'spendlyBackup': true,
+        'version': 1,
+        'encrypted': false,
+        'data': _samplePayload().toJson()..remove('tags'),
+      });
+
+      final decoded = await decodePayload(v1Json);
+      expect(decoded.tags, isEmpty);
+      // The expense's tagId (also absent pre-trip-feature) decodes to null.
+      final v1JsonNoTagId = jsonEncode({
+        'spendlyBackup': true,
+        'version': 1,
+        'encrypted': false,
+        'data': _samplePayload().toJson()
+          ..remove('tags')
+          ..['expenses'] = [
+            (_samplePayload().expenses.single.toJson()..remove('tagId')),
+          ],
+      });
+      final decodedNoTagId = await decodePayload(v1JsonNoTagId);
+      expect(decodedNoTagId.expenses.single.tagId, isNull);
+    },
+  );
+
+  test('the photo travels as an ordinary settings row and round-trips', () async {
     final payload = BackupPayload(
       exportedAt: DateTime(2026, 7, 23, 10, 15),
       categories: const [],
       expenses: const [],
       budgets: const [],
-      settings: const [],
-      profilePhotoBase64: base64Encode(utf8.encode('fake jpeg bytes')),
+      settings: [
+        BackupSetting(
+          key: 'profile_photo_base64',
+          value: base64Encode(utf8.encode('fake jpeg bytes')),
+        ),
+      ],
+      tags: const [],
     );
     final envelope = await encodeEnvelope(payload);
     final decoded = await decodePayload(envelope);
-    expect(decoded.profilePhotoBase64, payload.profilePhotoBase64);
+    expect(jsonEncode(decoded.toJson()), jsonEncode(payload.toJson()));
   });
+
+  test(
+    'a legacy v2 file with a top-level profilePhotoBase64 field folds it into settings',
+    () async {
+      final legacyJson = jsonEncode({
+        'spendlyBackup': true,
+        'version': 2,
+        'encrypted': false,
+        'data': _samplePayload().toJson()
+          ..['profilePhotoBase64'] = base64Encode(
+            utf8.encode('fake jpeg bytes'),
+          ),
+      });
+
+      final decoded = await decodePayload(legacyJson);
+      final photoSetting = decoded.settings.singleWhere(
+        (s) => s.key == 'profile_photo_base64',
+      );
+      expect(photoSetting.value, base64Encode(utf8.encode('fake jpeg bytes')));
+    },
+  );
 
   test('future version is rejected before a password would ever be needed', () {
     final future = jsonEncode({

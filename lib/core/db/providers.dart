@@ -22,11 +22,15 @@ class SettingsRepository {
   static const profileEmailKey = 'profile_email';
   static const profilePhoneKey = 'profile_phone';
 
-  // Avatar (FR-51..55). photoPath is device-specific (excluded from backup's
-  // generic settings export — see BackupRepository); avatarColorIndex is an
-  // ordinary portable setting.
-  static const profilePhotoPathKey = 'profile_photo_path';
+  // Avatar (FR-51..55). Photo bytes (base64) and avatarColorIndex are both
+  // ordinary portable settings — same as name/email/phone.
+  static const profilePhotoBase64Key = 'profile_photo_base64';
   static const profileAvatarColorKey = 'profile_avatar_color';
+
+  // Legacy — pre-migration installs stored a local file path here instead of
+  // the photo bytes. Read once by ProfileNotifier.build() to migrate any
+  // still-present file, then left unused (never written again).
+  static const profilePhotoPathKey = 'profile_photo_path';
 
   // Backup bookkeeping (FR-37, FR-42) — excluded from what a backup exports,
   // so restoring one never rewrites the restoring device's own schedule/state.
