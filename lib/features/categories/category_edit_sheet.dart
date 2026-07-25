@@ -65,6 +65,27 @@ const _iconChoices = [
 /// Curated swatches for the color picker (FR-9) — see [AppColors.swatchPalette].
 const _colorChoices = AppColors.swatchPalette;
 
+const _stripPreviewCount = 6;
+
+/// Preview strip contents for [selected] out of [all]: the selected item
+/// pinned first, then the next items from [all] in their existing order
+/// (skipping a duplicate of the selected item), capped at [max].
+/// [overflowCount] is how many more items exist beyond what's shown.
+({List<T> items, int overflowCount}) previewStripItems<T>(
+  List<T> all,
+  T selected, {
+  int max = _stripPreviewCount,
+}) {
+  final items = <T>[selected];
+  for (final item in all) {
+    if (items.length >= max) break;
+    if (item == selected) continue;
+    items.add(item);
+  }
+  final totalDistinct = all.contains(selected) ? all.length : all.length + 1;
+  return (items: items, overflowCount: totalDistinct - items.length);
+}
+
 /// Add/edit a category. [existing] null = create mode. Save/archive/unarchive
 /// go through [CategoryRepository]; archive never deletes (FR-11).
 class CategoryEditSheet extends ConsumerStatefulWidget {
