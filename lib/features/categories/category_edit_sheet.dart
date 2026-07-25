@@ -410,6 +410,7 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
     final palette = Theme.of(context).extension<AppPalette>()!;
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
@@ -456,6 +457,7 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
     };
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
