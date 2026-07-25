@@ -5,8 +5,9 @@
 
 ## Current status
 
-- **Sprint:** 7 (Polish & Accessibility) — **built, awaiting user verification (real VoiceOver/TalkBack pass, Dynamic Type at largest setting, cold-start stopwatch timing)**. Since that entry was written, a run of ad-hoc work landed without PROGRESS.md updates (see "Catch-up" section below) — onboarding, a bare Profile screen, and three small fixes — followed by the full **Sprint 10 (Ad-Hoc) — Profile** sprint (FR-51–58), done now at the user's explicit request even though the sprint plan calls for it as a fast-follow after Sprint 9. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
+- **Sprint:** post-**Sprint 11 (Ad-Hoc) — Trips, All-Transactions, per-month budgets, picker UX** (see Sprint 11 section at the bottom). Sprints 0–7 + 10 shipped (Scaffold → Polish/Accessibility + Profile), then a large run of ad-hoc feature work landed and is recorded retroactively as Sprint 11: the whole **Trips/Tags** feature, an **All-Transactions** browser, **per-month budgets** with carry-forward, the **preview-strip + popup** category icon/color pickers (+ custom hex color), an **Archived Categories** screen, and **8 → 18 default categories**. Drift schema is now **v5**; backup format is **v3**. Everything is **built + `flutter analyze`/`flutter test` green (110+ tests)**, awaiting the same real-device manual verification called out in Sprints 6/7/10. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
 - **Next:** Sprint 8 (Beta & Hardening) — TestFlight/Internal Testing builds, crash reporting + opt-in analytics, a week-long bug bash, edge cases (currency-locale mid-month, date/time changes, cross-version restore, 1000+ transactions).
+- **Docs:** `requirement_docs/spendly-requirements.md` (now **v2.0**) and `requirement_docs/spendly-prototype.html` were rewritten to match the current app (Trips, All-Transactions, per-month budgets, picker UX, 18 categories, new FR-59–76). `README.md` rewritten as the real project front page. `docs/backup-schema.md` already covers backup v1→v3.
 - **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the app) rather than writing natively in-widget — see Sprint 6 section below for the full tradeoff.
 
 ## Locked decisions (from PRD open questions)
@@ -54,7 +55,7 @@ written, with no corresponding PROGRESS.md update. Recorded now, retroactively:
 
 - Flutter 3.44.7 (latest stable) · Dart 3.12.2 · Xcode 26.6 · Android SDK · CocoaPods (all verified present).
 - Dependency freshness: **all direct deps latest, except where noted below**. Remaining `pub outdated` flags (analyzer 12, meta, test, build_runner, drift_dev, package_config 2, record_use 0.6, …) are **SDK-pinned by Dart 3.12.2** — `Resolvable == Current`, not bumpable without a newer Flutter/Dart. No `dependency_overrides` (would break). Revisit when stable Flutter ships newer Dart.
-- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** (S4 export), **flutter_timezone ^5.1** + **timezone ^0.11** (S4, for `zonedSchedule`), **cryptography ^2.9** (S5 — AES-GCM + PBKDF2 for optional backup password), **home_widget ^0.9.3** (S6 — shared-store bridge to iOS WidgetKit / Android Glance), **image_picker ^1.2.3** (S10 — camera/gallery for the profile photo, FR-53), **characters** (S10 — grapheme-safe initials logic in `avatar.dart` uses `String.characters`, provided today via `flutter/material.dart`'s re-export; pinned as an explicit direct dependency anyway since it was already resolvable transitively, at ^1.4.1, so the import stays valid even if that re-export path ever changes). Dev: drift_dev, build_runner, flutter_lints, **path_provider_platform_interface** (S10 — fakes `getApplicationSupportPath()` in `backup_repository_test.dart` so the photo round-trip test never touches a real platform channel).
+- Deps: flutter_riverpod, drift + sqlite3_flutter_libs + path_provider + path, intl, fl_chart, **flutter_local_notifications ^22.1.0**, **pdf ^3.13** (S4 export), **flutter_timezone ^5.1** + **timezone ^0.11** (S4, for `zonedSchedule`), **cryptography ^2.9** (S5 — AES-GCM + PBKDF2 for optional backup password), **home_widget ^0.9.3** (S6 — shared-store bridge to iOS WidgetKit / Android Glance), **image_picker ^1.2.3** (S10 — camera/gallery for the profile photo, FR-53), **flutter_colorpicker ^1.1.0** (S11 — custom hex color for category/tag edit, behind the 18-swatch brand palette in `category_edit_sheet.dart`'s color popup), **characters** (S10 — grapheme-safe initials logic in `avatar.dart` uses `String.characters`, provided today via `flutter/material.dart`'s re-export; pinned as an explicit direct dependency anyway since it was already resolvable transitively, at ^1.4.1, so the import stays valid even if that re-export path ever changes). Dev: drift_dev, build_runner, flutter_lints, **path_provider_platform_interface** (S10 — fakes `getApplicationSupportPath()` in `backup_repository_test.dart` so the photo round-trip test never touches a real platform channel).
 - **iOS deployment target is 26.0 (all 6 build configs in `project.pbxproj`) — explicit user override of the PRD's iOS 16+ target, not a technical requirement.** `home_widget`'s CocoaPod only needed 14.0 (that was the S6 fix, done first); the user then explicitly asked to bump further to 26.0 (Apple's current/latest release), fully aware this restricts the whole app to devices already on iOS 26 and excludes iOS 16-25 users entirely — **flagged to the user before applying, confirmed intentional.** If a future session needs to widen the install base again, 14.0 is the real floor (`home_widget`'s minimum); the lock-screen widget code is separately gated `@available(iOS 16.0, *)` in Swift regardless of deployment target.
 - **Android Glance widgets need the Compose compiler Gradle plugin** (`org.jetbrains.kotlin.plugin.compose`, pinned to the same version as `org.jetbrains.kotlin.android`, 2.3.20) plus `buildFeatures { compose = true }` and `androidx.glance:glance-appwidget:1.1.1` in `android/app/build.gradle.kts`/`settings.gradle.kts`. Without the compose plugin, Glance's `@Composable` functions fail to compile.
 - **share_plus pinned to ^12.0.2 (downgraded from ^13.2 in S4) — deliberate, do not bump casually.** `share_plus ^13.2.1` requires `win32 ^6.0.1`; every `file_picker` version compatible with this project's Android toolchain (see below) requires `win32 ^5.9.0`. The two can't coexist above `share_plus 12.x`. Verified `share_plus 12.0.2`'s `ShareParams`/`SharePlus.instance.share` API is unchanged from 13.x — `report_export.dart`'s `shareReportFile` needed no changes. Re-check this constraint before bumping either package.
@@ -371,6 +372,99 @@ User-approved decisions (asked up front, before writing code):
 - No photo history — picking a new photo overwrites
   `profile/avatar.jpg` in place. Fine for a single-avatar-per-user model;
   would need a real migration if past photos ever needed to be kept.
+
+## Sprint 11 (Ad-Hoc) — done (Trips, All-Transactions, per-month budgets, picker UX)
+
+Retroactive catch-up, same spirit as the earlier "Catch-up" section: a large run of
+feature work landed after Sprint 10 without per-feature PROGRESS entries. Recorded here
+as one block. All of it is `flutter analyze` clean and covered by the test suite
+(**110+ tests**, see the per-feature test files below). Schema went **v1→v5** and backup
+format **v1→v3** across this work; both are additive, mirroring each other (see
+`docs/backup-schema.md`). Real-device manual verification still owed, same caveat as
+Sprints 6/7/10.
+
+- [x] **Trips / Tags (FR-69–73)** → `features/tags/`. New `Tags` Drift table
+  (schema **v4**: `tags` table + nullable `expenses.tagId`) — an expense grouping
+  orthogonal to category (a holiday, a wedding, a project). `tag_repository.dart`
+  (watchAll/watchActive/create/rename/recolor/archive/unarchive/`delete` — delete untags
+  expenses atomically, never deletes them, FR-72). `TagManagerScreen` (list + FAB "Add
+  trip"), `TagEditSheet` (`showTagEditSheet`, name + 18-swatch color + archive/delete),
+  `TagReportScreen` (per-trip list: name, count, lifetime total) → `TagDetailScreen`
+  (per-trip report: hero, trend, donut, transactions, export). Reached from the **Reports
+  screen's Trips icon** + from Quick Add's **trip chip** (`_openTagPicker` bottom sheet:
+  "+ New trip" / "No trip" sentinel / active tags). Report plumbing: `tagReportProvider`
+  (own min/max span per trip), `watchByTag`/`watchCountByTag`/`watchTotalsByTag`,
+  `tagTotalsProvider`/`tagExpenseCountProvider`. Tests: `tag_repository_test.dart`.
+- [x] **All-Transactions browser (FR-62–66)** → `all_transactions_screen.dart`.
+  Day-grouped list (`groupExpensesByDay` + `DayGroupHeader`/`ExpenseTile`,
+  relative Today/Yesterday/date headers), lazy pagination (`_pageSize` 100, scroll-to-load),
+  AppBar month prev/next chevrons + custom-range `showDateRangePicker` + a multi-select
+  **category filter** (`_CategoryFilterSheet`: searchable checkbox list, removable
+  `InputChip`s, active-count badge). Swipe-to-delete with confirm (via `ExpenseTile`).
+  New repo queries: `watchInRange` gained a `categoryIds` filter + `distinctCategoryIdsInRange`.
+  Reached from Home's "Recent → View all" + the tile is also used by Reports. Tests:
+  `all_transactions_grouping_test.dart`.
+- [x] **Per-month budgets (FR-74–76)** → schema **v2** added `budgets.monthKey` ('YYYY-MM',
+  `monthKeyFor(DateTime)` helper; existing rows backfilled to current month on upgrade).
+  `budget_repository.dart` reworked to key everything by month: `watchAllForMonth`,
+  `watchOverallBudget`, `setOverall`/`setForCategory`/`clearForCategory` (per-month upsert),
+  **`carryForward`** (copies previous month's overall + per-category setup, FR-75), pure
+  `categoryBudgetOverrun`. `BudgetSetupScreen` now navigates month-by-month (AppBar
+  chevrons), shows a **carry-forward** empty state, a `_CategoryTotalCard` warning when
+  per-category budgets exceed the overall (FR-76), and clears a budget on a zero amount.
+  Threshold alerts (`crossedThresholds`, 80/100%) unchanged from Sprint 3, still fired at
+  save-time in `quick_add_screen.dart`. Tests: `budget_repository_test.dart`,
+  `budget_threshold_test.dart`, `backdated_budget_scoping_test.dart`.
+- [x] **Category edit UX — preview-strip + popup (FR-10, FR-67)** →
+  `category_edit_sheet.dart` rebuilt. Instead of an always-expanded icon/color grid, each
+  is now a **6-item preview strip + "+N" overflow chip** that opens a full popup sheet:
+  `_openIconPicker` (~50 curated emojis) and `_openColorPicker` (18-swatch brand palette +
+  a `_customColorTile` → `_showCustomColorPicker` hex dialog via **flutter_colorpicker**).
+  The color popup flags a swatch **already used by another category** with a dot indicator.
+  Pure `previewStripItems` helper pins the selected item first. Edit mode adds
+  Archive/Unarchive + a **morphing `_DeleteCategoryDialog`** (`_DeletePhase`
+  confirm→deleting→blocked): if the category is referenced by expenses, hard-delete is
+  blocked and it offers **"Archive instead"** (FR-11). Tests: `category_edit_strip_test.dart`,
+  `quick_add_category_grid_test.dart` (the "top 8 + More" grid logic).
+- [x] **Archived Categories screen (FR-68)** → `archived_categories_screen.dart`
+  (list of archived categories, tap → edit sheet to unarchive/delete). Reached from a
+  count badge in `CategoryManagerScreen`'s AppBar.
+- [x] **18 default categories (FR-8)** → schema **v3** appended 10 more defaults
+  (`_newCategoriesV3`, index 8+) to the original 8: EMI/Loan, Online Shopping, Groceries,
+  Fuel, Insurance, Subscriptions, Education, Personal Care, Fitness, Gifts & Donations.
+  Existing installs get them on upgrade; the "18" count is asserted in
+  `category_repository_test.dart` + `widget_test.dart` — **any docs figure must say 18, not 8**.
+- [x] **Schema indexes (schema v5)** → `idx_expenses_date`/`idx_expenses_category`/
+  `idx_expenses_tag` added (`@TableIndex` on fresh installs; created in `onUpgrade from < 5`
+  for existing installs). Pure query perf, no behavior change.
+- [x] **Quick Add polish (FR-59–61)** → date/backdate chip (today back to 90 days, no
+  future — `backdate_picker_bounds_test.dart`), trip chip, note field that collapses the
+  keypad via `AnimatedSize` when focused.
+- [x] **Backup format v3 (FR-34)** → `currentBackupVersion = 3`. v3 adds the top-level
+  `tags` array + `expenses.tagId`; pre-v3 files read missing `tags` as `[]` and `tagId` as
+  null (additive, no version branch). Merge matches tags by normalized name and remaps
+  `tagId` like `categoryId`; Replace wipes/restores tags in child→parent FK order. Full
+  spec in `docs/backup-schema.md`. Tests: `backup_format_test.dart`,
+  `backup_repository_test.dart`, `backup_crypto_test.dart`.
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **110+ passed** (adds tag_repository, all_transactions_grouping,
+  backdated_budget_scoping, category_edit_strip, quick_add_category_grid, backdate_picker_bounds
+  on top of the Sprint 10 suite).
+- Build sanity: same native-dep constraints as before (`file_picker`/`share_plus` pins,
+  KGP warning) unchanged; `flutter_colorpicker` is pure-Dart, no native impact.
+
+### Deferred / notes — real manual verification NOT yet done, needs the user
+- **Build-level verification only**, same caveat as Sprints 6/7/10. Nobody has yet, on a
+  real device/simulator: created a trip and tagged an expense to it, confirmed the per-trip
+  report + export; filtered All-Transactions by multiple categories and paged a long history;
+  navigated budgets across months and used carry-forward; opened the icon/color popups,
+  picked a custom hex color, and confirmed the "used by another category" marker; archived
+  a referenced category and confirmed the "Archive instead" block.
+- `Recurrence` is still date-math + reminder only (no auto-insert) — unchanged from Sprint 1/3.
+- Merge's known ceilings (rename-breaks-name-match, fingerprint collision) documented in
+  `docs/backup-schema.md` still apply, now extended to tags (matched by normalized name).
 
 ## How to run
 

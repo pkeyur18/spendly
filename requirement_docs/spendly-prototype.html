@@ -567,6 +567,110 @@
   .radio-card b { font-size: 13px; display:block; }
   .radio-card p { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height:1.4; }
 
+  /* Month switcher (per-month budgets) */
+  .month-switch {
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:9px 12px; margin-bottom:14px; box-shadow:var(--shadow-sm);
+  }
+  .month-switch .mchev {
+    width:30px; height:30px; border-radius:9px; background:var(--card-2);
+    border:1px solid var(--line); display:grid; place-items:center; cursor:pointer; font-size:14px;
+  }
+  .month-switch b { font-family:'Sora',sans-serif; font-size:15px; }
+
+  /* Carry-forward empty state */
+  .carry-card {
+    background:var(--card-2); border:1.5px dashed var(--line); border-radius:16px;
+    padding:18px 16px; text-align:center; font-size:12.5px; color:var(--text-dim); margin-bottom:14px; line-height:1.5;
+  }
+  .carry-card b { display:block; color:var(--text); font-family:'Sora',sans-serif; font-size:14px; margin-bottom:4px; }
+  .carry-btn {
+    display:inline-block; margin-top:12px; padding:10px 18px; border-radius:100px;
+    background: linear-gradient(135deg, var(--primary), var(--pink)); color:#fff; font-weight:600; font-size:12px; cursor:pointer;
+  }
+
+  /* Overrun / warning banner */
+  .warn-banner {
+    display:flex; gap:8px; align-items:flex-start; background:rgba(239,68,68,.1);
+    border:1px solid rgba(239,68,68,.3); border-radius:14px; padding:11px 13px;
+    font-size:12px; color:var(--red); margin-bottom:14px; line-height:1.45;
+  }
+
+  /* Filter bar (all transactions) */
+  .filter-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .filter-btn {
+    display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:100px;
+    font-size:12px; font-weight:600; background:var(--card); border:1px solid var(--line); color:var(--text-dim); cursor:pointer;
+  }
+  .filter-btn .badge { background:var(--primary); color:#fff; border-radius:100px; font-size:10px; padding:1px 6px; font-weight:700; }
+  .chip.removable::after { content:' ✕'; opacity:.7; }
+
+  /* Day group header (all transactions) */
+  .day-head {
+    font-size:12px; font-weight:700; color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:.4px; margin:14px 4px 8px;
+  }
+
+  /* Preview strip + popup (category edit icon / color) */
+  .edit-field-label { font-size:12px; font-weight:600; color:var(--text-dim); margin:16px 2px 8px; }
+  .preview-strip { display:flex; gap:9px; align-items:center; }
+  .strip-tile {
+    width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-size:18px;
+    background:var(--card); border:1.5px solid var(--line); cursor:pointer; flex-shrink:0;
+  }
+  .strip-tile.sel { border-color:var(--primary); background:rgba(99,102,241,.12); }
+  .strip-swatch { width:38px; height:38px; border-radius:50%; cursor:pointer; flex-shrink:0; border:2.5px solid transparent; position:relative; }
+  .strip-swatch.sel { border-color:var(--text); }
+  .strip-swatch.sel::after { content:'✓'; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:13px; font-weight:700; }
+  .strip-more {
+    width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-size:12px; font-weight:700;
+    color:var(--primary); background:var(--card-2); border:1.5px dashed var(--line); cursor:pointer; flex-shrink:0;
+  }
+
+  /* Expanded picker popups */
+  .picker-grid {
+    display:grid; grid-template-columns:repeat(6,1fr); gap:9px;
+    background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px; box-shadow:var(--shadow-sm);
+  }
+  .picker-tile {
+    aspect-ratio:1; border-radius:12px; display:grid; place-items:center; font-size:19px;
+    background:var(--card-2); border:1.5px solid var(--line); cursor:pointer;
+  }
+  .picker-tile.sel { border-color:var(--primary); background:rgba(99,102,241,.14); }
+  .swatch-grid {
+    display:grid; grid-template-columns:repeat(6,1fr); gap:13px;
+    background:var(--card); border:1px solid var(--line); border-radius:20px; padding:18px; box-shadow:var(--shadow-sm);
+  }
+  .swatch-tile { aspect-ratio:1; border-radius:50%; cursor:pointer; position:relative; border:2.5px solid transparent; }
+  .swatch-tile.sel { border-color:var(--text); }
+  .swatch-tile.sel::after { content:'✓'; position:absolute; inset:0; display:grid; place-items:center; color:#fff; font-size:15px; font-weight:700; }
+  .swatch-tile.used::before {
+    content:''; position:absolute; top:-2px; right:-2px; width:11px; height:11px;
+    border-radius:50%; background:var(--accent); border:2px solid var(--card);
+  }
+  .swatch-tile.custom {
+    background:var(--card-2); border:1.5px dashed var(--line);
+    display:grid; place-items:center; font-size:17px; color:var(--text-dim);
+  }
+  .used-note { display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--accent); font-weight:600; margin-top:12px; }
+
+  /* Quick Add: chips + note field */
+  .qa-chips { display:flex; gap:8px; margin-bottom:12px; }
+  .qa-note {
+    display:flex; align-items:center; gap:10px; background:var(--card); border:1.5px solid var(--line);
+    border-radius:14px; padding:11px 13px; margin-bottom:14px;
+  }
+  .qa-note input {
+    border:none; outline:none; background:transparent; font-family:'Inter',sans-serif; font-size:13px; color:var(--text); width:100%;
+  }
+  .qa-note input::placeholder { color:var(--text-dim); opacity:.7; }
+
+  /* Trips */
+  .trip-total { text-align:right; }
+  .trip-total b { font-family:'Sora',sans-serif; font-size:15px; display:block; }
+  .trip-total small { font-size:11px; color:var(--text-dim); }
+
   .note {
     max-width: 1200px; margin: 50px auto 0; padding: 22px 26px;
     background: var(--card); border: 1px solid var(--line); border-radius: 20px;
@@ -598,6 +702,7 @@
     <div class="tab" onclick="showGroup('profile')">Profile</div>
     <div class="tab" onclick="showGroup('reports')">Reports</div>
     <div class="tab" onclick="showGroup('categories')">Categories &amp; Budget</div>
+    <div class="tab" onclick="showGroup('trips')">Trips</div>
     <div class="tab" onclick="showGroup('widgets')">Widgets</div>
     <div class="tab" onclick="showGroup('backup')">Backup &amp; Restore</div>
   </div>
@@ -713,7 +818,7 @@
                 <div class="bar active"><i style="height:60%"></i><span>Jul</span></div>
               </div>
             </div>
-            <div class="sec-title"><h3>Recent</h3><a>All ›</a></div>
+            <div class="sec-title"><h3>Recent</h3><a onclick="showGroup('alltxns')">All ›</a></div>
             <div class="txn"><div class="t-ico" style="background:rgba(99,102,241,.15)">🍔</div><div class="t-info"><b>Lunch — Cafe Nero</b><small>Today · 1:24 PM</small></div><div class="t-amt">-₹350</div></div>
             <div class="txn"><div class="t-ico" style="background:rgba(245,158,11,.15)">🛒</div><div class="t-info"><b>Groceries</b><small>Today · 10:02 AM</small></div><div class="t-amt">-₹1,240</div></div>
             <div class="txn"><div class="t-ico" style="background:rgba(20,184,166,.15)">🚕</div><div class="t-info"><b>Cab to office</b><small>Yesterday</small></div><div class="t-amt">-₹210</div></div>
@@ -737,7 +842,15 @@
           <div class="screen-body">
             <div class="screen-title-bar"><div class="back">✕</div><h2>New expense</h2></div>
             <div class="qa-amount"><span>₹</span><span id="qaVal">350</span></div>
-            <div class="qa-sub">Food · Cafe Nero · Today</div>
+            <div class="qa-sub">Food · Today</div>
+            <div class="qa-chips">
+              <div class="chip sel" onclick="alert('Backdate picker — today back to 90 days, no future dates')">📅 Today</div>
+              <div class="chip" onclick="showGroup('tripedit')">🧳 Add to trip</div>
+            </div>
+            <div class="qa-note">
+              <span>📝</span>
+              <input type="text" value="Cafe Nero" placeholder="Add a note (optional)">
+            </div>
             <div class="qa-cats">
               <div class="qa-cat sel" onclick="selCat(this)">🍔<small>Food</small></div>
               <div class="qa-cat" onclick="selCat(this)">🚕<small>Travel</small></div>
@@ -759,6 +872,52 @@
         </div>
       </div>
       <div class="phone-label">2 · Quick Add (2-tap)</div>
+    </div>
+
+    <!-- PHONE: ALL TRANSACTIONS -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="back" onclick="showGroup('core')">‹</div><h2>All transactions</h2>
+              </div>
+              <div style="display:flex;gap:6px">
+                <div class="mchev" onclick="alert('Previous month')">‹</div>
+                <div class="mchev" onclick="alert('Custom date range picker')">📅</div>
+                <div class="mchev" onclick="alert('Next month')">›</div>
+              </div>
+            </div>
+
+            <div class="filter-bar">
+              <div class="filter-btn" onclick="alert('Category filter — searchable multi-select sheet')">⚲ Filter <span class="badge">2</span></div>
+              <div class="chip sel removable" onclick="alert('Remove Food filter')">🍔 Food</div>
+              <div class="chip sel removable" onclick="alert('Remove Travel filter')">🚕 Travel</div>
+            </div>
+
+            <div class="day-head">Today</div>
+            <div class="txn"><div class="t-ico" style="background:rgba(99,102,241,.15)">🍔</div><div class="t-info"><b>Lunch — Cafe Nero</b><small>1:24 PM · Card</small></div><div class="t-amt">-₹350</div></div>
+            <div class="txn"><div class="t-ico" style="background:rgba(245,158,11,.15)">🚕</div><div class="t-info"><b>Cab to office</b><small>9:02 AM · UPI</small></div><div class="t-amt">-₹210</div></div>
+
+            <div class="day-head">Yesterday</div>
+            <div class="txn"><div class="t-ico" style="background:rgba(99,102,241,.15)">🍔</div><div class="t-info"><b>Dinner — Barbeque</b><small>8:40 PM · Card</small></div><div class="t-amt">-₹1,650</div></div>
+            <div class="txn"><div class="t-ico" style="background:rgba(245,158,11,.15)">🚕</div><div class="t-info"><b>Airport drop</b><small>Goa trip · 6:10 AM</small></div><div class="t-amt">-₹640</div></div>
+
+            <div class="day-head">Jul 22</div>
+            <div class="txn"><div class="t-ico" style="background:rgba(99,102,241,.15)">🍔</div><div class="t-info"><b>Coffee</b><small>4:05 PM · Cash</small></div><div class="t-amt">-₹180</div></div>
+            <div style="text-align:center;font-size:12px;color:var(--text-dim);padding:8px 0">Swipe a row to delete · scroll to load more</div>
+          </div>
+          <div class="nav">
+            <a class="active" onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab" onclick="alert('Opens Quick Add')">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">3 · All Transactions</div>
     </div>
 
   </div>
@@ -951,7 +1110,13 @@
         <div class="screen">
           <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
           <div class="screen-body">
-            <div class="screen-title-bar"><div class="back">‹</div><h2>July Report</h2></div>
+            <div class="screen-title-bar" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px"><div class="back" onclick="showGroup('core')">‹</div><h2>July Report</h2></div>
+              <div style="display:flex;gap:6px">
+                <div class="mchev" onclick="showGroup('trips')" title="Trips">🧳</div>
+                <div class="mchev" onclick="showGroup('reports')" title="Custom range">📅</div>
+              </div>
+            </div>
             <div class="report-hero">
               <div class="rlabel">Total spent</div>
               <div class="ramt">₹24,350</div>
@@ -1068,24 +1233,157 @@
         <div class="screen">
           <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
           <div class="screen-body">
-            <div class="screen-title-bar"><div class="back">‹</div><h2>Categories</h2></div>
-            <div class="cat-row"><div class="cico" style="background:rgba(99,102,241,.15)">🍔</div><div><div class="cname">Food</div><div class="cbudget">Budget: ₹10,000/mo</div></div><span class="drag">⠿</span></div>
-            <div class="cat-row"><div class="cico" style="background:rgba(245,158,11,.15)">🚕</div><div><div class="cname">Travel</div><div class="cbudget">Budget: ₹6,000/mo</div></div><span class="drag">⠿</span></div>
+            <div class="screen-title-bar" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px"><div class="back" onclick="showGroup('core')">‹</div><h2>Categories</h2></div>
+              <div class="mchev" onclick="showGroup('budgets')" title="Budgets">💰</div>
+            </div>
+            <div class="sec-title" style="margin-top:0"><h3>17 active</h3><a onclick="showGroup('archived')">Archived (1) ›</a></div>
+            <div class="cat-row" onclick="showGroup('iconpicker')"><div class="cico" style="background:rgba(99,102,241,.15)">🍔</div><div><div class="cname">Food</div><div class="cbudget">Budget: ₹10,000/mo</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row" onclick="showGroup('colorpicker')"><div class="cico" style="background:rgba(245,158,11,.15)">🚕</div><div><div class="cname">Travel</div><div class="cbudget">Budget: ₹6,000/mo</div></div><span class="drag">⠿</span></div>
             <div class="cat-row"><div class="cico" style="background:rgba(20,184,166,.15)">🧾</div><div><div class="cname">Bills</div><div class="cbudget">Budget: ₹5,000/mo</div></div><span class="drag">⠿</span></div>
-            <div class="cat-row"><div class="cico" style="background:rgba(236,72,153,.15)">🎬</div><div><div class="cname">Entertainment</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
             <div class="cat-row"><div class="cico" style="background:rgba(99,102,241,.15)">🛒</div><div><div class="cname">Shopping</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(236,72,153,.15)">🎬</div><div><div class="cname">Entertainment</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
             <div class="cat-row"><div class="cico" style="background:rgba(20,184,166,.15)">💊</div><div><div class="cname">Health</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
-            <div class="cat-row" style="opacity:.5"><div class="cico" style="background:rgba(107,107,123,.15)">📦</div><div><div class="cname">Misc (archived)</div><div class="cbudget">Hidden from Quick Add</div></div><span class="drag">⠿</span></div>
-            <div class="add-cat-btn" onclick="alert('Opens new category form')">+ Add category</div>
+            <div class="cat-row"><div class="cico" style="background:rgba(99,102,241,.15)">🍎</div><div><div class="cname">Groceries</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(245,158,11,.15)">⛽</div><div><div class="cname">Fuel</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(99,102,241,.15)">🏦</div><div><div class="cname">EMI / Loan</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div class="cat-row"><div class="cico" style="background:rgba(236,72,153,.15)">📺</div><div><div class="cname">Subscriptions</div><div class="cbudget">No budget set</div></div><span class="drag">⠿</span></div>
+            <div style="text-align:center;font-size:11px;color:var(--text-dim);padding:4px 0">…and 7 more defaults (Insurance, Education, Personal Care, Fitness, Online Shopping, Gifts &amp; Donations, Other)</div>
+            <div class="add-cat-btn" onclick="showGroup('iconpicker')">+ Add category</div>
           </div>
           <div class="nav">
             <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
             <div class="fab">+</div>
-            <a class="active">🏷️</a><a>⚙️</a>
+            <a class="active">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
           </div>
         </div>
       </div>
       <div class="phone-label">5 · Category Manager</div>
+    </div>
+
+    <!-- PHONE: CATEGORY EDIT — ICON PICKER POPUP -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('categories')">‹</div><h2>Edit category</h2></div>
+
+            <label class="onb-label">Name</label>
+            <div class="onb-input"><span class="onb-ico">🏷️</span><input type="text" value="Food"></div>
+
+            <div class="edit-field-label">Icon — tap to change, or "+" for all</div>
+            <div class="preview-strip">
+              <div class="strip-tile sel">🍔</div>
+              <div class="strip-tile">🍕</div>
+              <div class="strip-tile">☕</div>
+              <div class="strip-tile">🍎</div>
+              <div class="strip-tile">🛒</div>
+              <div class="strip-tile">🎬</div>
+              <div class="strip-more" onclick="alert('Full icon grid — already expanded below')">+44</div>
+            </div>
+
+            <div class="sec-title" style="margin-top:18px"><h3>Choose an icon</h3></div>
+            <div class="picker-grid">
+              <div class="picker-tile sel">🍔</div><div class="picker-tile">🍕</div><div class="picker-tile">☕</div><div class="picker-tile">🍎</div><div class="picker-tile">🥗</div><div class="picker-tile">🍜</div>
+              <div class="picker-tile">🚕</div><div class="picker-tile">✈️</div><div class="picker-tile">🚌</div><div class="picker-tile">⛽</div><div class="picker-tile">🛒</div><div class="picker-tile">🛍️</div>
+              <div class="picker-tile">🧾</div><div class="picker-tile">💡</div><div class="picker-tile">🏠</div><div class="picker-tile">🏦</div><div class="picker-tile">📺</div><div class="picker-tile">🎬</div>
+              <div class="picker-tile">💊</div><div class="picker-tile">🏥</div><div class="picker-tile">🏋️</div><div class="picker-tile">🧴</div><div class="picker-tile">🎓</div><div class="picker-tile">📚</div>
+              <div class="picker-tile">🎁</div><div class="picker-tile">🐶</div><div class="picker-tile">🎮</div><div class="picker-tile">👕</div><div class="picker-tile">📱</div><div class="picker-tile">🎵</div>
+            </div>
+
+            <button class="btn-save" onclick="alert('Category saved ✓'); showGroup('categories')">Save</button>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a class="active">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">7 · Category Edit — Icon Picker</div>
+    </div>
+
+    <!-- PHONE: CATEGORY EDIT — COLOR PICKER POPUP -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('categories')">‹</div><h2>Edit category</h2></div>
+
+            <label class="onb-label">Name</label>
+            <div class="onb-input"><span class="onb-ico">🏷️</span><input type="text" value="Travel"></div>
+
+            <div class="edit-field-label">Color — tap to change, or "+" for all</div>
+            <div class="preview-strip">
+              <div class="strip-swatch sel" style="background:#F59E0B"></div>
+              <div class="strip-swatch" style="background:#6366F1"></div>
+              <div class="strip-swatch" style="background:#14B8A6"></div>
+              <div class="strip-swatch" style="background:#EC4899"></div>
+              <div class="strip-more" onclick="alert('Full swatch grid — already expanded below')">+14</div>
+            </div>
+
+            <div class="sec-title" style="margin-top:18px"><h3>Choose a color</h3></div>
+            <div class="swatch-grid">
+              <div class="swatch-tile sel" style="background:#F59E0B"></div>
+              <div class="swatch-tile" style="background:#6366F1"></div>
+              <div class="swatch-tile" style="background:#818CF8"></div>
+              <div class="swatch-tile" style="background:#4F46E5"></div>
+              <div class="swatch-tile used" style="background:#EC4899"></div>
+              <div class="swatch-tile" style="background:#14B8A6"></div>
+              <div class="swatch-tile" style="background:#EF4444"></div>
+              <div class="swatch-tile" style="background:#F472B6"></div>
+              <div class="swatch-tile" style="background:#0D9488"></div>
+              <div class="swatch-tile" style="background:#EA580C"></div>
+              <div class="swatch-tile" style="background:#8B5CF6"></div>
+              <div class="swatch-tile" style="background:#06B6D4"></div>
+              <div class="swatch-tile" style="background:#10B981"></div>
+              <div class="swatch-tile" style="background:#3B82F6"></div>
+              <div class="swatch-tile" style="background:#A855F7"></div>
+              <div class="swatch-tile" style="background:#FBBF24"></div>
+              <div class="swatch-tile" style="background:#64748B"></div>
+              <div class="swatch-tile custom" onclick="alert('Custom hex color picker dialog')">🎨</div>
+            </div>
+            <div class="used-note">● Amber dot marks a color already used by another category</div>
+
+            <button class="btn-save" onclick="alert('Category saved ✓'); showGroup('categories')">Save</button>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a class="active">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">8 · Category Edit — Color Picker</div>
+    </div>
+
+    <!-- PHONE: ARCHIVED CATEGORIES -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('categories')">‹</div><h2>Archived categories</h2></div>
+            <p class="onb-hint" style="margin:0 0 16px">Archived categories are hidden from Quick Add but keep every past expense intact. Unarchive to use again, or delete permanently.</p>
+            <div class="cat-row" style="opacity:.6"><div class="cico" style="background:rgba(107,107,123,.15)">📦</div><div><div class="cname">Misc</div><div class="cbudget">14 past expenses · archived</div></div></div>
+            <div class="export-row" style="margin-top:4px">
+              <div class="export-btn primary" onclick="alert('Unarchived ✓')">Unarchive</div>
+              <div class="export-btn" style="color:var(--red);border-color:rgba(239,68,68,.4)" onclick="alert('Delete blocked — 14 expenses reference this category. Archive instead.')">Delete</div>
+            </div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a class="active">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">9 · Archived Categories</div>
     </div>
 
     <!-- PHONE: BUDGET SETUP -->
@@ -1095,7 +1393,13 @@
         <div class="screen">
           <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
           <div class="screen-body">
-            <div class="screen-title-bar"><div class="back">‹</div><h2>Budgets</h2></div>
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('categories')">‹</div><h2>Budgets</h2></div>
+            <div class="month-switch">
+              <div class="mchev" onclick="alert('Previous month')">‹</div>
+              <b>July 2026</b>
+              <div class="mchev" onclick="alert('Next month')">›</div>
+            </div>
+            <div class="warn-banner">⚠️ Per-category budgets total ₹21,000 but your overall budget is ₹40,000 — you have ₹19,000 unallocated.</div>
             <div class="budget-card">
               <div class="bhead"><b>Overall monthly budget</b></div>
               <div style="font-family:'Sora',sans-serif;font-size:26px;font-weight:700;">₹40,000</div>
@@ -1119,15 +1423,155 @@
               <div class="budget-mini"><span>78% used</span><span>On track</span></div>
             </div>
             <div class="add-cat-btn" onclick="alert('Set budget for another category')">+ Set budget for a category</div>
+            <div class="carry-card" style="margin-top:14px">
+              Starting a fresh month? <b>Carry forward from June</b>
+              Copies last month's overall + per-category budgets so you don't re-enter them.
+              <div class="carry-btn" onclick="alert('Carried forward June budgets ✓')">Carry forward</div>
+            </div>
           </div>
           <div class="nav">
             <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
             <div class="fab">+</div>
-            <a class="active">🏷️</a><a>⚙️</a>
+            <a class="active">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
           </div>
         </div>
       </div>
-      <div class="phone-label">6 · Budget Setup</div>
+      <div class="phone-label">10 · Budget Setup (per month)</div>
+    </div>
+
+  </div>
+  </div>
+
+  <!-- ============ GROUP: TRIPS ============ -->
+  <div class="group" id="g-trips">
+  <div class="phones">
+
+    <!-- PHONE: TRIPS LIST -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar" style="justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px"><div class="back" onclick="showGroup('reports')">‹</div><h2>Trips</h2></div>
+              <div class="mchev" onclick="showGroup('tripedit')" title="Manage trips">⚙️</div>
+            </div>
+            <p class="onb-hint" style="margin:0 0 16px">Group any expenses into a trip — independent of category. Great for a holiday, a wedding, or a project.</p>
+            <div class="cat-row" onclick="showGroup('tripdetail')">
+              <div class="cico" style="background:rgba(20,184,166,.15)">🏝️</div>
+              <div style="flex:1"><div class="cname">Goa trip</div><div class="cbudget">18 expenses</div></div>
+              <div class="trip-total"><b>₹32,400</b><small>total</small></div>
+            </div>
+            <div class="cat-row" onclick="showGroup('tripdetail')">
+              <div class="cico" style="background:rgba(236,72,153,.15)">💍</div>
+              <div style="flex:1"><div class="cname">Cousin's wedding</div><div class="cbudget">9 expenses</div></div>
+              <div class="trip-total"><b>₹14,900</b><small>total</small></div>
+            </div>
+            <div class="cat-row" onclick="showGroup('tripdetail')">
+              <div class="cico" style="background:rgba(99,102,241,.15)">💻</div>
+              <div style="flex:1"><div class="cname">Home office setup</div><div class="cbudget">5 expenses</div></div>
+              <div class="trip-total"><b>₹48,200</b><small>total</small></div>
+            </div>
+            <div class="add-cat-btn" onclick="showGroup('tripedit')">+ New trip</div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">11 · Trips list</div>
+    </div>
+
+    <!-- PHONE: TRIP DETAIL REPORT -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('trips')">‹</div><h2>🏝️ Goa trip</h2></div>
+            <div class="report-hero">
+              <div class="rlabel">Trip total</div>
+              <div class="ramt">₹32,400</div>
+              <div class="rcompare" style="color:var(--text-dim)">18 expenses · Jun 12 – Jun 18</div>
+            </div>
+            <div class="sec-title"><h3>Spending trend</h3></div>
+            <div class="bars">
+              <div class="bar-row">
+                <div class="bar"><i style="height:60%"></i><span>D1</span></div>
+                <div class="bar active"><i style="height:95%"></i><span>D2</span></div>
+                <div class="bar"><i style="height:45%"></i><span>D3</span></div>
+                <div class="bar"><i style="height:70%"></i><span>D4</span></div>
+                <div class="bar"><i style="height:35%"></i><span>D5</span></div>
+              </div>
+            </div>
+            <div class="sec-title"><h3>By category</h3></div>
+            <div class="chart-card">
+              <div class="donut"><div class="donut-center"><div><b>₹32.4k</b><small>total</small></div></div></div>
+              <div class="legend">
+                <div><span class="swatch" style="background:var(--primary)"></span> Travel <span class="pct">42%</span></div>
+                <div><span class="swatch" style="background:var(--accent)"></span> Food <span class="pct">28%</span></div>
+                <div><span class="swatch" style="background:var(--teal)"></span> Stay <span class="pct">22%</span></div>
+                <div><span class="swatch" style="background:var(--pink)"></span> Other <span class="pct">8%</span></div>
+              </div>
+            </div>
+            <div class="export-row">
+              <div class="export-btn" onclick="alert('Exports trip as CSV')">Export CSV</div>
+              <div class="export-btn primary" onclick="alert('Exports trip as PDF')">Export PDF</div>
+            </div>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">12 · Trip detail report</div>
+    </div>
+
+    <!-- PHONE: TRIP MANAGER / EDIT -->
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status-bar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="screen-body">
+            <div class="screen-title-bar"><div class="back" onclick="showGroup('trips')">‹</div><h2>New trip</h2></div>
+
+            <label class="onb-label">Trip name <span class="req">*</span></label>
+            <div class="onb-input"><span class="onb-ico">🧳</span><input type="text" placeholder="e.g. Goa trip"></div>
+
+            <div class="edit-field-label">Color</div>
+            <div class="swatch-grid">
+              <div class="swatch-tile sel" style="background:#14B8A6"></div>
+              <div class="swatch-tile" style="background:#6366F1"></div>
+              <div class="swatch-tile" style="background:#818CF8"></div>
+              <div class="swatch-tile" style="background:#4F46E5"></div>
+              <div class="swatch-tile" style="background:#F59E0B"></div>
+              <div class="swatch-tile" style="background:#EC4899"></div>
+              <div class="swatch-tile" style="background:#EF4444"></div>
+              <div class="swatch-tile" style="background:#F472B6"></div>
+              <div class="swatch-tile" style="background:#0D9488"></div>
+              <div class="swatch-tile" style="background:#EA580C"></div>
+              <div class="swatch-tile" style="background:#8B5CF6"></div>
+              <div class="swatch-tile" style="background:#06B6D4"></div>
+            </div>
+
+            <button class="btn-save" onclick="alert('Trip saved ✓'); showGroup('trips')">Save trip</button>
+            <p class="onb-hint" style="margin-top:14px">Deleting a trip later just untags its expenses — the expenses themselves are never deleted.</p>
+          </div>
+          <div class="nav">
+            <a onclick="showGroup('core')">🏠</a><a onclick="showGroup('reports')">📊</a>
+            <div class="fab">+</div>
+            <a onclick="showGroup('categories')">🏷️</a><a onclick="showGroup('profile')">⚙️</a>
+          </div>
+        </div>
+      </div>
+      <div class="phone-label">13 · Trip Manager / edit</div>
     </div>
 
   </div>
@@ -1137,7 +1581,7 @@
   <div class="group" id="g-widgets">
   <div class="widgets-wrap" style="margin-top:10px">
     <h3>Home &amp; Lock screen widgets</h3>
-    <p>Add an expense without opening the app — 7 &amp; 8 in the screen list</p>
+    <p>iOS WidgetKit (4 variants) + Android Glance. Tapping a quick-add category deep-links into a pre-filled Quick Add.</p>
     <div class="widget-row">
       <div class="widget widget-grad w-small">
         <div class="w-label">Quick add</div>
@@ -1288,13 +1732,13 @@
   </div>
 
   <div class="note">
-    <b>How to use:</b> Use the tabs above to move between the four flows. Toggle 🌙/☀️ for theme. On Quick Add, the keypad and category chips are live. All buttons show placeholder confirmations — this is a UX prototype, not a functional build.
+    <b>How to use:</b> Use the tabs above to move between flows. Toggle 🌙/☀️ for theme. On Quick Add, the keypad and category chips are live. All buttons show placeholder confirmations — this is a UX prototype, not a functional build.
     <br><br>
-    <b>Screens included (matches the numbered list in the requirements doc):</b> 0) Welcome/Onboarding 1) Home/Dashboard 2) Quick Add 3) Monthly Report 4) Custom Range Report 5) Category Manager 6) Budget Setup 7) Home Screen Widgets 8) Lock Screen Widget 9) Backup Settings 10) Restore Flow 11) Profile 11a) Edit Profile 11b) Avatar Picker.
+    <b>Screens (match §8 of the requirements doc):</b> 0) Welcome/Onboarding · 1) Home/Dashboard · 2) Quick Add · 3) All Transactions · 4) Monthly Report · 5) Custom Range Report · 6) Category Manager · 7) Category Edit — Icon Picker · 8) Category Edit — Color Picker · 9) Archived Categories · 10) Budget Setup (per month) · 11) Trips list · 12) Trip detail report · 13) Trip Manager/edit · 14) Home Screen Widgets · 15) Lock Screen Widget · 16) Backup Settings · 17) Restore Flow · 18) Profile · 19) Edit Profile · 20) Avatar Picker.
     <br><br>
-    <b>New this update:</b> Profile screen with an avatar/photo — tap the pencil on the avatar to open the picker, upload a real photo, or choose from colored initials-avatars (the fallback shown when no photo is set). Edit Profile lets you update name, phone, and email after onboarding. Profile also links into Backup &amp; Restore since account and data settings live together.
+    <b>New in v2.0:</b> a full <b>Trips</b> tab (group expenses into a holiday/wedding/project, with its own per-trip report + export); an <b>All Transactions</b> browser with day grouping and a multi-select category filter; <b>per-month budgets</b> with month navigation, an over-allocation warning, and a "carry forward" shortcut; the <b>preview-strip + popup</b> category icon &amp; color pickers (18-swatch palette + custom hex, with a "used by another category" marker); and an <b>Archived Categories</b> screen. Also: 18 default categories, date/note/trip chips on Quick Add.
     <br><br>
-    <b>Palette:</b> Indigo → Pink gradient (#6366F1 → #EC4899), full light/dark support.
+    <b>Palette:</b> Indigo → Pink gradient (#6366F1 → #EC4899), full light/dark support. Companion docs: <b>spendly-requirements.md</b>, <b>../docs/backup-schema.md</b>, <b>../PROGRESS.md</b>.
   </div>
 
 <script>
@@ -1318,15 +1762,25 @@
   }
   function showGroup(name) {
     // sub-views that live inside a parent tab group
-    const subViewMap = { restore: 'backup', editprofile: 'profile', avatarpicker: 'profile' };
+    const subViewMap = {
+      restore: 'backup', editprofile: 'profile', avatarpicker: 'profile',
+      alltxns: 'core',
+      iconpicker: 'categories', colorpicker: 'categories', archived: 'categories', budgets: 'categories',
+      tripdetail: 'trips', tripedit: 'trips'
+    };
     const groupId = subViewMap[name] || name;
     document.querySelectorAll('.group').forEach(g => g.classList.remove('on'));
     document.getElementById('g-' + groupId).classList.add('on');
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-    const idx = {onboarding:0, core:1, profile:2, reports:3, categories:4, widgets:5, backup:6}[groupId];
+    const idx = {onboarding:0, core:1, profile:2, reports:3, categories:4, trips:5, widgets:6, backup:7}[groupId];
     document.querySelectorAll('.tab')[idx].classList.add('on');
     // Scroll to the right phone within a multi-phone group when jumping to a sub-view
-    const scrollTargets = { restore: 1, editprofile: 1, avatarpicker: 2 };
+    const scrollTargets = {
+      restore: 1, editprofile: 1, avatarpicker: 2,
+      alltxns: 2,
+      iconpicker: 1, colorpicker: 2, archived: 3, budgets: 4,
+      tripdetail: 1, tripedit: 2
+    };
     if (scrollTargets[name] !== undefined) {
       setTimeout(() => {
         const labels = document.querySelectorAll('#g-' + groupId + ' .phone-label');
