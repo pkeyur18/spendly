@@ -153,7 +153,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               controller: _name,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.person_outline),
-                hintText: 'e.g. Aditi Sharma',
+                hintText: 'e.g. John Doe',
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -163,7 +163,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.phone_outlined),
-                hintText: '+91 98765 43210',
+                hintText: 'XXX XXX XXXX',
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -173,7 +173,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.mail_outline),
-                hintText: 'you@example.com',
+                hintText: 'john.doe@gmail.com',
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
