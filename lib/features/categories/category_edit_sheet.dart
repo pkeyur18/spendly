@@ -164,8 +164,12 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                 palette,
                 onTap: () => setState(() => _icon = icon),
               ),
-              overflowTileBuilder: (count) =>
-                  _overflowChip(count, palette, circle: false, onTap: _openIconPicker),
+              overflowTileBuilder: (count) => _overflowChip(
+                count,
+                palette,
+                circle: false,
+                onTap: _openIconPicker,
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -181,8 +185,12 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                 usedColors,
                 onTap: () => setState(() => _color = color.toARGB32()),
               ),
-              overflowTileBuilder: (count) =>
-                  _overflowChip(count, palette, circle: true, onTap: _openColorPicker),
+              overflowTileBuilder: (count) => _overflowChip(
+                count,
+                palette,
+                circle: true,
+                onTap: _openColorPicker,
+              ),
             ),
             if (duplicateOwner != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -240,11 +248,7 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
               Positioned(
                 top: -3,
                 right: -3,
-                child: Icon(
-                  Icons.check_circle,
-                  size: 14,
-                  color: Color(_color),
-                ),
+                child: Icon(Icons.check_circle, size: 14, color: Color(_color)),
               ),
           ],
         ),
@@ -408,7 +412,9 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
       context: context,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
       ),
       builder: (popupContext) => Padding(
         padding: EdgeInsets.fromLTRB(
@@ -452,7 +458,9 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
       context: context,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
       ),
       builder: (popupContext) => Padding(
         padding: EdgeInsets.fromLTRB(
