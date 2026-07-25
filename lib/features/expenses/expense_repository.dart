@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import '../../core/money/money.dart';
+import '../categories/category_repository.dart';
 
 /// Expense CRUD + money-math queries (FR-1, FR-6). All amounts flow through
 /// [Money] (integer minor units) — never a float.
@@ -73,23 +74,43 @@ class ExpenseRepository {
       (_db.delete(_db.expenses)..where((t) => t.id.equals(id))).go();
 
   /// Expenses with date in [start, end), newest first. Pass [limit] to cap the
-  /// rows loaded (lazy pagination for long lists); null = whole range.
+  /// rows loaded (lazy pagination for long lists); null = whole range. Pass
+  /// [categoryIds] to restrict to those categories; null/empty = no filter.
   Stream<List<ExpenseRow>> watchInRange(
     DateTime start,
     DateTime end, {
     int? limit,
+    Set<int>? categoryIds,
   }) {
     final query = _db.select(_db.expenses)
       ..where(
         (t) =>
-            t.date.isBiggerOrEqualValue(start) &
-            t.date.isSmallerThanValue(end),
+            t.date.isBiggerOrEqualValue(start) & t.date.isSmallerThanValue(end),
       )
       ..orderBy([
         (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
       ]);
+    if (categoryIds != null && categoryIds.isNotEmpty) {
+      query.where((t) => t.categoryId.isIn(categoryIds));
+    }
     if (limit != null) query.limit(limit);
     return query.watch();
+  }
+
+  /// Distinct category ids with at least one expense in [start, end) — feeds
+  /// the category filter chips on [AllTransactionsScreen] so only categories
+  /// actually present in the range are offered.
+  Stream<Set<int>> distinctCategoryIdsInRange(DateTime start, DateTime end) {
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.categoryId])
+      ..where(
+        _db.expenses.date.isBiggerOrEqualValue(start) &
+            _db.expenses.date.isSmallerThanValue(end),
+      )
+      ..groupBy([_db.expenses.categoryId]);
+    return query.watch().map(
+      (rows) => {for (final r in rows) r.read(_db.expenses.categoryId)!},
+    );
   }
 
   Stream<List<ExpenseRow>> watchMonth(DateTime month) {
@@ -239,12 +260,44 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>(
 /// Raw expense list for a half-open [start, end) range, capped at a row limit,
 /// newest first — feeds [AllTransactionsScreen] (no need for the heavier
 /// [ReportData] there). The limit grows as the user scrolls (lazy pagination).
+/// The 4th key element is the category filter: selected ids sorted and
+/// joined with `,` (empty string = no filter) — a plain `String` rather than
+/// a `Set`/`List` so the family key has real value equality.
 final expensesInRangeProvider =
-    StreamProvider.family<List<ExpenseRow>, (DateTime, DateTime, int)>(
+    StreamProvider.family<List<ExpenseRow>, (DateTime, DateTime, int, String)>(
       (ref, key) => ref
           .watch(expenseRepositoryProvider)
-          .watchInRange(key.$1, key.$2, limit: key.$3),
+          .watchInRange(
+            key.$1,
+            key.$2,
+            limit: key.$3,
+            categoryIds: key.$4.isEmpty
+                ? null
+                : key.$4.split(',').map(int.parse).toSet(),
+          ),
     );
+
+/// Categories with at least one expense in [start, end), sorted for display —
+/// feeds the category filter chips on [AllTransactionsScreen].
+final categoriesInRangeProvider =
+    StreamProvider.family<List<CategoryRow>, (DateTime, DateTime)>((
+      ref,
+      key,
+    ) async* {
+      final cats = ref.watch(allCategoriesProvider).value ?? const [];
+      final byId = {for (final c in cats) c.id: c};
+      await for (final ids
+          in ref
+              .watch(expenseRepositoryProvider)
+              .distinctCategoryIdsInRange(key.$1, key.$2)) {
+        final cats = [
+          for (final id in ids)
+            if (byId[id] != null) byId[id]!,
+        ];
+        cats.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        yield cats;
+      }
+    });
 
 final currentMonthExpensesProvider = StreamProvider<List<ExpenseRow>>(
   (ref) => ref.watch(expenseRepositoryProvider).watchMonth(DateTime.now()),

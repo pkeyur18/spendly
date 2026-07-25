@@ -243,6 +243,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
   ) async {
     final chosen = await showModalBottomSheet<CategoryRow>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
@@ -257,12 +258,19 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
               padding: EdgeInsets.all(AppSpacing.lg),
               child: Text('Pick a category'),
             ),
-            for (final c in budgetable)
-              ListTile(
-                leading: Text(c.icon, style: const TextStyle(fontSize: 20)),
-                title: Text(c.name),
-                onTap: () => Navigator.of(context).pop(c),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final c in budgetable)
+                    ListTile(
+                      leading: Text(c.icon, style: const TextStyle(fontSize: 20)),
+                      title: Text(c.name),
+                      onTap: () => Navigator.of(context).pop(c),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),

@@ -76,12 +76,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late DateTime _selectedDate;
   bool _defaulted = false;
   final _noteController = TextEditingController();
+  final _noteFocusNode = FocusNode();
 
   bool get _isEdit => widget.editing != null;
 
   @override
   void initState() {
     super.initState();
+    _noteFocusNode.addListener(() => setState(() {}));
     final e = widget.editing;
     // Prefill from the expense being edited; strip trailing ".00".
     _amount = e == null
@@ -98,6 +100,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   @override
   void dispose() {
     _noteController.dispose();
+    _noteFocusNode.dispose();
     super.dispose();
   }
 
@@ -121,7 +124,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 .cast<CategoryRow?>()
                 .firstOrNull;
 
-            return Column(
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: Column(
               children: [
                 _titleBar(context),
                 Expanded(
@@ -163,17 +169,31 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                   ),
                   child: Column(
                     children: [
-                      AmountKeypad(
-                        onKey: (k) => setState(
-                          () => _amount = applyAmountKey(_amount, k),
-                        ),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 200),
+                        alignment: Alignment.topCenter,
+                        child: _noteFocusNode.hasFocus
+                            ? const SizedBox.shrink()
+                            : Column(
+                                children: [
+                                  AmountKeypad(
+                                    onKey: (k) => setState(
+                                      () => _amount = applyAmountKey(
+                                        _amount,
+                                        k,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                ],
+                              ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
                       _saveButton(context),
                     ],
                   ),
                 ),
               ],
+              ),
             );
           },
         ),
@@ -435,6 +455,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       ),
       child: TextField(
         controller: _noteController,
+        focusNode: _noteFocusNode,
+        textInputAction: TextInputAction.done,
+        onEditingComplete: () => _noteFocusNode.unfocus(),
         textCapitalization: TextCapitalization.sentences,
         maxLength: 140,
         style: TextStyle(fontSize: 13, color: palette.textDim),

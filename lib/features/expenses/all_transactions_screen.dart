@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/db/database.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/category_glyph.dart';
 import '../home/dashboard_providers.dart';
 import 'expense_repository.dart';
 import 'widgets/expense_tile.dart';
@@ -52,7 +53,10 @@ const _pageSize = 100;
 class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   late (DateTime, DateTime) _range = widget.initialRange;
   int _limit = _pageSize;
+  Set<int> _selectedCategoryIds = {};
   final _scrollController = ScrollController();
+
+  String get _categoryKey => (_selectedCategoryIds.toList()..sort()).join(',');
 
   @override
   void initState() {
@@ -72,7 +76,9 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
     final pos = _scrollController.position;
     if (pos.pixels < pos.maxScrollExtent - 400) return;
     final loaded = ref
-        .read(expensesInRangeProvider((_range.$1, _range.$2, _limit)))
+        .read(
+          expensesInRangeProvider((_range.$1, _range.$2, _limit, _categoryKey)),
+        )
         .asData
         ?.value
         .length;
@@ -86,6 +92,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
     setState(() {
       _range = monthBounds(anchor);
       _limit = _pageSize;
+      _selectedCategoryIds = {};
     });
   }
 
@@ -101,7 +108,11 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
       ),
     );
     if (picked == null) return;
-    final start = DateTime(picked.start.year, picked.start.month, picked.start.day);
+    final start = DateTime(
+      picked.start.year,
+      picked.start.month,
+      picked.start.day,
+    );
     final end = DateTime(
       picked.end.year,
       picked.end.month,
@@ -110,7 +121,24 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
     setState(() {
       _range = (start, end);
       _limit = _pageSize;
+      _selectedCategoryIds = {};
     });
+  }
+
+  Future<void> _openCategoryFilterSheet(List<CategoryRow> categories) async {
+    final result = await showModalBottomSheet<Set<int>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (_) => _CategoryFilterSheet(
+        categories: categories,
+        initialSelected: _selectedCategoryIds,
+      ),
+    );
+    if (result != null) setState(() => _selectedCategoryIds = result);
   }
 
   String get _title {
@@ -124,15 +152,17 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final key = (_range.$1, _range.$2, _limit);
+    final key = (_range.$1, _range.$2, _limit, _categoryKey);
     final async = ref.watch(expensesInRangeProvider(key));
     final byId = ref.watch(categoriesByIdProvider);
+    final categoryChips =
+        ref.watch(categoriesInRangeProvider((_range.$1, _range.$2))).value ??
+        const [];
+    final palette = Theme.of(context).extension<AppPalette>()!;
     final monthMode = widget.showRangeSwitcher && _isCalendarMonth(_range);
     final now = DateTime.now();
     final atCurrentMonth =
-        monthMode &&
-        _range.$1.year == now.year &&
-        _range.$1.month == now.month;
+        monthMode && _range.$1.year == now.year && _range.$1.month == now.month;
 
     return Scaffold(
       appBar: AppBar(
@@ -156,41 +186,220 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
               icon: const Icon(Icons.tune_rounded),
               onPressed: _pickCustomRange,
             ),
+          IconButton(
+            tooltip: 'Filter by category',
+            icon: Badge(
+              label: Text('${_selectedCategoryIds.length}'),
+              isLabelVisible: _selectedCategoryIds.isNotEmpty,
+              child: const Icon(Icons.filter_list_rounded),
+            ),
+            onPressed: categoryChips.isEmpty
+                ? null
+                : () => _openCategoryFilterSheet(categoryChips),
+          ),
         ],
       ),
-      body: async.when(
-        loading: () => const LoadingView(),
-        error: (e, _) => ErrorView(
-          message: 'Could not load transactions.',
-          onRetry: () => ref.invalidate(expensesInRangeProvider(key)),
+      body: Column(
+        children: [
+          if (_selectedCategoryIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                0,
+              ),
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final c in categoryChips)
+                    if (_selectedCategoryIds.contains(c.id))
+                      InputChip(
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CategoryGlyph(c.icon, size: 16),
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(c.name),
+                          ],
+                        ),
+                        selected: true,
+                        onSelected: (_) =>
+                            setState(() => _selectedCategoryIds.remove(c.id)),
+                        onDeleted: () =>
+                            setState(() => _selectedCategoryIds.remove(c.id)),
+                        selectedColor: AppColors.primary,
+                        labelStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        backgroundColor: palette.card,
+                        shape: StadiumBorder(
+                          side: BorderSide(color: palette.line),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: async.when(
+              loading: () => const LoadingView(),
+              error: (e, _) => ErrorView(
+                message: 'Could not load transactions.',
+                onRetry: () => ref.invalidate(expensesInRangeProvider(key)),
+              ),
+              data: (expenses) {
+                if (expenses.isEmpty) {
+                  return const EmptyView(
+                    icon: Icons.receipt_long_outlined,
+                    message: 'No transactions in this range.',
+                  );
+                }
+                // Flatten day-groups into a single list (DateTime = header,
+                // ExpenseRow = tile) so ListView.builder can lazily build only the
+                // visible rows instead of every tile up front.
+                final items = <Object>[];
+                for (final entry in groupExpensesByDay(expenses).entries) {
+                  items.add(entry.key);
+                  items.addAll(entry.value);
+                }
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final item = items[i];
+                    if (item is DateTime) return DayGroupHeader(item);
+                    final e = item as ExpenseRow;
+                    return ExpenseTile(
+                      expense: e,
+                      category: byId[e.categoryId],
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryFilterSheet extends StatefulWidget {
+  const _CategoryFilterSheet({
+    required this.categories,
+    required this.initialSelected,
+  });
+
+  final List<CategoryRow> categories;
+  final Set<int> initialSelected;
+
+  @override
+  State<_CategoryFilterSheet> createState() => _CategoryFilterSheetState();
+}
+
+class _CategoryFilterSheetState extends State<_CategoryFilterSheet> {
+  final Set<int> _selected = {};
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected.addAll(widget.initialSelected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.categories
+        .where((c) => c.name.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
         ),
-        data: (expenses) {
-          if (expenses.isEmpty) {
-            return const EmptyView(
-              icon: Icons.receipt_long_outlined,
-              message: 'No transactions in this range.',
-            );
-          }
-          // Flatten day-groups into a single list (DateTime = header,
-          // ExpenseRow = tile) so ListView.builder can lazily build only the
-          // visible rows instead of every tile up front.
-          final items = <Object>[];
-          for (final entry in groupExpensesByDay(expenses).entries) {
-            items.add(entry.key);
-            items.addAll(entry.value);
-          }
-          return ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            itemCount: items.length,
-            itemBuilder: (context, i) {
-              final item = items[i];
-              if (item is DateTime) return DayGroupHeader(item);
-              final e = item as ExpenseRow;
-              return ExpenseTile(expense: e, category: byId[e.categoryId]);
-            },
-          );
-        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.sm,
+                0,
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Filter by category',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _selected.isEmpty
+                        ? null
+                        : () => setState(_selected.clear),
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                0,
+                AppSpacing.lg,
+                AppSpacing.sm,
+              ),
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: const InputDecoration(
+                  hintText: 'Search categories',
+                  prefixIcon: Icon(Icons.search),
+                ),
+              ),
+            ),
+            Flexible(
+              child: filtered.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(AppSpacing.lg),
+                      child: Text('No categories found'),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) {
+                        final c = filtered[i];
+                        return CheckboxListTile(
+                          secondary: CategoryGlyph(c.icon, size: 20),
+                          title: Text(c.name),
+                          value: _selected.contains(c.id),
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _selected.add(c.id);
+                            } else {
+                              _selected.remove(c.id);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context, _selected),
+                  child: const Text('Done'),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

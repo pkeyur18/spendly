@@ -120,6 +120,66 @@ void main() {
     expect(all.length, 250); // null limit = whole range
   });
 
+  test('watchInRange with categoryIds returns only matching rows', () async {
+    await repo.add(
+      amount: Money.parse('10'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 1),
+    );
+    await repo.add(
+      amount: Money.parse('20'),
+      categoryId: 2,
+      date: DateTime(2026, 3, 2),
+    );
+    await repo.add(
+      amount: Money.parse('30'),
+      categoryId: 3,
+      date: DateTime(2026, 3, 3),
+    );
+    final rows = await repo
+        .watchInRange(
+          DateTime(2026, 3, 1),
+          DateTime(2026, 4, 1),
+          categoryIds: {1, 3},
+        )
+        .first;
+    expect(rows.map((e) => e.categoryId).toSet(), {1, 3});
+  });
+
+  test(
+    'distinctCategoryIdsInRange returns only categories actually used',
+    () async {
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 1),
+      );
+      await repo.add(
+        amount: Money.parse('20'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 2),
+      );
+      await repo.add(
+        amount: Money.parse('30'),
+        categoryId: 2,
+        date: DateTime(2026, 3, 3),
+      );
+      // Category 3 has an expense outside the range — must not appear.
+      await repo.add(
+        amount: Money.parse('40'),
+        categoryId: 3,
+        date: DateTime(2026, 5, 1),
+      );
+      final ids = await repo
+          .distinctCategoryIdsInRange(
+            DateTime(2026, 3, 1),
+            DateTime(2026, 4, 1),
+          )
+          .first;
+      expect(ids, {1, 2});
+    },
+  );
+
   test('update and delete reflected', () async {
     final id = await repo.add(
       amount: Money.parse('100'),
