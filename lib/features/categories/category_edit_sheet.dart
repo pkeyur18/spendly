@@ -157,56 +157,16 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
               style: TextStyle(color: palette.textDim, fontSize: 13),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final e in _iconChoices)
-                  Semantics(
-                    button: true,
-                    selected: _icon == e,
-                    label: 'Icon $e',
-                    child: GestureDetector(
-                      onTap: () => setState(() => _icon = e),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: _icon == e
-                                  ? Color(_color).withValues(alpha: 0.15)
-                                  : palette.card,
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.icon,
-                              ),
-                              border: Border.all(
-                                color: _icon == e
-                                    ? Color(_color)
-                                    : palette.line,
-                                width: _icon == e ? 1.6 : 1,
-                              ),
-                            ),
-                            alignment: Alignment.center,
-                            child: CategoryGlyph(e, size: 18),
-                          ),
-                          // Selection isn't color-only: a checkmark badge too.
-                          if (_icon == e)
-                            Positioned(
-                              top: -3,
-                              right: -3,
-                              child: Icon(
-                                Icons.check_circle,
-                                size: 14,
-                                color: Color(_color),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+            _previewStrip<String>(
+              all: _iconChoices,
+              selected: _icon,
+              tileBuilder: (icon) => _iconTile(
+                icon,
+                palette,
+                onTap: () => setState(() => _icon = icon),
+              ),
+              overflowTileBuilder: (count) =>
+                  _overflowChip(count, palette, circle: false, onTap: _openIconPicker),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -329,6 +289,141 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
               _deleteButton(),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconTile(
+    String icon,
+    AppPalette palette, {
+    required VoidCallback onTap,
+  }) {
+    final selected = icon == _icon;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Icon $icon',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: selected
+                    ? Color(_color).withValues(alpha: 0.15)
+                    : palette.card,
+                borderRadius: BorderRadius.circular(AppRadius.icon),
+                border: Border.all(
+                  color: selected ? Color(_color) : palette.line,
+                  width: selected ? 1.6 : 1,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: CategoryGlyph(icon, size: 18),
+            ),
+            if (selected)
+              Positioned(
+                top: -3,
+                right: -3,
+                child: Icon(
+                  Icons.check_circle,
+                  size: 14,
+                  color: Color(_color),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _previewStrip<T>({
+    required List<T> all,
+    required T selected,
+    required Widget Function(T item) tileBuilder,
+    required Widget Function(int overflowCount) overflowTileBuilder,
+  }) {
+    final strip = previewStripItems(all, selected);
+    return Row(
+      children: [
+        for (final item in strip.items) ...[
+          tileBuilder(item),
+          const SizedBox(width: 8),
+        ],
+        if (strip.overflowCount > 0) overflowTileBuilder(strip.overflowCount),
+      ],
+    );
+  }
+
+  Widget _overflowChip(
+    int count,
+    AppPalette palette, {
+    required bool circle,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: 'Show all, $count more',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: circle ? 34 : 42,
+          height: circle ? 34 : 42,
+          decoration: BoxDecoration(
+            color: palette.card,
+            shape: circle ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: circle ? null : BorderRadius.circular(AppRadius.icon),
+            border: Border.all(color: palette.line),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '+$count',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: palette.textDim,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openIconPicker() async {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (popupContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.lg + MediaQuery.of(popupContext).viewInsets.bottom,
+        ),
+        child: SingleChildScrollView(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final icon in _iconChoices)
+                _iconTile(
+                  icon,
+                  palette,
+                  onTap: () {
+                    setState(() => _icon = icon);
+                    Navigator.of(popupContext).pop();
+                  },
+                ),
+            ],
+          ),
         ),
       ),
     );
