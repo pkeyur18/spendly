@@ -34,12 +34,17 @@ neither OS lets Flutter code run inside the widget itself.
 
 HOW WE'LL WORK:
 Build this in the sprint order laid out in "spendly-sprint-plan.md" (in this
-folder). Do not skip ahead to later-sprint features. At the start of every
-session, read PROGRESS.md in the repo root to see what's done and what sprint
-we're on. At the end of every session, update PROGRESS.md yourself: mark
-completed items, note anything you deferred and why, and note the next task to
-pick up. Treat PROGRESS.md as the thing that makes the next session (which
-won't have this conversation's context) able to continue correctly.
+folder): Sprint 0 through Sprint 9 form the path to initial production launch.
+There is also an Ad-Hoc Sprint (Profile) appended after Sprint 9 for a
+requirement that was added after the original plan was written — treat it as
+a fast-follow after launch, not something to pull forward into the main
+sequence, unless I explicitly tell you otherwise. Do not skip ahead to
+later-sprint features. At the start of every session, read PROGRESS.md in the
+repo root to see what's done and what sprint we're on. At the end of every
+session, update PROGRESS.md yourself: mark completed items, note anything you
+deferred and why, and note the next task to pick up. Treat PROGRESS.md as the
+thing that makes the next session (which won't have this conversation's
+context) able to continue correctly.
 
 Within each sprint:
 1. Propose a short technical plan for that sprint's scope before writing code.
@@ -102,15 +107,18 @@ Each sprint assumes roughly **1 focused week for a solo builder** working with C
 
 ---
 
-### Sprint 2 — Home Dashboard & Quick Add
-**Goal:** The two highest-traffic screens, matching the prototype pixel-for-pixel in spirit.
+### Sprint 2 — Onboarding, Home Dashboard & Quick Add
+**Goal:** The first-run experience plus the two highest-traffic screens, matching the prototype pixel-for-pixel in spirit.
 
+- Welcome/Onboarding screen: name (mandatory), phone + email (optional), "Get started" disabled until name is filled (FR-44 to FR-47)
+- First-launch detection so onboarding shows once and never reappears on normal app opens (FR-50)
+- On completion, redirect straight into Home dashboard (FR-48); profile fields stored locally (FR-49)
 - Home dashboard: month total, budget bar, donut chart, trend bar chart, recent transactions list (FR-12 to FR-16)
 - Quick Add screen: numeric keypad, category grid, ≤3-tap save (FR-2, FR-5)
 - Empty states (no expenses yet, no budget set)
 - Wire Quick Add → Home so the dashboard updates immediately after saving
 
-**Exit criteria:** You can use the app for real daily logging — add an expense from Home in under 3 taps and see it reflected in the charts immediately.
+**Exit criteria:** Fresh install shows Welcome, blocks "Get started" until a name is entered, and lands on Home after completion. From there, you can use the app for real daily logging — add an expense from Home in under 3 taps and see it reflected in the charts immediately.
 
 ---
 
@@ -142,7 +150,7 @@ Each sprint assumes roughly **1 focused week for a solo builder** working with C
 ---
 
 ### Sprint 5 — Backup, Export & Import
-**Goal:** The full data-safety net — this is FR-33 to FR-43, and the newest requirement, so give it a full sprint on its own rather than folding it into Sprint 4.
+**Goal:** The full data-safety net — this is FR-33 to FR-43, and the newest requirement at the time this sprint was planned, so it gets a full sprint on its own rather than folding it into Sprint 4.
 
 - Versioned JSON backup format definition (FR-34) — write this schema down in the repo, e.g. `docs/backup-schema.md`, since every future app version must stay able to read old backups
 - Full backup export: expenses, categories, budgets, settings (FR-33)
@@ -215,20 +223,43 @@ Each sprint assumes roughly **1 focused week for a solo builder** working with C
 
 ---
 
+## Ad-Hoc Sprint — Added After Initial Launch Plan: Profile
+
+This sprint was not part of the original 0–9 plan. It covers a requirement added later in the PRD (Section 5.10, FR-51 to FR-58) after the initial sprint sequence above was already laid out. Rather than renumber everything and disturb a plan you may already be executing against, it's appended here as a standalone sprint to run **after Sprint 9**, or wherever it best fits once you've assessed progress against the plan above — most naturally right after launch, as a fast-follow update.
+
+### Sprint 10 (Ad-Hoc) — Profile
+**Goal:** The full account/profile experience — FR-51 to FR-58.
+
+- Profile screen: avatar/photo display with colored-initials fallback, name/email display, lifetime stats (months tracked, expenses logged, categories used) (FR-51)
+- Edit Profile flow: update name, phone, email after the fact (FR-52)
+- Avatar Picker: upload a real photo via camera/photo library (FR-53), or choose from a preset palette of colored initials-avatars (FR-54)
+- Default-avatar logic: if no photo or color has been chosen, generate a colored initials-avatar from the user's name automatically — there should be no blank/broken-image state anywhere in the app (FR-55)
+- Photo/avatar storage decision: store the photo as a local file (not inline in the main database) and keep a reference/path in the profile record, so the database itself stays light
+- Wire Profile into navigation: reachable from Home (e.g. the settings icon), and Profile links onward to Theme, Currency, and Backup & Restore (FR-57)
+- "Delete all data" destructive action on Profile, clearly marked, gated behind a backup-first prompt so a user can't lose data by accident (FR-58)
+- **Retrofit into the existing backup schema (Sprint 5):** extend the versioned JSON backup format to include profile data and avatar/photo (FR-56) — since this lands after Sprint 5 already shipped a schema version, treat this as a schema version bump (e.g. v1 → v2) with backward-compatible reads of old v1 backup files, not a breaking change
+- Unit tests: initials-generation logic (single name, multi-word name, emoji/special characters in name), avatar fallback always resolves to something renderable; backup v1 files still import correctly after the schema bump
+
+**Exit criteria:** From Profile, you can edit your name/phone/email, upload a real photo or pick a preset avatar color, and see the change reflected immediately on Profile and anywhere else the avatar appears. A brand-new user with no photo set never sees a broken image — only their initials on a color. "Delete all data" cannot be triggered without first being prompted to back up. A backup file created before this sprint still restores correctly, and a new backup created after this sprint includes the profile photo.
+
+---
+
 ## How This Maps to the PRD
 
 Every FR number from `spendly-requirements.md` is covered by exactly one sprint above, so nothing gets lost between planning and building:
 
 | PRD Section | Sprint |
 |---|---|
-| 5.1 Add Expense | 1, 2 |
-| 5.2 Categories | 1, 3 |
-| 5.3 Dashboard | 2 |
-| 5.4 Reports | 4 |
-| 5.5 Budgets | 3 |
-| 5.6 Widgets | 6 |
-| 5.7 Data & Sync | 5 |
-| 5.8 Backup, Export & Import | 5 |
+| 5.1 Onboarding | 2 |
+| 5.2 Add Expense | 1, 2 |
+| 5.3 Categories | 1, 3 |
+| 5.4 Dashboard | 2 |
+| 5.5 Reports | 4 |
+| 5.6 Budgets | 3 |
+| 5.7 Widgets | 6 |
+| 5.8 Data & Sync | 5 |
+| 5.9 Backup, Export & Import | 5 |
+| 5.10 Profile | 10 (ad-hoc, post-launch) |
 | Section 6 (NFRs) | 7 (ongoing from Sprint 0) |
 
 ---
@@ -239,3 +270,4 @@ Every FR number from `spendly-requirements.md` is covered by exactly one sprint 
 - **Resolve the PRD's open questions before the sprint that needs them**, not mid-sprint: currency (before Sprint 1), cloud sync scope (before Sprint 5), backup encryption (before Sprint 5), recurring auto-log behavior (before Sprint 1).
 - **Don't let Claude Code skip tests on the money math.** Sprints 1, 4, and 5 all involve arithmetic a user will notice if it's wrong — insist on the test step in the kickoff prompt's workflow rather than letting it get skipped under time pressure.
 - **Sprint 5 and Sprint 6 are the ones most likely to run long.** Backup/restore correctness and native widget code are both areas where "looks done" and "is actually done" diverge. Budget slack around them rather than the earlier UI sprints.
+- **The ad-hoc Profile sprint touches the Sprint 5 backup schema.** When you get to it, budget a little extra time to verify old backups still restore correctly after the schema version bump — this is the one place where new work can quietly break an already-shipped feature.

@@ -8,18 +8,17 @@ import '../../core/db/providers.dart';
 class ThemeModeNotifier extends AsyncNotifier<ThemeMode> {
   @override
   Future<ThemeMode> build() async {
-    final stored = await ref.read(settingsRepositoryProvider).get(
-          SettingsRepository.themeModeKey,
-        );
+    final stored = await ref
+        .read(settingsRepositoryProvider)
+        .get(SettingsRepository.themeModeKey);
     return _parse(stored);
   }
 
   Future<void> setMode(ThemeMode mode) async {
     state = AsyncData(mode);
-    await ref.read(settingsRepositoryProvider).set(
-          SettingsRepository.themeModeKey,
-          mode.name,
-        );
+    await ref
+        .read(settingsRepositoryProvider)
+        .set(SettingsRepository.themeModeKey, mode.name);
   }
 
   static ThemeMode _parse(String? name) {
@@ -30,5 +29,6 @@ class ThemeModeNotifier extends AsyncNotifier<ThemeMode> {
   }
 }
 
-final themeModeProvider =
-    AsyncNotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+final themeModeProvider = AsyncNotifierProvider<ThemeModeNotifier, ThemeMode>(
+  ThemeModeNotifier.new,
+);
