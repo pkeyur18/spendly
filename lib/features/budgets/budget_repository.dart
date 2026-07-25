@@ -103,6 +103,13 @@ List<int> crossedThresholds(Money before, Money after, Money budget) {
   return out;
 }
 
+/// By how much [categoryTotal] exceeds [overall], or null when there's
+/// nothing to compare (no overall budget set) or the total isn't over.
+Money? categoryBudgetOverrun(Money categoryTotal, Money? overall) {
+  if (overall == null || categoryTotal <= overall) return null;
+  return categoryTotal - overall;
+}
+
 final budgetRepositoryProvider = Provider<BudgetRepository>(
   (ref) => BudgetRepository(ref.watch(databaseProvider)),
 );

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
 import '../../core/money/money.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
@@ -58,6 +59,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
           cat.id: money,
       };
       final monthTotal = report?.total ?? Money.zero;
+      final categoryTotal = perCategory.values.fold(
+        Money.zero,
+        (a, b) => a + b,
+      );
 
       // Active categories that don't yet have a budget → the "+ add" picker.
       final active = activeAsync.value ?? const [];
@@ -91,6 +96,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             budget: overall,
             onTap: () => _editOverall(context, ref, overall),
           ),
+          if (perCategory.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _CategoryTotalCard(total: categoryTotal, overall: overall),
+          ],
           const SizedBox(height: AppSpacing.lg),
           Text('Per category', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
@@ -116,6 +125,12 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                 budget: entry.value,
                 onTap: () =>
                     _editCategory(context, ref, entry.key, entry.value),
+                onDelete: () => _deleteCategoryBudget(
+                  context,
+                  ref,
+                  entry.key,
+                  catsById[entry.key]?.name ?? 'Category',
+                ),
               ),
             ),
           const SizedBox(height: AppSpacing.sm),
@@ -188,6 +203,39 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         : await repo.clearForCategory(_month, categoryId);
   }
 
+  Future<void> _deleteCategoryBudget(
+    BuildContext context,
+    WidgetRef ref,
+    int categoryId,
+    String categoryName,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          title: const Text('Delete budget?'),
+          content: Text("Removes $categoryName's budget for this month."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await ref
+        .read(budgetRepositoryProvider)
+        .clearForCategory(_month, categoryId);
+  }
+
   Future<void> _addCategoryBudget(
     BuildContext context,
     WidgetRef ref,
@@ -238,12 +286,14 @@ class _BudgetCard extends StatelessWidget {
     required this.spent,
     required this.budget,
     required this.onTap,
+    this.onDelete,
   });
 
   final String title;
   final Money spent;
   final Money? budget;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -293,6 +343,16 @@ class _BudgetCard extends StatelessWidget {
                       : 'No budget',
                   style: TextStyle(fontSize: 12, color: palette.textDim),
                 ),
+                if (onDelete != null)
+                  IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    color: palette.textDim,
+                    tooltip: 'Delete budget',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
               ],
             ),
             const SizedBox(height: 10),
@@ -325,6 +385,122 @@ class _BudgetCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Read-only summary of the sum of per-category budgets vs the overall
+/// monthly budget. Shows a persistent (non-dismissible) warning line when
+/// the total exceeds the overall budget — it's purely derived from live
+/// data each rebuild, so it clears itself once the user fixes the numbers.
+class _CategoryTotalCard extends StatelessWidget {
+  const _CategoryTotalCard({required this.total, required this.overall});
+
+  final Money total;
+  final Money? overall;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final overrun = categoryBudgetOverrun(total, overall);
+
+    if (overall == null) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: palette.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Category budgets total',
+                  style: TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  total.format(locale: 'en_IN'),
+                  style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Set overall budget to compare.',
+              style: TextStyle(fontSize: 11, color: palette.textDim),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final ratio = total.ratioOf(overall!).clamp(0.0, 1.0);
+    final pct = (ratio * 100).round();
+    final barColor = overrun != null
+        ? AppColors.red
+        : pct >= 80
+        ? AppColors.accent
+        : AppColors.primary;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: palette.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Category budgets total',
+                style: TextStyle(
+                  fontFamily: 'Sora',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '${total.format(locale: 'en_IN')} / ${overall!.format(locale: 'en_IN')}',
+                style: TextStyle(fontSize: 12, color: palette.textDim),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 8,
+              backgroundColor: palette.line,
+              valueColor: AlwaysStoppedAnimation(barColor),
+            ),
+          ),
+          if (overrun != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Exceeds monthly budget by ${overrun.format(locale: 'en_IN')}. '
+              'Increase monthly budget or reduce category budgets.',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.red,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

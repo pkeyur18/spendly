@@ -41,4 +41,22 @@ void main() {
       isEmpty,
     );
   });
+
+  group('categoryBudgetOverrun', () {
+    test('no overall budget set → null (nothing to compare)', () {
+      expect(categoryBudgetOverrun(m('100'), null), isNull);
+    });
+
+    test('category total under overall → null', () {
+      expect(categoryBudgetOverrun(m('80'), m('100')), isNull);
+    });
+
+    test('category total exactly equal to overall → null (not an overrun)', () {
+      expect(categoryBudgetOverrun(m('100'), m('100')), isNull);
+    });
+
+    test('category total over overall → the exceeded amount', () {
+      expect(categoryBudgetOverrun(m('120'), m('100')), m('20'));
+    });
+  });
 }
