@@ -124,7 +124,6 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
       for (final c in otherCategories ?? const <CategoryRow>[])
         c.colorValue: c.name,
     };
-    final isPreset = _colorChoices.any((c) => c.toARGB32() == _color);
     final duplicateOwner = usedColors[_color];
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -174,104 +173,16 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
               style: TextStyle(color: palette.textDim, fontSize: 13),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final (i, c) in _colorChoices.indexed)
-                  Semantics(
-                    button: true,
-                    selected: _color == c.toARGB32(),
-                    label: 'Color option ${i + 1}',
-                    child: GestureDetector(
-                      onTap: () => setState(() => _color = c.toARGB32()),
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: c,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _color == c.toARGB32()
-                                    ? Theme.of(context).colorScheme.onSurface
-                                    : Colors.transparent,
-                                width: 2.5,
-                              ),
-                            ),
-                            alignment: Alignment.center,
-                            // Selection isn't color-only: a checkmark on top too.
-                            child: _color == c.toARGB32()
-                                ? Icon(
-                                    Icons.check,
-                                    size: 16,
-                                    color: c.computeLuminance() > 0.5
-                                        ? Colors.black
-                                        : Colors.white,
-                                  )
-                                : null,
-                          ),
-                          // Already-in-use marker, separate from selection.
-                          if (usedColors.containsKey(c.toARGB32()))
-                            Positioned(
-                              bottom: -2,
-                              right: -2,
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: palette.textDim,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: palette.card,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                Semantics(
-                  button: true,
-                  selected: !isPreset,
-                  label: 'Custom color',
-                  child: GestureDetector(
-                    onTap: _showCustomColorPicker,
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: isPreset ? palette.card : Color(_color),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: !isPreset
-                              ? Theme.of(context).colorScheme.onSurface
-                              : palette.line,
-                          width: !isPreset ? 2.5 : 1,
-                        ),
-                      ),
-                      alignment: Alignment.center,
-                      child: isPreset
-                          ? Icon(
-                              Icons.palette_outlined,
-                              size: 16,
-                              color: palette.textDim,
-                            )
-                          : Icon(
-                              Icons.check,
-                              size: 16,
-                              color: Color(_color).computeLuminance() > 0.5
-                                  ? Colors.black
-                                  : Colors.white,
-                            ),
-                    ),
-                  ),
-                ),
-              ],
+            _previewStrip<Color>(
+              all: _colorChoices,
+              selected: Color(_color),
+              tileBuilder: (color) => _colorTile(
+                color,
+                usedColors,
+                onTap: () => setState(() => _color = color.toARGB32()),
+              ),
+              overflowTileBuilder: (count) =>
+                  _overflowChip(count, palette, circle: true, onTap: _openColorPicker),
             ),
             if (duplicateOwner != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -336,6 +247,104 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _colorTile(
+    Color color,
+    Map<int, String> usedColors, {
+    required VoidCallback onTap,
+  }) {
+    final selected = _color == color.toARGB32();
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Color ${color.toARGB32().toRadixString(16)}',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected
+                      ? Theme.of(context).colorScheme.onSurface
+                      : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: selected
+                  ? Icon(
+                      Icons.check,
+                      size: 16,
+                      color: color.computeLuminance() > 0.5
+                          ? Colors.black
+                          : Colors.white,
+                    )
+                  : null,
+            ),
+            if (usedColors.containsKey(color.toARGB32()))
+              Positioned(
+                bottom: -2,
+                right: -2,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).extension<AppPalette>()!.textDim,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).extension<AppPalette>()!.card,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _customColorTile(AppPalette palette, {required VoidCallback onTap}) {
+    final isPreset = _colorChoices.any((c) => c.toARGB32() == _color);
+    return Semantics(
+      button: true,
+      selected: !isPreset,
+      label: 'Custom color',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: isPreset ? palette.card : Color(_color),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: !isPreset
+                  ? Theme.of(context).colorScheme.onSurface
+                  : palette.line,
+              width: !isPreset ? 2.5 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: isPreset
+              ? Icon(Icons.palette_outlined, size: 16, color: palette.textDim)
+              : Icon(
+                  Icons.check,
+                  size: 16,
+                  color: Color(_color).computeLuminance() > 0.5
+                      ? Colors.black
+                      : Colors.white,
+                ),
         ),
       ),
     );
@@ -422,6 +431,57 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
                     Navigator.of(popupContext).pop();
                   },
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openColorPicker() async {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final otherCategories = ref
+        .read(allCategoriesProvider)
+        .value
+        ?.where((c) => c.id != widget.existing?.id);
+    final usedColors = <int, String>{
+      for (final c in otherCategories ?? const <CategoryRow>[])
+        c.colorValue: c.name,
+    };
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      builder: (popupContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xl,
+          AppSpacing.lg + MediaQuery.of(popupContext).viewInsets.bottom,
+        ),
+        child: SingleChildScrollView(
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final color in _colorChoices)
+                _colorTile(
+                  color,
+                  usedColors,
+                  onTap: () {
+                    setState(() => _color = color.toARGB32());
+                    Navigator.of(popupContext).pop();
+                  },
+                ),
+              _customColorTile(
+                palette,
+                onTap: () {
+                  Navigator.of(popupContext).pop();
+                  _showCustomColorPicker();
+                },
+              ),
             ],
           ),
         ),
