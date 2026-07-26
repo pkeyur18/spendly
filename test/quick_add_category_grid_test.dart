@@ -10,6 +10,7 @@ CategoryRow _cat(int id) => CategoryRow(
   sortOrder: id,
   isArchived: false,
   isDefault: false,
+  isIgnoredForBudget: false,
 );
 
 void main() {

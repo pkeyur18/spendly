@@ -54,14 +54,25 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       final perCategory = ref.watch(perCategoryBudgetsForMonthProvider(monthKey));
       final catsById = ref.watch(categoriesByIdProvider);
       final report = ref.watch(reportProvider(monthBounds(_month))).value;
-      final spentByCat = {
-        for (final (cat, money, _) in report?.breakdown ?? const <CategorySlice>[])
-          cat.id: money,
-      };
       final monthTotal = report?.total ?? Money.zero;
-      final categoryTotal = perCategory.values.fold(
-        Money.zero,
-        (a, b) => a + b,
+      // Raw per-category spend, unfiltered — so an ignored category still
+      // shows its own real spent-vs-budget number even though it's dropped
+      // from monthTotal/report above.
+      final spentByCat =
+          ref.watch(categorySpendForMonthProvider(monthKey)).value ??
+          const <int, Money>{};
+      // Ignored categories' own budget allocation is netted out of both the
+      // overall target and the per-category sum, so the bars/percentages
+      // stay meaningful once their spend is excluded from the numerator.
+      final ignoredIds = ignoredCategoryIds(catsById);
+      final effectiveOverall = effectiveOverallBudget(
+        overall,
+        perCategory,
+        ignoredIds,
+      );
+      final categoryTotal = effectiveCategoryBudgetTotal(
+        perCategory,
+        ignoredIds,
       );
 
       // Active categories that don't yet have a budget → the "+ add" picker.
@@ -80,25 +91,24 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
           40,
         ),
         children: [
-          if (isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-              child: OutlinedButton(
-                onPressed: () => _carryForward(context, ref),
-                child: Text(
-                  'Carry forward from ${DateFormat('MMMM').format(DateTime(_month.year, _month.month - 1, 1))}',
-                ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: OutlinedButton(
+              onPressed: () => _carryForward(context, ref, isEmpty),
+              child: Text(
+                'Carry forward from ${DateFormat('MMMM').format(DateTime(_month.year, _month.month - 1, 1))}',
               ),
             ),
+          ),
           _BudgetCard(
             title: 'Overall monthly budget',
             spent: monthTotal,
-            budget: overall,
+            budget: effectiveOverall,
             onTap: () => _editOverall(context, ref, overall),
           ),
           if (perCategory.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
-            _CategoryTotalCard(total: categoryTotal, overall: overall),
+            _CategoryTotalCard(total: categoryTotal, overall: effectiveOverall),
           ],
           const SizedBox(height: AppSpacing.lg),
           Text('Per category', style: Theme.of(context).textTheme.titleMedium),
@@ -131,6 +141,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                   entry.key,
                   catsById[entry.key]?.name ?? 'Category',
                 ),
+                isIgnored: catsById[entry.key]?.isIgnoredForBudget ?? false,
+                onToggleIgnored: (v) => ref
+                    .read(categoryRepositoryProvider)
+                    .setIgnoredForBudget(entry.key, v),
               ),
             ),
           const SizedBox(height: AppSpacing.sm),
@@ -162,7 +176,38 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     );
   }
 
-  Future<void> _carryForward(BuildContext context, WidgetRef ref) async {
+  Future<void> _carryForward(
+    BuildContext context,
+    WidgetRef ref,
+    bool isEmpty,
+  ) async {
+    if (!isEmpty) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => Theme(
+          data: AppTheme.boldDialogActions(dialogContext),
+          child: AlertDialog(
+            title: const Text('Overwrite this month\'s budgets?'),
+            content: const Text(
+              'Carrying forward replaces the overall budget and every '
+              'category budget already set for this month with last '
+              'month\'s values.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Overwrite'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+    }
     final prevMonth = DateTime(_month.year, _month.month - 1, 1);
     await ref
         .read(budgetRepositoryProvider)
@@ -295,6 +340,8 @@ class _BudgetCard extends StatelessWidget {
     required this.budget,
     required this.onTap,
     this.onDelete,
+    this.isIgnored,
+    this.onToggleIgnored,
   });
 
   final String title;
@@ -302,6 +349,11 @@ class _BudgetCard extends StatelessWidget {
   final Money? budget;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+
+  /// Null = no ignore toggle shown (the overall-budget card). Non-null shows
+  /// the "Ignore in totals" switch for a per-category card.
+  final bool? isIgnored;
+  final ValueChanged<bool>? onToggleIgnored;
 
   @override
   Widget build(BuildContext context) {
@@ -363,6 +415,23 @@ class _BudgetCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (isIgnored != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Ignore in totals',
+                    style: TextStyle(fontSize: 11, color: palette.textDim),
+                  ),
+                  Switch(
+                    value: isIgnored!,
+                    activeTrackColor: AppColors.primary,
+                    onChanged: onToggleIgnored,
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(10),

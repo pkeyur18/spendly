@@ -59,14 +59,25 @@ final categoriesByIdProvider = Provider<Map<int, CategoryRow>>((ref) {
   return {for (final c in cats) c.id: c};
 });
 
+/// Categories flagged "ignore for budget" — excluded from aggregate
+/// totals/rankings, not from their own per-category tracking.
+Set<int> ignoredCategoryIds(Map<int, CategoryRow> byId) =>
+    {for (final c in byId.values) if (c.isIgnoredForBudget) c.id};
+
 final monthTotalProvider = Provider<Money>((ref) {
   final expenses = ref.watch(currentMonthExpensesProvider).value ?? const [];
-  return sumMoney(expenses);
+  final ignored = ignoredCategoryIds(ref.watch(categoriesByIdProvider));
+  return sumMoney(expenses.where((e) => !ignored.contains(e.categoryId)));
 });
 
 final categoryBreakdownProvider = Provider<List<CategorySlice>>((ref) {
   final expenses = ref.watch(currentMonthExpensesProvider).value ?? const [];
-  return buildBreakdown(expenses, ref.watch(categoriesByIdProvider));
+  final byId = ref.watch(categoriesByIdProvider);
+  final ignored = ignoredCategoryIds(byId);
+  return buildBreakdown(
+    expenses.where((e) => !ignored.contains(e.categoryId)).toList(),
+    byId,
+  );
 });
 
 /// Recent transactions (this month, newest first), paired with their category.

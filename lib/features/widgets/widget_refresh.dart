@@ -14,12 +14,18 @@ Future<void> refreshWidgets(WidgetRef ref) async {
   final expenses = ref.read(expenseRepositoryProvider);
   final now = DateTime.now();
 
-  final todayTotal = await expenses.todayTotal(now);
-  final monthTotal = await expenses.monthTotal(now);
-  final budget = await ref
+  final ignored = ignoredCategoryIds(ref.read(categoriesByIdProvider));
+  final todayTotal = await expenses.todayTotal(now, ignored);
+  final monthTotal = await expenses.monthTotal(now, excludeCategoryIds: ignored);
+  final rawBudget = await ref
       .read(budgetRepositoryProvider)
       .watchOverallBudget(now)
       .first;
+  final budget = effectiveOverallBudget(
+    rawBudget,
+    ref.read(perCategoryBudgetsProvider),
+    ignored,
+  );
 
   // Trend: reuse the same pure bucketing the dashboard uses.
   final lastSix = await expenses.watchLastNMonths(6).first;

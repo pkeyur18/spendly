@@ -127,29 +127,36 @@ class ExpenseRepository {
     return watchInRange(start, end);
   }
 
-  /// Exact total across a calendar month (sum of minor units).
-  Future<Money> monthTotal(DateTime month) {
+  /// Exact total across a calendar month (sum of minor units). Pass
+  /// [excludeCategoryIds] to leave "ignored for budget" categories out.
+  Future<Money> monthTotal(DateTime month, {Set<int>? excludeCategoryIds}) {
     final (start, end) = monthBounds(month);
-    return totalInRange(start, end);
+    return totalInRange(start, end, excludeCategoryIds: excludeCategoryIds);
   }
 
   /// Exact total for the calendar day containing [day] — feeds the "today"
   /// widget (FR-26). Reuses the range-sum primitive with day bounds.
-  Future<Money> todayTotal([DateTime? day]) {
+  Future<Money> todayTotal([DateTime? day, Set<int>? excludeCategoryIds]) {
     final (start, end) = dayBounds(day ?? DateTime.now());
-    return totalInRange(start, end);
+    return totalInRange(start, end, excludeCategoryIds: excludeCategoryIds);
   }
 
-  Future<Money> totalInRange(DateTime start, DateTime end) async {
+  Future<Money> totalInRange(
+    DateTime start,
+    DateTime end, {
+    Set<int>? excludeCategoryIds,
+  }) async {
     final sum = _db.expenses.amountMinor.sum();
-    final row =
-        await (_db.selectOnly(_db.expenses)
-              ..addColumns([sum])
-              ..where(
-                _db.expenses.date.isBiggerOrEqualValue(start) &
-                    _db.expenses.date.isSmallerThanValue(end),
-              ))
-            .getSingle();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([sum])
+      ..where(
+        _db.expenses.date.isBiggerOrEqualValue(start) &
+            _db.expenses.date.isSmallerThanValue(end),
+      );
+    if (excludeCategoryIds != null && excludeCategoryIds.isNotEmpty) {
+      query.where(_db.expenses.categoryId.isIn(excludeCategoryIds).not());
+    }
+    final row = await query.getSingle();
     return Money.fromMinor(row.read(sum) ?? 0);
   }
 

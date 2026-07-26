@@ -50,6 +50,8 @@ class CategoryRepository {
   Future<void> setIcon(int id, String icon) => _update(id, icon: Value(icon));
   Future<void> archive(int id) => _update(id, isArchived: const Value(true));
   Future<void> unarchive(int id) => _update(id, isArchived: const Value(false));
+  Future<void> setIgnoredForBudget(int id, bool value) =>
+      _update(id, isIgnoredForBudget: Value(value));
 
   /// Hard-deletes a category if nothing references it. Blocked when any
   /// expense still points at [id] — archive is the safe path for those
@@ -93,6 +95,7 @@ class CategoryRepository {
     Value<String> icon = const Value.absent(),
     Value<int> colorValue = const Value.absent(),
     Value<bool> isArchived = const Value.absent(),
+    Value<bool> isIgnoredForBudget = const Value.absent(),
   }) async {
     await (_db.update(_db.categories)..where((t) => t.id.equals(id))).write(
       CategoriesCompanion(
@@ -100,6 +103,7 @@ class CategoryRepository {
         icon: icon,
         colorValue: colorValue,
         isArchived: isArchived,
+        isIgnoredForBudget: isIgnoredForBudget,
       ),
     );
   }

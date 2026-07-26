@@ -2,7 +2,7 @@ import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../home/dashboard_providers.dart'
-    show CategorySlice, TrendBar, sumMoney;
+    show CategorySlice, TrendBar, ignoredCategoryIds, sumMoney;
 
 /// Everything a report screen renders (FR-20). Built purely from a list of
 /// in-range expenses + the previous period's total — no DB, so it's unit-tested
@@ -54,11 +54,18 @@ ReportData buildReport({
   required Money previousTotal,
   required Map<int, CategoryRow> categoriesById,
 }) {
-  final total = sumMoney(expenses);
+  // Categories flagged "ignore for budget" are excluded from every aggregate
+  // below, but [expenses] itself stays the full raw list (CSV export/FR-32).
+  final ignored = ignoredCategoryIds(categoriesById);
+  final counted = expenses
+      .where((e) => !ignored.contains(e.categoryId))
+      .toList();
+
+  final total = sumMoney(counted);
 
   // Per-category totals → slices (fraction of grand total), desc.
   final byCategory = <int, Money>{};
-  for (final e in expenses) {
+  for (final e in counted) {
     byCategory[e.categoryId] =
         (byCategory[e.categoryId] ?? Money.zero) + e.amount;
   }
@@ -69,7 +76,7 @@ ReportData buildReport({
   ]..sort((a, b) => b.$2.minor.compareTo(a.$2.minor));
 
   // Top 5 single expenses by amount, desc.
-  final top5 = [...expenses]
+  final top5 = [...counted]
     ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
 
   // Daily average over the inclusive day span (>= 1 to avoid /0).
@@ -87,12 +94,12 @@ ReportData buildReport({
     total: total,
     previousTotal: previousTotal,
     changePct: changePct,
-    txnCount: expenses.length,
+    txnCount: counted.length,
     dailyAverage: dailyAverage,
     topCategory: breakdown.isEmpty ? null : breakdown.first,
     breakdown: breakdown,
     top5: top5.take(5).toList(),
-    weekly: weeklyBuckets(expenses, start, end),
+    weekly: weeklyBuckets(counted, start, end),
   );
 }
 

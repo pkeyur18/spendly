@@ -5,9 +5,9 @@
 
 ## Current status
 
-- **Sprint:** post-**Sprint 11 (Ad-Hoc) — Trips, All-Transactions, per-month budgets, picker UX** (see Sprint 11 section at the bottom). Sprints 0–7 + 10 shipped (Scaffold → Polish/Accessibility + Profile), then a large run of ad-hoc feature work landed and is recorded retroactively as Sprint 11: the whole **Trips/Tags** feature, an **All-Transactions** browser, **per-month budgets** with carry-forward, the **preview-strip + popup** category icon/color pickers (+ custom hex color), an **Archived Categories** screen, and **8 → 18 default categories**. Drift schema is now **v5**; backup format is **v3**. Everything is **built + `flutter analyze`/`flutter test` green (110+ tests)**, awaiting the same real-device manual verification called out in Sprints 6/7/10. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
+- **Sprint:** post-**Sprint 12 (Ad-Hoc) — Ignore category for budget** (see Sprint 12 section at the bottom). Sprints 0–7 + 10 shipped (Scaffold → Polish/Accessibility + Profile), Sprint 11 added Trips/All-Transactions/per-month budgets/picker UX, and Sprint 12 added a per-category **"ignore for budget"** toggle (fixed costs like rent/EMI excluded from daily totals, budget math, top categories, and top expenses, while staying visible in All Transactions and exports). Drift schema is now **v6**; backup format is still **v3** (no new persisted field needed backup changes — the flag lives on `categories`, already in the backup payload). Everything is **built + `flutter analyze`/`flutter test` green (162 tests)**, awaiting the same real-device manual verification called out in Sprints 6/7/10/11. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
 - **Next:** Sprint 8 (Beta & Hardening) — TestFlight/Internal Testing builds, crash reporting + opt-in analytics, a week-long bug bash, edge cases (currency-locale mid-month, date/time changes, cross-version restore, 1000+ transactions).
-- **Docs:** `requirement_docs/spendly-requirements.md` (now **v2.0**) and `requirement_docs/spendly-prototype.html` were rewritten to match the current app (Trips, All-Transactions, per-month budgets, picker UX, 18 categories, new FR-59–76). `README.md` rewritten as the real project front page. `docs/backup-schema.md` already covers backup v1→v3.
+- **Docs:** `requirement_docs/spendly-requirements.md` (now **v2.1**) and `requirement_docs/spendly-prototype.html` updated for the ignore-for-budget toggle (new FR-77). `README.md` reflects schema v6 / 161 tests. `docs/backup-schema.md` already covers backup v1→v3 (unchanged by Sprint 12).
 - **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the app) rather than writing natively in-widget — see Sprint 6 section below for the full tradeoff.
 
 ## Locked decisions (from PRD open questions)
@@ -465,6 +465,97 @@ Sprints 6/7/10.
 - `Recurrence` is still date-math + reminder only (no auto-insert) — unchanged from Sprint 1/3.
 - Merge's known ceilings (rename-breaks-name-match, fingerprint collision) documented in
   `docs/backup-schema.md` still apply, now extended to tags (matched by normalized name).
+
+## Sprint 12 (Ad-Hoc) — done (Ignore category for budget)
+
+User-requested feature, brainstormed to a written design before implementation (per the
+`superpowers:brainstorming` skill flow): mark a category as "ignored for budget" — for
+fixed monthly costs like rent or an EMI/loan — so it stops distorting the numbers that are
+meant to reflect *discretionary* spending.
+
+Decisions locked with the user before coding:
+- **Retroactive/live filter, not a snapshot.** Toggling a category just changes what the
+  live filter excludes; there's no "as of this date" history to track.
+- **Ignored category keeps its own budget entry and its own spent-vs-budget display** —
+  it's excluded only from *aggregate* figures, never from its own per-category tracking.
+- **"Top expenses" = individual transactions**, distinct from "top categories" (both
+  excluded per the requirement, just different shapes of aggregate).
+- **Toggle lives on the per-category Budget Setup card**, not a separate Categories screen
+  setting — it's a budget-math concern, not a category-identity concern.
+- **View All Transactions and CSV/PDF export are untouched** — an ignored category's
+  expenses must always stay fully visible/exportable; only budget-facing aggregates filter
+  it out.
+
+- [x] **Schema** → `isIgnoredForBudget` bool column on `Categories`
+  (`lib/core/db/database.dart`), schema **v6**, mirrors the existing `isArchived` column
+  exactly. `CategoryRepository.setIgnoredForBudget(id, value)` mirrors `archive`/`unarchive`.
+- [x] **No single shared aggregation chokepoint existed** — a codebase-exploration pass
+  found spend totals/rankings computed independently in three places, so the filter had to
+  be threaded through each rather than through one shared function:
+  1. **Dashboard** (`dashboard_providers.dart`) — `monthTotalProvider` (Home hero) and
+     `categoryBreakdownProvider` (SpendDonut "top categories") filter
+     `currentMonthExpensesProvider` before aggregating. New `ignoredCategoryIds(byId)` helper
+     lives here, reused everywhere else.
+  2. **Reports** (`report_model.dart` `buildReport`) — `total`, `breakdown`, `top5`,
+     `dailyAverage`, `topCategory`, `weekly` buckets, and `txnCount` are all computed from an
+     ignored-filtered subset; `ReportData.expenses` (the raw list CSV export and the PDF's
+     transaction rows depend on) stays untouched. `report_providers.dart`'s `previousTotal`
+     (the "vs previous period" comparison) also excludes ignored categories, so it isn't
+     comparing a filtered number against an unfiltered one.
+  3. **Native widget + Quick Add budget alert** (`expense_repository.dart` raw SQL) —
+     `totalInRange`/`monthTotal`/`todayTotal` gained an optional `excludeCategoryIds` param.
+     `widget_refresh.dart` (the Home Screen/Lock Screen widget's "today total") and
+     `quick_add_screen.dart`'s **overall** budget-alert check both pass ignored ids through;
+     the **per-category** alert check is untouched — an ignored category's own threshold
+     still fires normally. Caught and fixed a real edge case here: if the just-saved
+     expense's own category is the ignored one, the overall total doesn't move at all, so
+     the before/after delta used for threshold-crossing must not subtract it either
+     (`quick_add_screen.dart`'s `_checkBudgetAlerts`).
+- [x] **Budget Setup screen's per-category nuance** → `spentByCat` used to read
+  `report.breakdown`, which is now filtered — so an ignored category would've lost its own
+  displayed spend. Fixed by decoupling it onto a new `categorySpendForMonthProvider`
+  (`budget_repository.dart`, wraps the pre-existing unfiltered
+  `ExpenseRepository.totalsByCategory`), so a category's own card always shows its real
+  spend regardless of the ignore flag. The overall-total card still reads the (now
+  correctly filtered) `report.total`.
+- [x] **UI** → a `Switch` + "Ignore in totals" label added to each per-category
+  `_BudgetCard` (not the overall card) in `budget_setup_screen.dart`, mirroring the app's one
+  existing `Switch` usage (`backup_restore_screen.dart`'s auto-backup toggle). No
+  confirmation dialog — instantly reversible, live.
+- [x] **Backup gap found and fixed during doc-sync review** — `BackupCategory`
+  (`backup_models.dart`) is an explicit field-list DTO and didn't originally include the new
+  column, so export/restore/merge would have silently dropped the ignore flag on every
+  backup. Added `isIgnoredForBudget` to the DTO (`fromRow`/`fromJson`/`toJson`/
+  `toInsertCompanion`/`toReplaceCompanion`), additive JSON key — **no backup version bump**,
+  pre-Sprint-12 files simply lack the key and decode it as `false`, same pattern as v2's
+  photo field and v3's `tagId`. Documented in `docs/backup-schema.md`. Merge behavior matches
+  `isArchived`/`isDefault` today: a matched (pre-existing) category's flag is left alone; only
+  a brand-new category inserted by Merge carries its backed-up value.
+- [x] **Docs synced** → `requirement_docs/spendly-requirements.md` bumped to **v2.1** (new
+  FR-77), `requirement_docs/spendly-prototype.html`'s Budget Setup mockup gained an example
+  ignored card, `README.md` and this file updated for schema v6 / test count.
+
+### Verification done
+- `flutter analyze` → No issues.
+- `flutter test` → **162 passed** (+ `setIgnoredForBudget` round-trip in
+  `category_repository_test.dart`, an ignored-category aggregate-exclusion case in
+  `report_model_test.dart`, an `excludeCategoryIds` case in `expense_repository_test.dart`,
+  and a missing-key-defaults-to-false case in `backup_format_test.dart`).
+
+### Deferred / notes — real manual verification NOT yet done, needs the user
+- **Build-level verification only**, same caveat as every prior sprint. Nobody has yet, on a
+  real device: toggled a category (e.g. EMI/Loan) to ignored in Budget Setup and confirmed
+  Home's hero total/donut, Reports' total/breakdown/top-5/trend/txn-count, and the native
+  widget's today-total all drop it live; confirmed the ignored category's own budget card
+  still shows its real spend; confirmed it still appears in All Transactions and in an
+  exported CSV/PDF; exported a backup with an ignored category set, restored it, and
+  confirmed the flag survived.
+- `weekly`/`txnCount` in `ReportData` and the Home dashboard's 6-month trend bars
+  (`trendProvider`/`_lastSixMonthsProvider`) were explicitly asked about mid-build: weekly/
+  txnCount now excludes ignored categories (user chose consistency over minimal scope); the
+  Home 6-month trend bars were left unfiltered (out of the requirement's named scope —
+  daily/budget/top-categories/top-expenses — and the user didn't ask to extend it there).
+  Revisit if that inconsistency ever bothers a real usage session.
 
 ## How to run
 

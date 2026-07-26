@@ -78,6 +78,24 @@ void main() {
     expect(totals[2], Money.fromMinor(20000));
   });
 
+  test('monthTotal/totalInRange excludeCategoryIds drops those categories', () async {
+    await repo.add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 5),
+    );
+    await repo.add(
+      amount: Money.parse('50'),
+      categoryId: 2,
+      date: DateTime(2026, 3, 6),
+    );
+    final total = await repo.monthTotal(
+      DateTime(2026, 3, 1),
+      excludeCategoryIds: {1},
+    );
+    expect(total, Money.fromMinor(5000)); // only category 2's ₹50
+  });
+
   test('watchInRange excludes out-of-range', () async {
     await repo.add(
       amount: Money.parse('10'),

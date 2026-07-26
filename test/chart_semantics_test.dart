@@ -13,6 +13,7 @@ CategoryRow _cat(int id, String name) => CategoryRow(
   sortOrder: 0,
   isArchived: false,
   isDefault: false,
+  isIgnoredForBudget: false,
 );
 
 void main() {

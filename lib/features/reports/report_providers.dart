@@ -20,7 +20,11 @@ final reportProvider = StreamProvider.family<ReportData, DateRange>((
   final categoriesById = ref.watch(categoriesByIdProvider);
   final (pStart, pEnd) = previousPeriod(start, end);
   return repo.watchInRange(start, end).asyncMap((expenses) async {
-    final previousTotal = await repo.totalInRange(pStart, pEnd);
+    final previousTotal = await repo.totalInRange(
+      pStart,
+      pEnd,
+      excludeCategoryIds: ignoredCategoryIds(categoriesById),
+    );
     return buildReport(
       start: start,
       end: end,

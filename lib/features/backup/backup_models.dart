@@ -17,6 +17,7 @@ class BackupCategory {
     required this.sortOrder,
     required this.isArchived,
     required this.isDefault,
+    required this.isIgnoredForBudget,
   });
 
   final int id;
@@ -26,6 +27,7 @@ class BackupCategory {
   final int sortOrder;
   final bool isArchived;
   final bool isDefault;
+  final bool isIgnoredForBudget;
 
   factory BackupCategory.fromRow(CategoryRow row) => BackupCategory(
     id: row.id,
@@ -35,6 +37,7 @@ class BackupCategory {
     sortOrder: row.sortOrder,
     isArchived: row.isArchived,
     isDefault: row.isDefault,
+    isIgnoredForBudget: row.isIgnoredForBudget,
   );
 
   factory BackupCategory.fromJson(Map<String, dynamic> j) => BackupCategory(
@@ -45,6 +48,8 @@ class BackupCategory {
     sortOrder: j['sortOrder'] as int,
     isArchived: j['isArchived'] as bool,
     isDefault: j['isDefault'] as bool,
+    // Additive — pre-Sprint-12 backups lack this key entirely.
+    isIgnoredForBudget: j['isIgnoredForBudget'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
@@ -55,6 +60,7 @@ class BackupCategory {
     'sortOrder': sortOrder,
     'isArchived': isArchived,
     'isDefault': isDefault,
+    'isIgnoredForBudget': isIgnoredForBudget,
   };
 
   /// Merge: new row, id auto-assigned; caller picks the append-order slot.
@@ -66,6 +72,7 @@ class BackupCategory {
         sortOrder: Value(sortOrder),
         isArchived: Value(isArchived),
         isDefault: Value(isDefault),
+        isIgnoredForBudget: Value(isIgnoredForBudget),
       );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -77,6 +84,7 @@ class BackupCategory {
     sortOrder: Value(sortOrder),
     isArchived: Value(isArchived),
     isDefault: Value(isDefault),
+    isIgnoredForBudget: Value(isIgnoredForBudget),
   );
 }
 

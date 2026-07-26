@@ -673,10 +673,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final notifier = ref.read(notificationServiceProvider);
     final monthKey = monthKeyFor(_selectedDate);
 
-    // Per-category budget.
-    final catBudget = ref.read(
+    final perCategoryBudgets = ref.read(
       perCategoryBudgetsForMonthProvider(monthKey),
-    )[categoryId];
+    );
+    final ignored = ignoredCategoryIds(ref.read(categoriesByIdProvider));
+
+    // Per-category budget.
+    final catBudget = perCategoryBudgets[categoryId];
     if (catBudget != null) {
       final after = byCategory[categoryId] ?? Money.zero;
       final name =
@@ -686,11 +689,25 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       }
     }
 
-    // Overall budget.
-    final overall = ref.read(overallBudgetForMonthProvider(monthKey)).value;
+    // Overall budget — ignored-for-budget categories don't count toward it,
+    // and their own budget allocation is netted out of the target too.
+    final overall = effectiveOverallBudget(
+      ref.read(overallBudgetForMonthProvider(monthKey)).value,
+      perCategoryBudgets,
+      ignored,
+    );
     if (overall != null) {
-      final after = byCategory.values.fold(Money.zero, (a, m) => a + m);
-      for (final pct in crossedThresholds(after - delta, after, overall)) {
+      final after = byCategory.entries
+          .where((e) => !ignored.contains(e.key))
+          .fold(Money.zero, (a, e) => a + e.value);
+      // If this write's own category is ignored, it never entered `after`,
+      // so the overall total didn't move — no threshold crossing to check.
+      final effectiveDelta = ignored.contains(categoryId) ? Money.zero : delta;
+      for (final pct in crossedThresholds(
+        after - effectiveDelta,
+        after,
+        overall,
+      )) {
         await notifier.showBudgetAlert('Overall', pct);
       }
     }

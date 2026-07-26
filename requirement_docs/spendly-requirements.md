@@ -1,6 +1,6 @@
 # Spendly — Product Requirements Document
 
-**Version:** 2.0 · **Date:** July 25, 2026
+**Version:** 2.1 · **Date:** July 26, 2026
 **Product:** Cross-platform personal expense tracker (iOS + Android)
 **Status:** Built — this document now reflects the implemented app, not just intent.
 
@@ -143,6 +143,7 @@ Single-user app. No login, no account. All data local by default.
 | FR-74 | Budgets are **per calendar month**; Budget Setup navigates month-by-month |
 | FR-75 | An empty budget month can **carry forward** the previous month's budget setup in one tap |
 | FR-76 | Budget Setup warns when the sum of per-category budgets exceeds the overall budget |
+| FR-77 | User can mark a category as "ignored for budget" (for fixed costs like rent/EMI); ignored categories are excluded from daily totals, budget calculations, top categories, and top expenses, but still appear in All Transactions and exports. Toggle is per-category, reversible any time, and applies live to existing and future expenses |
 
 ### 5.9 Widgets
 | ID | Requirement |
@@ -243,7 +244,7 @@ Categories
 
 Budget Setup (per month, month nav)
 ├── Overall budget
-├── Per-category budgets (usage bars, overrun warning)
+├── Per-category budgets (usage bars, overrun warning, "Ignore in totals" toggle)
 └── Carry forward from previous month
 
 Trips
@@ -285,7 +286,7 @@ Widgets (iOS WidgetKit / Android Glance)
 7. **Category Edit — Icon Picker popup** — preview strip + full emoji grid
 8. **Category Edit — Color Picker popup** — 18 swatches + custom hex tile
 9. **Archived Categories** — unarchive / delete
-10. **Budget Setup** — per-month, overall + per-category usage bars, carry-forward, overrun warning
+10. **Budget Setup** — per-month, overall + per-category usage bars, carry-forward, overrun warning, per-category "ignore for budget" toggle for fixed costs (rent/EMI)
 11. **Trips list** — per-trip count + total
 12. **Trip detail report** — hero, trend, donut, transactions, export
 13. **Trip Manager / edit** — create/rename/recolor/archive/delete

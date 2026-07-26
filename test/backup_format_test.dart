@@ -16,6 +16,7 @@ BackupPayload _samplePayload() => BackupPayload(
       sortOrder: 0,
       isArchived: false,
       isDefault: true,
+      isIgnoredForBudget: false,
     ),
   ],
   expenses: [
@@ -129,6 +130,23 @@ void main() {
       );
       expect(decoded.categories.single.name, 'Food');
       expect(decoded.expenses.single.amountMinor, 24500);
+    },
+  );
+
+  test(
+    'a category with no "isIgnoredForBudget" key (pre-Sprint-12) defaults to false',
+    () async {
+      final catJson = _samplePayload().categories.single.toJson()
+        ..remove('isIgnoredForBudget');
+      final v1Json = jsonEncode({
+        'spendlyBackup': true,
+        'version': 1,
+        'encrypted': false,
+        'data': _samplePayload().toJson()..['categories'] = [catJson],
+      });
+
+      final decoded = await decodePayload(v1Json);
+      expect(decoded.categories.single.isIgnoredForBudget, isFalse);
     },
   );
 

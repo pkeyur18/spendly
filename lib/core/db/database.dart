@@ -28,6 +28,11 @@ class Categories extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
+
+  /// Excluded from daily/budget totals, top categories, and top expenses —
+  /// for fixed costs like rent/EMI. Still shown in transaction lists/exports.
+  BoolColumn get isIgnoredForBudget =>
+      boolean().withDefault(const Constant(false))();
 }
 
 @DataClassName('ExpenseRow')
@@ -98,7 +103,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -139,6 +144,9 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'CREATE INDEX IF NOT EXISTS idx_expenses_tag ON expenses(tag_id)',
         );
+      }
+      if (from < 6) {
+        await m.addColumn(categories, categories.isIgnoredForBudget);
       }
     },
   );

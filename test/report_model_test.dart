@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/money/money.dart';
+import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 import 'package:spendly/features/reports/report_model.dart';
 
@@ -117,6 +118,34 @@ void main() {
     expect(r.topCategory, isNull);
     expect(r.changePct, -100.0); // spent nothing vs ₹500 before
   });
+
+  test(
+    'ignored-for-budget category is excluded from every aggregate but stays '
+    'in the raw expenses list',
+    () async {
+      await repo.add(
+        amount: Money.parse('600'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 2),
+      );
+      await repo.add(
+        amount: Money.parse('400'),
+        categoryId: 2,
+        date: DateTime(2026, 3, 5),
+      );
+      await CategoryRepository(db).setIgnoredForBudget(1, true);
+
+      final r = await build(previousTotal: Money.zero);
+      expect(r.total, Money.fromMinor(40000)); // only category 2's ₹400
+      expect(r.txnCount, 1);
+      expect(r.breakdown.map((s) => s.$1.id), [2]);
+      expect(r.topCategory!.$1.id, 2);
+      expect(r.top5.map((e) => e.categoryId), [2]);
+      expect(r.weekly.fold<int>(0, (a, w) => a + w.$2.minor), 40000);
+      // Raw list stays complete (CSV export/"view all" must show everything).
+      expect(r.expenses.length, 2);
+    },
+  );
 
   test('weekly buckets split the range into 7-day windows', () async {
     await repo.add(

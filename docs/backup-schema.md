@@ -58,7 +58,8 @@ unencrypted case.
       "colorValue": 1667510321,
       "sortOrder": 0,
       "isArchived": false,
-      "isDefault": true
+      "isDefault": true,
+      "isIgnoredForBudget": false
     }
   ],
   "expenses": [
@@ -156,6 +157,20 @@ purely an additional grouping. v3 adds:
 - **Merge** matches tags by normalized name, exactly like categories (see
   below), and remaps each expense's `tagId` through that map the same way
   `categoryId` is remapped.
+
+## Additive field — `isIgnoredForBudget` (Sprint 12, still v3)
+
+Sprint 12 added a per-category "ignore for budget" flag (`categories.isIgnoredForBudget`,
+Drift schema v6). It's carried in the payload as a plain new key on each `categories` entry
+— no version bump needed, same additive pattern as v2's photo field and v3's `tagId`:
+pre-Sprint-12 backups simply lack the key, and `BackupCategory.fromJson` reads a missing
+key as `false`.
+
+- **Replace** restores it verbatim, same as `isArchived`/`isDefault`.
+- **Merge** — matched (pre-existing) categories are left untouched (same as
+  `isArchived`/`isDefault` today — merge never overwrites an existing category's flags from
+  the backup); only a brand-new category inserted by Merge carries over its backed-up
+  `isIgnoredForBudget` value.
 
 ## Merge algorithm (no UUID column — natural-key matching)
 

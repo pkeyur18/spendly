@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import '../../core/money/money.dart';
+import '../expenses/expense_repository.dart';
 
 /// Budget CRUD (FR-23, FR-24), scoped per month via [monthKeyFor]. Overall
 /// monthly budget = the row with a null categoryId; per-category budgets have
@@ -110,6 +111,34 @@ Money? categoryBudgetOverrun(Money categoryTotal, Money? overall) {
   return categoryTotal - overall;
 }
 
+Money _ignoredBudgetSum(Map<int, Money> perCategoryBudgets, Set<int> ignoredIds) =>
+    perCategoryBudgets.entries
+        .where((e) => ignoredIds.contains(e.key))
+        .fold(Money.zero, (a, e) => a + e.value);
+
+/// Overall budget with each ignored-for-budget category's own per-category
+/// budget netted out, so the bar/percentage stays meaningful once that
+/// category's spend is excluded from the numerator elsewhere. Null stays
+/// null. Never negative (clamped at zero if ignored budgets exceed overall).
+Money? effectiveOverallBudget(
+  Money? overall,
+  Map<int, Money> perCategoryBudgets,
+  Set<int> ignoredIds,
+) {
+  if (overall == null) return null;
+  final minor =
+      overall.minor - _ignoredBudgetSum(perCategoryBudgets, ignoredIds).minor;
+  return Money.fromMinor(minor < 0 ? 0 : minor);
+}
+
+/// Sum of per-category budgets, excluding categories ignored for budget.
+Money effectiveCategoryBudgetTotal(
+  Map<int, Money> perCategoryBudgets,
+  Set<int> ignoredIds,
+) => perCategoryBudgets.entries
+    .where((e) => !ignoredIds.contains(e.key))
+    .fold(Money.zero, (a, e) => a + e.value);
+
 final budgetRepositoryProvider = Provider<BudgetRepository>(
   (ref) => BudgetRepository(ref.watch(databaseProvider)),
 );
@@ -136,6 +165,16 @@ final perCategoryBudgetsForMonthProvider = Provider.family<Map<int, Money>, Stri
     };
   },
 );
+
+/// Real per-category spend for [monthKey], raw/unfiltered — including
+/// categories flagged "ignore for budget", so budget_setup_screen can still
+/// show an ignored category's own actual spend even though it's excluded
+/// from every aggregate (report total/breakdown/top categories/etc).
+final categorySpendForMonthProvider =
+    FutureProvider.family<Map<int, Money>, String>((ref, monthKey) {
+      final (start, end) = monthBounds(_monthFromKey(monthKey));
+      return ref.watch(expenseRepositoryProvider).totalsByCategory(start, end);
+    });
 
 /// Convenience wrappers for call sites that only ever care about *now*
 /// (Quick Add threshold checks, the home dashboard, category screens) — the

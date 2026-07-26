@@ -59,4 +59,48 @@ void main() {
       expect(categoryBudgetOverrun(m('120'), m('100')), m('20'));
     });
   });
+
+  group('effectiveOverallBudget', () {
+    test('null overall stays null', () {
+      expect(effectiveOverallBudget(null, {1: m('30')}, {1}), isNull);
+    });
+
+    test('ignored category with a budget nets it out of overall', () {
+      expect(
+        effectiveOverallBudget(m('100'), {1: m('30')}, {1}),
+        m('70'),
+      );
+    });
+
+    test('ignored category with no budget of its own changes nothing', () {
+      expect(effectiveOverallBudget(m('100'), {2: m('30')}, {1}), m('100'));
+    });
+
+    test('clamps at zero when ignored budgets exceed overall', () {
+      expect(effectiveOverallBudget(m('20'), {1: m('30')}, {1}), Money.zero);
+    });
+
+    test('only ignored categories are subtracted, not all budgets', () {
+      expect(
+        effectiveOverallBudget(m('100'), {1: m('30'), 2: m('10')}, {1}),
+        m('70'),
+      );
+    });
+  });
+
+  group('effectiveCategoryBudgetTotal', () {
+    test('excludes ignored categories from the sum', () {
+      expect(
+        effectiveCategoryBudgetTotal({1: m('30'), 2: m('10')}, {1}),
+        m('10'),
+      );
+    });
+
+    test('no ignored categories → sum unchanged', () {
+      expect(
+        effectiveCategoryBudgetTotal({1: m('30'), 2: m('10')}, {}),
+        m('40'),
+      );
+    });
+  });
 }

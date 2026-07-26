@@ -1418,9 +1418,13 @@
               <div class="budget-mini"><span>68% used</span><span>On track</span></div>
             </div>
             <div class="budget-card">
-              <div class="bhead"><b>🧾 Bills</b><span>₹3,900 / ₹5,000</span></div>
-              <div class="slider-track"><div class="slider-fill" style="width:78%"></div><div class="handle" style="left:78%"></div></div>
-              <div class="budget-mini"><span>78% used</span><span>On track</span></div>
+              <div class="bhead"><b>🏦 EMI / Loan</b><span>₹12,000 / ₹12,000</span></div>
+              <div class="toggle-row" style="margin:0 0 10px">
+                <div><span>Ignore in totals</span><small>Excluded from daily totals, budget math, top categories &amp; top expenses</small></div>
+                <div class="switch" onclick="toggleSwitch(this)"></div>
+              </div>
+              <div class="slider-track"><div class="slider-fill" style="width:100%"></div><div class="handle" style="left:100%"></div></div>
+              <div class="budget-mini"><span>100% used</span><span>Fixed cost — ignored</span></div>
             </div>
             <div class="add-cat-btn" onclick="alert('Set budget for another category')">+ Set budget for a category</div>
             <div class="carry-card" style="margin-top:14px">
@@ -1737,6 +1741,8 @@
     <b>Screens (match §8 of the requirements doc):</b> 0) Welcome/Onboarding · 1) Home/Dashboard · 2) Quick Add · 3) All Transactions · 4) Monthly Report · 5) Custom Range Report · 6) Category Manager · 7) Category Edit — Icon Picker · 8) Category Edit — Color Picker · 9) Archived Categories · 10) Budget Setup (per month) · 11) Trips list · 12) Trip detail report · 13) Trip Manager/edit · 14) Home Screen Widgets · 15) Lock Screen Widget · 16) Backup Settings · 17) Restore Flow · 18) Profile · 19) Edit Profile · 20) Avatar Picker.
     <br><br>
     <b>New in v2.0:</b> a full <b>Trips</b> tab (group expenses into a holiday/wedding/project, with its own per-trip report + export); an <b>All Transactions</b> browser with day grouping and a multi-select category filter; <b>per-month budgets</b> with month navigation, an over-allocation warning, and a "carry forward" shortcut; the <b>preview-strip + popup</b> category icon &amp; color pickers (18-swatch palette + custom hex, with a "used by another category" marker); and an <b>Archived Categories</b> screen. Also: 18 default categories, date/note/trip chips on Quick Add.
+    <br><br>
+    <b>New in v2.1:</b> per-category <b>"Ignore in totals"</b> toggle on Budget Setup (screen 10) for fixed costs like rent/EMI — excludes that category from daily totals, budget calculations, top categories, and top expenses, while it keeps its own budget entry and still shows up in All Transactions and exports.
     <br><br>
     <b>Palette:</b> Indigo → Pink gradient (#6366F1 → #EC4899), full light/dark support. Companion docs: <b>spendly-requirements.md</b>, <b>../docs/backup-schema.md</b>, <b>../PROGRESS.md</b>.
   </div>

@@ -174,7 +174,11 @@ class _HeroCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final total = ref.watch(monthTotalProvider);
-    final budget = ref.watch(overallBudgetProvider).value;
+    final budget = effectiveOverallBudget(
+      ref.watch(overallBudgetProvider).value,
+      ref.watch(perCategoryBudgetsProvider),
+      ignoredCategoryIds(ref.watch(categoriesByIdProvider)),
+    );
 
     final hasBudget = budget != null && budget.minor > 0;
     final ratio = hasBudget ? total.ratioOf(budget).clamp(0.0, 1.0) : 0.0;

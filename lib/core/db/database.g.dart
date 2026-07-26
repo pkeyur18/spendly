@@ -97,6 +97,20 @@ class $CategoriesTable extends Categories
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _isIgnoredForBudgetMeta =
+      const VerificationMeta('isIgnoredForBudget');
+  @override
+  late final GeneratedColumn<bool> isIgnoredForBudget = GeneratedColumn<bool>(
+    'is_ignored_for_budget',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_ignored_for_budget" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -106,6 +120,7 @@ class $CategoriesTable extends Categories
     sortOrder,
     isArchived,
     isDefault,
+    isIgnoredForBudget,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -164,6 +179,15 @@ class $CategoriesTable extends Categories
         isDefault.isAcceptableOrUnknown(data['is_default']!, _isDefaultMeta),
       );
     }
+    if (data.containsKey('is_ignored_for_budget')) {
+      context.handle(
+        _isIgnoredForBudgetMeta,
+        isIgnoredForBudget.isAcceptableOrUnknown(
+          data['is_ignored_for_budget']!,
+          _isIgnoredForBudgetMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -201,6 +225,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.bool,
         data['${effectivePrefix}is_default'],
       )!,
+      isIgnoredForBudget: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_ignored_for_budget'],
+      )!,
     );
   }
 
@@ -218,6 +246,10 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
   final int sortOrder;
   final bool isArchived;
   final bool isDefault;
+
+  /// Excluded from daily/budget totals, top categories, and top expenses —
+  /// for fixed costs like rent/EMI. Still shown in transaction lists/exports.
+  final bool isIgnoredForBudget;
   const CategoryRow({
     required this.id,
     required this.name,
@@ -226,6 +258,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     required this.sortOrder,
     required this.isArchived,
     required this.isDefault,
+    required this.isIgnoredForBudget,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -237,6 +270,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     map['sort_order'] = Variable<int>(sortOrder);
     map['is_archived'] = Variable<bool>(isArchived);
     map['is_default'] = Variable<bool>(isDefault);
+    map['is_ignored_for_budget'] = Variable<bool>(isIgnoredForBudget);
     return map;
   }
 
@@ -249,6 +283,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       sortOrder: Value(sortOrder),
       isArchived: Value(isArchived),
       isDefault: Value(isDefault),
+      isIgnoredForBudget: Value(isIgnoredForBudget),
     );
   }
 
@@ -265,6 +300,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
+      isIgnoredForBudget: serializer.fromJson<bool>(json['isIgnoredForBudget']),
     );
   }
   @override
@@ -278,6 +314,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       'sortOrder': serializer.toJson<int>(sortOrder),
       'isArchived': serializer.toJson<bool>(isArchived),
       'isDefault': serializer.toJson<bool>(isDefault),
+      'isIgnoredForBudget': serializer.toJson<bool>(isIgnoredForBudget),
     };
   }
 
@@ -289,6 +326,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     int? sortOrder,
     bool? isArchived,
     bool? isDefault,
+    bool? isIgnoredForBudget,
   }) => CategoryRow(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -297,6 +335,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     sortOrder: sortOrder ?? this.sortOrder,
     isArchived: isArchived ?? this.isArchived,
     isDefault: isDefault ?? this.isDefault,
+    isIgnoredForBudget: isIgnoredForBudget ?? this.isIgnoredForBudget,
   );
   CategoryRow copyWithCompanion(CategoriesCompanion data) {
     return CategoryRow(
@@ -311,6 +350,9 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           ? data.isArchived.value
           : this.isArchived,
       isDefault: data.isDefault.present ? data.isDefault.value : this.isDefault,
+      isIgnoredForBudget: data.isIgnoredForBudget.present
+          ? data.isIgnoredForBudget.value
+          : this.isIgnoredForBudget,
     );
   }
 
@@ -323,14 +365,23 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           ..write('colorValue: $colorValue, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('isArchived: $isArchived, ')
-          ..write('isDefault: $isDefault')
+          ..write('isDefault: $isDefault, ')
+          ..write('isIgnoredForBudget: $isIgnoredForBudget')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, icon, colorValue, sortOrder, isArchived, isDefault);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    icon,
+    colorValue,
+    sortOrder,
+    isArchived,
+    isDefault,
+    isIgnoredForBudget,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -341,7 +392,8 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           other.colorValue == this.colorValue &&
           other.sortOrder == this.sortOrder &&
           other.isArchived == this.isArchived &&
-          other.isDefault == this.isDefault);
+          other.isDefault == this.isDefault &&
+          other.isIgnoredForBudget == this.isIgnoredForBudget);
 }
 
 class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
@@ -352,6 +404,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
   final Value<int> sortOrder;
   final Value<bool> isArchived;
   final Value<bool> isDefault;
+  final Value<bool> isIgnoredForBudget;
   const CategoriesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -360,6 +413,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     this.sortOrder = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
+    this.isIgnoredForBudget = const Value.absent(),
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
@@ -369,6 +423,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     this.sortOrder = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
+    this.isIgnoredForBudget = const Value.absent(),
   }) : name = Value(name),
        icon = Value(icon),
        colorValue = Value(colorValue);
@@ -380,6 +435,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     Expression<int>? sortOrder,
     Expression<bool>? isArchived,
     Expression<bool>? isDefault,
+    Expression<bool>? isIgnoredForBudget,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -389,6 +445,8 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
       if (sortOrder != null) 'sort_order': sortOrder,
       if (isArchived != null) 'is_archived': isArchived,
       if (isDefault != null) 'is_default': isDefault,
+      if (isIgnoredForBudget != null)
+        'is_ignored_for_budget': isIgnoredForBudget,
     });
   }
 
@@ -400,6 +458,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     Value<int>? sortOrder,
     Value<bool>? isArchived,
     Value<bool>? isDefault,
+    Value<bool>? isIgnoredForBudget,
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
@@ -409,6 +468,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
       sortOrder: sortOrder ?? this.sortOrder,
       isArchived: isArchived ?? this.isArchived,
       isDefault: isDefault ?? this.isDefault,
+      isIgnoredForBudget: isIgnoredForBudget ?? this.isIgnoredForBudget,
     );
   }
 
@@ -436,6 +496,9 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     if (isDefault.present) {
       map['is_default'] = Variable<bool>(isDefault.value);
     }
+    if (isIgnoredForBudget.present) {
+      map['is_ignored_for_budget'] = Variable<bool>(isIgnoredForBudget.value);
+    }
     return map;
   }
 
@@ -448,7 +511,8 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
           ..write('colorValue: $colorValue, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('isArchived: $isArchived, ')
-          ..write('isDefault: $isDefault')
+          ..write('isDefault: $isDefault, ')
+          ..write('isIgnoredForBudget: $isIgnoredForBudget')
           ..write(')'))
         .toString();
   }
@@ -2122,6 +2186,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       Value<int> sortOrder,
       Value<bool> isArchived,
       Value<bool> isDefault,
+      Value<bool> isIgnoredForBudget,
     });
 typedef $$CategoriesTableUpdateCompanionBuilder =
     CategoriesCompanion Function({
@@ -2132,6 +2197,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<int> sortOrder,
       Value<bool> isArchived,
       Value<bool> isDefault,
+      Value<bool> isIgnoredForBudget,
     });
 
 final class $$CategoriesTableReferences
@@ -2217,6 +2283,11 @@ class $$CategoriesTableFilterComposer
 
   ColumnFilters<bool> get isDefault => $composableBuilder(
     column: $table.isDefault,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isIgnoredForBudget => $composableBuilder(
+    column: $table.isIgnoredForBudget,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2314,6 +2385,11 @@ class $$CategoriesTableOrderingComposer
     column: $table.isDefault,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get isIgnoredForBudget => $composableBuilder(
+    column: $table.isIgnoredForBudget,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CategoriesTableAnnotationComposer
@@ -2349,6 +2425,11 @@ class $$CategoriesTableAnnotationComposer
 
   GeneratedColumn<bool> get isDefault =>
       $composableBuilder(column: $table.isDefault, builder: (column) => column);
+
+  GeneratedColumn<bool> get isIgnoredForBudget => $composableBuilder(
+    column: $table.isIgnoredForBudget,
+    builder: (column) => column,
+  );
 
   Expression<T> expensesRefs<T extends Object>(
     Expression<T> Function($$ExpensesTableAnnotationComposer a) f,
@@ -2436,6 +2517,7 @@ class $$CategoriesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
+                Value<bool> isIgnoredForBudget = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
                 name: name,
@@ -2444,6 +2526,7 @@ class $$CategoriesTableTableManager
                 sortOrder: sortOrder,
                 isArchived: isArchived,
                 isDefault: isDefault,
+                isIgnoredForBudget: isIgnoredForBudget,
               ),
           createCompanionCallback:
               ({
@@ -2454,6 +2537,7 @@ class $$CategoriesTableTableManager
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
+                Value<bool> isIgnoredForBudget = const Value.absent(),
               }) => CategoriesCompanion.insert(
                 id: id,
                 name: name,
@@ -2462,6 +2546,7 @@ class $$CategoriesTableTableManager
                 sortOrder: sortOrder,
                 isArchived: isArchived,
                 isDefault: isDefault,
+                isIgnoredForBudget: isIgnoredForBudget,
               ),
           withReferenceMapper: (p0) => p0
               .map(

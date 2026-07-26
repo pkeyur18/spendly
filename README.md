@@ -8,10 +8,10 @@ own a full versioned backup so your data is never truly lost.
 Single codebase (Flutter), no account, no server. Money is stored as integer minor units
 (paise) — never float. Currency is INR (₹) with device-locale formatting.
 
-> **Status:** built through the ad-hoc Sprint 11 (Trips, All-Transactions, per-month
-> budgets, picker UX). Drift schema v5, backup format v3, 110+ passing tests. Beta &
-> hardening (Sprint 8) and store submission (Sprint 9) are not started. See
-> [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and locked decisions.
+> **Status:** built through the ad-hoc Sprint 12 (ignore-category-for-budget toggle).
+> Drift schema v6, backup format v3, 162 passing tests. Beta & hardening (Sprint 8) and
+> store submission (Sprint 9) are not started. See [PROGRESS.md](PROGRESS.md) for the
+> full sprint-by-sprint log and locked decisions.
 
 ---
 
@@ -28,7 +28,10 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   (~50 emoji) and color picker (18-swatch palette + custom hex) via a preview-strip + popup;
   archive (never lose referenced expenses) with a dedicated Archived Categories screen.
 - **Budgets** — per-month overall and per-category budgets, carry-forward from the previous
-  month, over-allocation warning, and 80%/100% threshold notifications.
+  month, over-allocation warning, 80%/100% threshold notifications, and a per-category
+  "ignore in totals" toggle for fixed costs (rent, EMI) — excluded from daily totals, budget
+  math, top categories, and top expenses, while still tracked on its own budget card and
+  still visible in All Transactions and exports.
 - **Trips (Tags)** — group any expenses into a trip (holiday, wedding, project) independent
   of category, with a per-trip report and CSV/PDF export.
 - **Reports** — auto-generated end-of-month report (scheduled local notification), on-demand
@@ -56,7 +59,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v5 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v6 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |
@@ -113,7 +116,7 @@ test/                               # 29 test files (money, repos, backup, repor
 flutter pub get
 dart run build_runner build      # regenerate Drift code after any schema change
 flutter run                      # pick an iOS simulator or Android emulator
-flutter analyze && flutter test  # 110+ tests
+flutter analyze && flutter test  # 162 tests
 ```
 
 The DB (`spendly.sqlite`) is created on first launch in the app documents directory and

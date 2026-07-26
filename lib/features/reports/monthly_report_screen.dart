@@ -30,9 +30,11 @@ class MonthlyReportScreen extends ConsumerWidget {
     final title = '${DateFormat('MMMM').format(month)} Report';
     final async = ref.watch(reportProvider((start, end)));
     final byId = ref.watch(categoriesByIdProvider);
-    final overall = ref
-        .watch(overallBudgetForMonthProvider(monthKeyFor(month)))
-        .value;
+    final overall = effectiveOverallBudget(
+      ref.watch(overallBudgetForMonthProvider(monthKeyFor(month))).value,
+      ref.watch(perCategoryBudgetsForMonthProvider(monthKeyFor(month))),
+      ignoredCategoryIds(byId),
+    );
     final profile = ref.watch(profileProvider).value;
 
     return Scaffold(

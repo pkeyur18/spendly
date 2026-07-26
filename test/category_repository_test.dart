@@ -79,6 +79,16 @@ void main() {
     },
   );
 
+  test('setIgnoredForBudget toggles and round-trips', () async {
+    await repo.setIgnoredForBudget(1, true);
+    var all = await repo.watchAll().first;
+    expect(all.firstWhere((c) => c.id == 1).isIgnoredForBudget, isTrue);
+
+    await repo.setIgnoredForBudget(1, false);
+    all = await repo.watchAll().first;
+    expect(all.firstWhere((c) => c.id == 1).isIgnoredForBudget, isFalse);
+  });
+
   test('reorder rewrites sortOrder', () async {
     // Reverse the first three ids.
     await repo.reorder([3, 2, 1]);
