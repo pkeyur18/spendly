@@ -205,6 +205,27 @@ class ExpenseRepository {
     };
   }
 
+  /// Live spend per category in [start, end) — same grouping as
+  /// [totalsByCategory] but via `.watch()` so budget_setup_screen's
+  /// per-category "spent" figure updates on every add/delete, not just on
+  /// first load.
+  Stream<Map<int, Money>> watchTotalsByCategory(DateTime start, DateTime end) {
+    final sum = _db.expenses.amountMinor.sum();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.categoryId, sum])
+      ..where(
+        _db.expenses.date.isBiggerOrEqualValue(start) &
+            _db.expenses.date.isSmallerThanValue(end),
+      )
+      ..groupBy([_db.expenses.categoryId]);
+    return query.watch().map(
+      (rows) => {
+        for (final r in rows)
+          r.read(_db.expenses.categoryId)!: Money.fromMinor(r.read(sum) ?? 0),
+      },
+    );
+  }
+
   /// Expenses tagged with [tagId] (e.g. all spend on one trip), newest first.
   Stream<List<ExpenseRow>> watchByTag(int tagId) {
     return (_db.select(_db.expenses)

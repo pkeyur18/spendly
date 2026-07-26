@@ -171,9 +171,11 @@ final perCategoryBudgetsForMonthProvider = Provider.family<Map<int, Money>, Stri
 /// show an ignored category's own actual spend even though it's excluded
 /// from every aggregate (report total/breakdown/top categories/etc).
 final categorySpendForMonthProvider =
-    FutureProvider.family<Map<int, Money>, String>((ref, monthKey) {
+    StreamProvider.family<Map<int, Money>, String>((ref, monthKey) {
       final (start, end) = monthBounds(_monthFromKey(monthKey));
-      return ref.watch(expenseRepositoryProvider).totalsByCategory(start, end);
+      return ref
+          .watch(expenseRepositoryProvider)
+          .watchTotalsByCategory(start, end);
     });
 
 /// Convenience wrappers for call sites that only ever care about *now*

@@ -78,6 +78,22 @@ void main() {
     expect(totals[2], Money.fromMinor(20000));
   });
 
+  test('watchTotalsByCategory re-emits after a new expense is added', () async {
+    final (start, end) = monthBounds(DateTime(2026, 3, 1));
+    final stream = repo.watchTotalsByCategory(start, end);
+    final emissions = <Map<int, Money>>[];
+    final sub = stream.listen(emissions.add);
+    await pumpEventQueue();
+    await repo.add(
+      amount: Money.parse('75'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 5),
+    );
+    await pumpEventQueue();
+    await sub.cancel();
+    expect(emissions.last[1], Money.fromMinor(7500));
+  });
+
   test('monthTotal/totalInRange excludeCategoryIds drops those categories', () async {
     await repo.add(
       amount: Money.parse('100'),
