@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/db/row_extensions.dart';
+import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
@@ -260,9 +262,14 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
                 // ExpenseRow = tile) so ListView.builder can lazily build only the
                 // visible rows instead of every tile up front.
                 final items = <Object>[];
+                final dayTotals = <DateTime, Money>{};
                 for (final entry in groupExpensesByDay(expenses).entries) {
                   items.add(entry.key);
                   items.addAll(entry.value);
+                  dayTotals[entry.key] = entry.value.fold(
+                    Money.zero,
+                    (sum, e) => sum + e.amount,
+                  );
                 }
                 return ListView.builder(
                   controller: _scrollController,
@@ -270,7 +277,9 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final item = items[i];
-                    if (item is DateTime) return DayGroupHeader(item);
+                    if (item is DateTime) {
+                      return DayGroupHeader(item, total: dayTotals[item]!);
+                    }
                     final e = item as ExpenseRow;
                     return ExpenseTile(
                       expense: e,

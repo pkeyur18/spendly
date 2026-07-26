@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/db/database.dart';
 import '../../../core/db/row_extensions.dart';
+import '../../../core/money/money.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
@@ -23,11 +24,13 @@ String relativeDayLabel(DateTime d) {
 }
 
 /// Day-group header ("Today"/"Yesterday"/calendar date) above a bucket of
-/// [ExpenseTile]s. Shared by [AllTransactionsScreen] and the custom report.
+/// [ExpenseTile]s, with that day's total in a tinted pill on the right.
+/// Shared by [AllTransactionsScreen] and the custom report.
 class DayGroupHeader extends StatelessWidget {
-  const DayGroupHeader(this.day, {super.key});
+  const DayGroupHeader(this.day, {required this.total, super.key});
 
   final DateTime day;
+  final Money total;
 
   @override
   Widget build(BuildContext context) {
@@ -39,13 +42,37 @@ class DayGroupHeader extends StatelessWidget {
         AppSpacing.xs,
         AppSpacing.sm,
       ),
-      child: Text(
-        relativeDayLabel(day),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: palette.textDim,
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            relativeDayLabel(day),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: palette.textDim,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 3,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.chip),
+            ),
+            child: Text(
+              total.format(locale: 'en_IN'),
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

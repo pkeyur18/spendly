@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
@@ -180,7 +181,13 @@ class TagDetailScreen extends ConsumerWidget {
                   for (final entry in groupExpensesByDay(
                     data.expenses,
                   ).entries) ...[
-                    DayGroupHeader(entry.key),
+                    DayGroupHeader(
+                      entry.key,
+                      total: entry.value.fold(
+                        Money.zero,
+                        (sum, e) => sum + e.amount,
+                      ),
+                    ),
                     for (final e in entry.value)
                       ExpenseTile(expense: e, category: byId[e.categoryId]),
                   ],

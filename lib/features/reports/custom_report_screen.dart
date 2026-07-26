@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/row_extensions.dart';
+import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
@@ -159,7 +161,13 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
                       const SectionTitle('Transactions'),
                       for (final entry
                           in groupExpensesByDay(data.expenses).entries) ...[
-                        DayGroupHeader(entry.key),
+                        DayGroupHeader(
+                          entry.key,
+                          total: entry.value.fold(
+                            Money.zero,
+                            (sum, e) => sum + e.amount,
+                          ),
+                        ),
                         for (final e in entry.value)
                           ExpenseTile(expense: e, category: byId[e.categoryId]),
                       ],
