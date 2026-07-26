@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/money/money.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../expenses/expense_repository.dart';
@@ -14,18 +15,27 @@ Future<void> refreshWidgets(WidgetRef ref) async {
   final expenses = ref.read(expenseRepositoryProvider);
   final now = DateTime.now();
 
-  final ignored = ignoredCategoryIds(ref.read(categoriesByIdProvider));
+  // Fresh one-shot reads, not the cached categoriesByIdProvider/
+  // perCategoryBudgetsProvider — those are Providers built from a Drift
+  // stream's cached `.value`, which lags the just-committed write by at
+  // least one microtask. A new `.watch()` subscription always re-queries.
+  final cats = await ref.read(categoryRepositoryProvider).watchAll().first;
+  final ignored = ignoredCategoryIds({for (final c in cats) c.id: c});
   final todayTotal = await expenses.todayTotal(now, ignored);
   final monthTotal = await expenses.monthTotal(now, excludeCategoryIds: ignored);
   final rawBudget = await ref
       .read(budgetRepositoryProvider)
       .watchOverallBudget(now)
       .first;
-  final budget = effectiveOverallBudget(
-    rawBudget,
-    ref.read(perCategoryBudgetsProvider),
-    ignored,
-  );
+  final budgetRows = await ref
+      .read(budgetRepositoryProvider)
+      .watchAllForMonth(now)
+      .first;
+  final perCategoryBudgets = {
+    for (final r in budgetRows)
+      if (r.categoryId != null) r.categoryId!: Money.fromMinor(r.amountMinor),
+  };
+  final budget = effectiveOverallBudget(rawBudget, perCategoryBudgets, ignored);
 
   // Trend: reuse the same pure bucketing the dashboard uses.
   final lastSix = await expenses.watchLastNMonths(6).first;
