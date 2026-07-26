@@ -6,6 +6,7 @@ import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/backup/backup_format.dart';
+import 'package:spendly/features/backup/backup_models.dart';
 import 'package:spendly/features/backup/backup_repository.dart';
 import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
@@ -288,6 +289,63 @@ void main() {
     expect(tags.length, 1); // not duplicated on the repeat merge
     expect(expenses.single.tagId, tags.single.id);
   });
+
+  test(
+    'renaming a category then merging the original backup matches by '
+    'externalId, not by name — no duplicate, rename preserved',
+    () async {
+      final catRepo = CategoryRepository(db);
+      final before = await db.select(db.categories).get();
+      final target = before.first;
+
+      final payload = await repo.exportAll(); // snapshot before the rename
+
+      await catRepo.rename(target.id, 'Renamed Category');
+      await repo.mergeAll(payload); // merge the pre-rename backup back in
+
+      final after = await db.select(db.categories).get();
+      expect(after.length, before.length); // no duplicate inserted
+      expect(after.any((c) => c.name == 'Renamed Category'), isTrue);
+      expect(after.any((c) => c.name == target.name), isFalse);
+    },
+  );
+
+  test(
+    'merging a legacy backup with no externalId field at all still falls '
+    'back to name matching, unchanged',
+    () async {
+      final before = await db.select(db.categories).get();
+      final target = before.first;
+
+      // Hand-built payload simulating a pre-this-change export: no
+      // "externalId" key on the category at all (not even null).
+      final legacyJson = {
+        'exportedAt': DateTime.now().toIso8601String(),
+        'categories': [
+          {
+            'id': target.id,
+            'name': target.name,
+            'icon': target.icon,
+            'colorValue': target.colorValue,
+            'sortOrder': target.sortOrder,
+            'isArchived': target.isArchived,
+            'isDefault': target.isDefault,
+            'isIgnoredForBudget': target.isIgnoredForBudget,
+          },
+        ],
+        'expenses': [],
+        'budgets': [],
+        'settings': [],
+        'tags': [],
+      };
+      final payload = BackupPayload.fromJson(legacyJson);
+
+      await repo.mergeAll(payload);
+
+      final after = await db.select(db.categories).get();
+      expect(after.length, before.length); // matched by name, not duplicated
+    },
+  );
 
   test(
     'importing a corrupted file leaves all existing data untouched',

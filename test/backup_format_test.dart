@@ -17,6 +17,7 @@ BackupPayload _samplePayload() => BackupPayload(
       isArchived: false,
       isDefault: true,
       isIgnoredForBudget: false,
+      externalId: null,
     ),
   ],
   expenses: [
@@ -32,6 +33,7 @@ BackupPayload _samplePayload() => BackupPayload(
       tagId: 1,
       createdAt: DateTime(2026, 7, 1, 9, 3),
       updatedAt: DateTime(2026, 7, 1, 9, 3),
+      externalId: null,
     ),
   ],
   tags: const [
@@ -40,6 +42,7 @@ BackupPayload _samplePayload() => BackupPayload(
       name: 'Japan Trip',
       colorValue: 0xFF6366F1,
       isArchived: false,
+      externalId: null,
     ),
   ],
   budgets: const [
@@ -49,6 +52,7 @@ BackupPayload _samplePayload() => BackupPayload(
       amountMinor: 5000000,
       period: BudgetPeriod.monthly,
       monthKey: '2026-07',
+      externalId: null,
     ),
   ],
   settings: const [BackupSetting(key: 'theme_mode', value: 'system')],

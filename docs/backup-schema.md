@@ -172,34 +172,39 @@ key as `false`.
   the backup); only a brand-new category inserted by Merge carries over its backed-up
   `isIgnoredForBudget` value.
 
-## Merge algorithm (no UUID column — natural-key matching)
+## Additive field — `externalId` (schema v7)
 
-A stable UUID column on `Expenses`/`Categories`/`Budgets` was considered so
-rows could be matched across reinstalls, but rejected: Sprint 5 only ever
-does share-sheet backup/restore (no account, no continuous multi-device
-sync), so the only real scenario is a one-time restore onto an empty or
-near-empty device. That doesn't need a schema migration to solve. Natural
-keys do it with zero schema change:
+Every table used by backup (`categories`, `expenses`, `tags`, `budgets`) now carries a
+nullable `externalId` (UUID v4, hand-generated — see `lib/core/db/external_id.dart`, no new
+dependency). Same additive, no-version-branch pattern as every prior field added to this
+format: `BackupCategory.fromJson` (and the sibling classes) read a missing `externalId` key
+as `null`. Every new row gets one automatically via Drift's `clientDefault` on the column —
+no repository code had to change. The v7 migration also backfills every pre-existing row with
+a freshly generated id immediately (not lazily), via `backfillExternalIds()` in
+`lib/core/db/database.dart`.
 
-- **Categories** — matched by normalized name (`trim().toLowerCase()`).
-  Every fresh install seeds the same 8 default category names, so this is
-  what stops a Merge from doubling them.
-- **Expenses** — matched by fingerprint
-  `(amountMinor, date, mappedCategoryId, note, paymentMethod)`; an exact
-  match is skipped, not re-inserted.
-- **Budgets** — matched by `(mappedCategoryId)` (`null` = overall); a slot
-  already occupied locally is left alone (merge is additive, never clobbers
-  a budget the user has since changed).
-- **Tags** — matched by normalized name, same rule as categories.
+- **Replace** carries the backup's `externalId` through verbatim, same as `id`.
+- **Merge** — see below, this is what `externalId` was added to fix.
 
-**Known ceiling** (ponytail: ship this, ceiling is real): renaming a
-category between backup and restore breaks name-matching — it inserts a
-"new" category instead of recognizing the rename. Fingerprint matching can
-rarely collide two genuinely distinct expenses that share amount, date,
-category, note, and payment method. Upgrade path if this ever bites: add a
-nullable `externalId` (UUID) column via a real Drift migration, populate it
-going forward, prefer it when present, and fall back to natural keys only
-for rows written before the migration.
+## Merge algorithm (`externalId` first, natural-key fallback)
+
+- **Categories** — matched by `externalId` first when both the backup row and a local row
+  have one; falls back to normalized name (`trim().toLowerCase()`) otherwise. Every fresh
+  install seeds the same 8 default category names, so the name fallback is still what stops a
+  Merge from doubling those.
+- **Tags** — same rule as categories.
+- **Expenses** — matched by `externalId` first; falls back to content fingerprint
+  `(amountMinor, date, mappedCategoryId, note, paymentMethod)`.
+- **Budgets** — matched by `externalId` first; falls back to `(mappedCategoryId)` slot
+  (`null` = overall) — a slot already occupied locally is left alone (merge is additive,
+  never clobbers a budget the user has since changed).
+
+**Residual ceiling**: the natural-key/fingerprint fallback is still real and still used —
+for rows created before schema v7, and for restoring a backup file exported before this
+change (which has no `externalId` key at all). For any row/file with `externalId` present,
+renaming a category between backup and restore now matches correctly (the exact bug this was
+built to fix); the previous "known ceiling" section described that failure mode before the
+fix — this replaces it.
 
 ## Replace algorithm
 

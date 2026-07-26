@@ -97,15 +97,22 @@ class BackupRepository {
     });
   }
 
-  /// Matches by normalized name (every fresh install seeds the same 8
-  /// default names, so blind-insert would double them); inserts the rest
-  /// individually (not batched) so each new row's assigned id can be
-  /// recorded — category counts are small enough that this is fine.
-  /// Returns backup-category-id -> local-category-id.
+  /// Matches by [BackupCategory.externalId] first (stable across a rename —
+  /// see `docs/backup-schema.md`), falling back to normalized name for rows
+  /// written before schema v7 or backup files that predate the field
+  /// entirely (every fresh install seeds the same 8 default names, so
+  /// blind-insert would double them). Inserts the rest individually (not
+  /// batched) so each new row's assigned id can be recorded — category
+  /// counts are small enough that this is fine. Returns
+  /// backup-category-id -> local-category-id.
   Future<Map<int, int>> _mergeCategories(
     List<BackupCategory> backupCats,
   ) async {
     final existing = await _db.select(_db.categories).get();
+    final byExternalId = <String, int>{
+      for (final c in existing)
+        if (c.externalId != null) c.externalId!: c.id,
+    };
     final byNormalizedName = <String, int>{
       for (final c in existing) _normalize(c.name): c.id,
     };
@@ -115,7 +122,9 @@ class BackupRepository {
 
     final idMap = <int, int>{};
     for (final c in backupCats) {
-      final matchedId = byNormalizedName[_normalize(c.name)];
+      final matchedId =
+          (c.externalId != null ? byExternalId[c.externalId] : null) ??
+          byNormalizedName[_normalize(c.name)];
       if (matchedId != null) {
         idMap[c.id] = matchedId;
         continue;
@@ -129,18 +138,24 @@ class BackupRepository {
     return idMap;
   }
 
-  /// Matches by normalized name, same rule as [_mergeCategories] — tags have
-  /// no sort order, so new ones are simply inserted. Returns
-  /// backup-tag-id -> local-tag-id.
+  /// Matches by [BackupTag.externalId] first, falling back to normalized
+  /// name — same rule as [_mergeCategories]. Tags have no sort order, so new
+  /// ones are simply inserted. Returns backup-tag-id -> local-tag-id.
   Future<Map<int, int>> _mergeTags(List<BackupTag> backupTags) async {
     final existing = await _db.select(_db.tags).get();
+    final byExternalId = <String, int>{
+      for (final t in existing)
+        if (t.externalId != null) t.externalId!: t.id,
+    };
     final byNormalizedName = <String, int>{
       for (final t in existing) _normalize(t.name): t.id,
     };
 
     final idMap = <int, int>{};
     for (final t in backupTags) {
-      final matchedId = byNormalizedName[_normalize(t.name)];
+      final matchedId =
+          (t.externalId != null ? byExternalId[t.externalId] : null) ??
+          byNormalizedName[_normalize(t.name)];
       if (matchedId != null) {
         idMap[t.id] = matchedId;
         continue;
@@ -151,18 +166,26 @@ class BackupRepository {
     return idMap;
   }
 
-  /// Matches by (mapped categoryId) slot — null = overall. A slot already
-  /// occupied locally is left alone (merge is additive, never overwrites a
-  /// budget the user has since changed).
+  /// Matches by [BackupBudget.externalId] first, falling back to (mapped
+  /// categoryId) slot — null = overall. A slot already occupied locally is
+  /// left alone (merge is additive, never overwrites a budget the user has
+  /// since changed).
   Future<void> _mergeBudgets(
     List<BackupBudget> backupBudgets,
     Map<int, int> categoryIdMap,
   ) async {
     final existing = await _db.select(_db.budgets).get();
+    final byExternalId = <String, BudgetRow>{
+      for (final b in existing)
+        if (b.externalId != null) b.externalId!: b,
+    };
     final occupiedSlots = <int?>{for (final b in existing) b.categoryId};
 
     final toInsert = <BudgetsCompanion>[];
     for (final b in backupBudgets) {
+      if (b.externalId != null && byExternalId.containsKey(b.externalId)) {
+        continue; // already present locally, matched by stable id
+      }
       int? mappedCategoryId;
       if (b.categoryId != null) {
         mappedCategoryId = categoryIdMap[b.categoryId];
@@ -176,14 +199,19 @@ class BackupRepository {
     }
   }
 
-  /// Matches by content fingerprint (amount, date, mapped category, note,
-  /// payment method) — the id column isn't stable across devices/reinstalls.
+  /// Matches by [BackupExpense.externalId] first, falling back to content
+  /// fingerprint (amount, date, mapped category, note, payment method) for
+  /// rows written before schema v7 or backup files that predate the field.
   Future<void> _mergeExpenses(
     List<BackupExpense> backupExpenses,
     Map<int, int> categoryIdMap,
     Map<int, int> tagIdMap,
   ) async {
     final existing = await _db.select(_db.expenses).get();
+    final knownExternalIds = <String>{
+      for (final e in existing)
+        if (e.externalId != null) e.externalId!,
+    };
     final fingerprints = <String>{
       for (final e in existing)
         BackupExpense.fromRow(e).fingerprint(mappedCategoryId: e.categoryId),
@@ -191,6 +219,9 @@ class BackupRepository {
 
     final toInsert = <ExpensesCompanion>[];
     for (final e in backupExpenses) {
+      if (e.externalId != null && knownExternalIds.contains(e.externalId)) {
+        continue; // already present locally, matched by stable id
+      }
       final mappedCategoryId = categoryIdMap[e.categoryId];
       if (mappedCategoryId == null) continue; // orphan safety net
       final fp = e.fingerprint(mappedCategoryId: mappedCategoryId);

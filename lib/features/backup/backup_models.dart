@@ -18,6 +18,7 @@ class BackupCategory {
     required this.isArchived,
     required this.isDefault,
     required this.isIgnoredForBudget,
+    required this.externalId,
   });
 
   final int id;
@@ -29,6 +30,11 @@ class BackupCategory {
   final bool isDefault;
   final bool isIgnoredForBudget;
 
+  /// Stable cross-device/cross-backup identity, preferred over name matching
+  /// on Merge — see `docs/backup-schema.md`. Null for rows written before
+  /// schema v7 that a legacy backup file predates entirely.
+  final String? externalId;
+
   factory BackupCategory.fromRow(CategoryRow row) => BackupCategory(
     id: row.id,
     name: row.name,
@@ -38,6 +44,7 @@ class BackupCategory {
     isArchived: row.isArchived,
     isDefault: row.isDefault,
     isIgnoredForBudget: row.isIgnoredForBudget,
+    externalId: row.externalId,
   );
 
   factory BackupCategory.fromJson(Map<String, dynamic> j) => BackupCategory(
@@ -50,6 +57,8 @@ class BackupCategory {
     isDefault: j['isDefault'] as bool,
     // Additive — pre-Sprint-12 backups lack this key entirely.
     isIgnoredForBudget: j['isIgnoredForBudget'] as bool? ?? false,
+    // Additive — pre-v7 backups lack this key entirely.
+    externalId: j['externalId'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -61,9 +70,13 @@ class BackupCategory {
     'isArchived': isArchived,
     'isDefault': isDefault,
     'isIgnoredForBudget': isIgnoredForBudget,
+    'externalId': externalId,
   };
 
   /// Merge: new row, id auto-assigned; caller picks the append-order slot.
+  /// Carries the backup's externalId through if it had one, so a record
+  /// merged from another device keeps its identity for the next merge too;
+  /// otherwise the column's clientDefault assigns a fresh one.
   CategoriesCompanion toInsertCompanion({required int sortOrder}) =>
       CategoriesCompanion.insert(
         name: name,
@@ -73,6 +86,9 @@ class BackupCategory {
         isArchived: Value(isArchived),
         isDefault: Value(isDefault),
         isIgnoredForBudget: Value(isIgnoredForBudget),
+        externalId: externalId == null
+            ? const Value.absent()
+            : Value(externalId),
       );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -85,6 +101,9 @@ class BackupCategory {
     isArchived: Value(isArchived),
     isDefault: Value(isDefault),
     isIgnoredForBudget: Value(isIgnoredForBudget),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
   );
 }
 
@@ -94,18 +113,21 @@ class BackupTag {
     required this.name,
     required this.colorValue,
     required this.isArchived,
+    required this.externalId,
   });
 
   final int id;
   final String name;
   final int colorValue;
   final bool isArchived;
+  final String? externalId;
 
   factory BackupTag.fromRow(TagRow row) => BackupTag(
     id: row.id,
     name: row.name,
     colorValue: row.colorValue,
     isArchived: row.isArchived,
+    externalId: row.externalId,
   );
 
   factory BackupTag.fromJson(Map<String, dynamic> j) => BackupTag(
@@ -113,6 +135,7 @@ class BackupTag {
     name: j['name'] as String,
     colorValue: j['colorValue'] as int,
     isArchived: j['isArchived'] as bool,
+    externalId: j['externalId'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -120,6 +143,7 @@ class BackupTag {
     'name': name,
     'colorValue': colorValue,
     'isArchived': isArchived,
+    'externalId': externalId,
   };
 
   /// Merge: new row, id auto-assigned.
@@ -127,6 +151,9 @@ class BackupTag {
     name: name,
     colorValue: colorValue,
     isArchived: Value(isArchived),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
   );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -135,6 +162,9 @@ class BackupTag {
     name: Value(name),
     colorValue: Value(colorValue),
     isArchived: Value(isArchived),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
   );
 }
 
@@ -151,6 +181,7 @@ class BackupExpense {
     required this.tagId,
     required this.createdAt,
     required this.updatedAt,
+    required this.externalId,
   });
 
   final int id;
@@ -168,6 +199,7 @@ class BackupExpense {
   final int? tagId;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? externalId;
 
   factory BackupExpense.fromRow(ExpenseRow row) => BackupExpense(
     id: row.id,
@@ -181,6 +213,7 @@ class BackupExpense {
     tagId: row.tagId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    externalId: row.externalId,
   );
 
   factory BackupExpense.fromJson(Map<String, dynamic> j) => BackupExpense(
@@ -198,6 +231,7 @@ class BackupExpense {
     tagId: j['tagId'] as int?,
     createdAt: DateTime.parse(j['createdAt'] as String),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
+    externalId: j['externalId'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -212,6 +246,7 @@ class BackupExpense {
     'tagId': tagId,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'externalId': externalId,
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
@@ -231,6 +266,9 @@ class BackupExpense {
     tagId: Value(mappedTagId),
     createdAt: Value(createdAt),
     updatedAt: Value(updatedAt),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
   );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -246,6 +284,9 @@ class BackupExpense {
     tagId: Value(tagId),
     createdAt: Value(createdAt),
     updatedAt: Value(updatedAt),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
   );
 
   /// Content fingerprint used to dedupe on Merge — deliberately not the id,
@@ -263,6 +304,7 @@ class BackupBudget {
     required this.amountMinor,
     required this.period,
     required this.monthKey,
+    required this.externalId,
   });
 
   final int id;
@@ -270,6 +312,7 @@ class BackupBudget {
   final int amountMinor;
   final BudgetPeriod period;
   final String monthKey;
+  final String? externalId;
 
   factory BackupBudget.fromRow(BudgetRow row) => BackupBudget(
     id: row.id,
@@ -277,6 +320,7 @@ class BackupBudget {
     amountMinor: row.amountMinor,
     period: row.period,
     monthKey: row.monthKey,
+    externalId: row.externalId,
   );
 
   factory BackupBudget.fromJson(Map<String, dynamic> j) => BackupBudget(
@@ -286,6 +330,7 @@ class BackupBudget {
     period: BudgetPeriod.values.byName(j['period'] as String),
     // Older backups predate per-month budgets; treat them as the current month.
     monthKey: j['monthKey'] as String? ?? monthKeyFor(DateTime.now()),
+    externalId: j['externalId'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -294,6 +339,7 @@ class BackupBudget {
     'amountMinor': amountMinor,
     'period': period.name,
     'monthKey': monthKey,
+    'externalId': externalId,
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is null for the
@@ -304,6 +350,9 @@ class BackupBudget {
         amountMinor: amountMinor,
         period: Value(period),
         monthKey: monthKey,
+        externalId: externalId == null
+            ? const Value.absent()
+            : Value(externalId),
       );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -313,6 +362,9 @@ class BackupBudget {
     amountMinor: Value(amountMinor),
     period: Value(period),
     monthKey: Value(monthKey),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
   );
 }
 

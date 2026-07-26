@@ -5,6 +5,8 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'external_id.dart';
+
 part 'database.g.dart';
 
 /// How often a recurring expense repeats (FR-7). v1 behavior = remind + confirm,
@@ -18,6 +20,24 @@ enum BudgetPeriod { monthly }
 /// providers — a String avoids DateTime equality footguns across rebuilds).
 String monthKeyFor(DateTime month) =>
     '${month.year}-${month.month.toString().padLeft(2, '0')}';
+
+/// Populates `external_id` for any row still missing one (pre-v7 rows,
+/// backfilled by the v7 migration). Not private — exposed so this behavior
+/// can be unit tested directly rather than only through a simulated
+/// ALTER TABLE upgrade path.
+Future<void> backfillExternalIds(GeneratedDatabase db) async {
+  for (final table in ['categories', 'expenses', 'tags', 'budgets']) {
+    final rows = await db
+        .customSelect('SELECT id FROM $table WHERE external_id IS NULL')
+        .get();
+    for (final row in rows) {
+      await db.customStatement('UPDATE $table SET external_id = ? WHERE id = ?', [
+        generateExternalId(),
+        row.data['id'],
+      ]);
+    }
+  }
+}
 
 @DataClassName('CategoryRow')
 class Categories extends Table {
@@ -33,6 +53,12 @@ class Categories extends Table {
   /// for fixed costs like rent/EMI. Still shown in transaction lists/exports.
   BoolColumn get isIgnoredForBudget =>
       boolean().withDefault(const Constant(false))();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  /// Nullable because pre-v7 rows only get one via the v7 migration's
+  /// backfill; every new row gets one automatically via [clientDefault].
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
 }
 
 @DataClassName('ExpenseRow')
@@ -56,6 +82,10 @@ class Expenses extends Table {
   IntColumn get tagId => integer().nullable().references(Tags, #id)();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
 }
 
 /// User-defined grouping for expenses (trips, home renovation, ...) —
@@ -67,6 +97,10 @@ class Tags extends Table {
   IntColumn get colorValue => integer()(); // ARGB int
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
 }
 
 @DataClassName('BudgetRow')
@@ -82,6 +116,10 @@ class Budgets extends Table {
 
   /// 'YYYY-MM' — which month this budget applies to. See [monthKeyFor].
   TextColumn get monthKey => text()();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
 }
 
 /// Typed key/value app settings: theme mode, currency locale, auto-backup
@@ -103,7 +141,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -147,6 +185,15 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 6) {
         await m.addColumn(categories, categories.isIgnoredForBudget);
+      }
+      if (from < 7) {
+        // Stable cross-device/cross-backup identity, replacing name/
+        // fingerprint-only matching in backup Merge (docs/backup-schema.md).
+        await m.addColumn(categories, categories.externalId);
+        await m.addColumn(expenses, expenses.externalId);
+        await m.addColumn(tags, tags.externalId);
+        await m.addColumn(budgets, budgets.externalId);
+        await backfillExternalIds(this);
       }
     },
   );

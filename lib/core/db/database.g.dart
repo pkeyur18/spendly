@@ -111,6 +111,18 @@ class $CategoriesTable extends Categories
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: generateExternalId,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -121,6 +133,7 @@ class $CategoriesTable extends Categories
     isArchived,
     isDefault,
     isIgnoredForBudget,
+    externalId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -188,6 +201,12 @@ class $CategoriesTable extends Categories
         ),
       );
     }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
     return context;
   }
 
@@ -229,6 +248,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.bool,
         data['${effectivePrefix}is_ignored_for_budget'],
       )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
     );
   }
 
@@ -250,6 +273,11 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
   /// Excluded from daily/budget totals, top categories, and top expenses —
   /// for fixed costs like rent/EMI. Still shown in transaction lists/exports.
   final bool isIgnoredForBudget;
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  /// Nullable because pre-v7 rows only get one via the v7 migration's
+  /// backfill; every new row gets one automatically via [clientDefault].
+  final String? externalId;
   const CategoryRow({
     required this.id,
     required this.name,
@@ -259,6 +287,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     required this.isArchived,
     required this.isDefault,
     required this.isIgnoredForBudget,
+    this.externalId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -271,6 +300,9 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     map['is_archived'] = Variable<bool>(isArchived);
     map['is_default'] = Variable<bool>(isDefault);
     map['is_ignored_for_budget'] = Variable<bool>(isIgnoredForBudget);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     return map;
   }
 
@@ -284,6 +316,9 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       isArchived: Value(isArchived),
       isDefault: Value(isDefault),
       isIgnoredForBudget: Value(isIgnoredForBudget),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
     );
   }
 
@@ -301,6 +336,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       isIgnoredForBudget: serializer.fromJson<bool>(json['isIgnoredForBudget']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
   @override
@@ -315,6 +351,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       'isArchived': serializer.toJson<bool>(isArchived),
       'isDefault': serializer.toJson<bool>(isDefault),
       'isIgnoredForBudget': serializer.toJson<bool>(isIgnoredForBudget),
+      'externalId': serializer.toJson<String?>(externalId),
     };
   }
 
@@ -327,6 +364,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     bool? isArchived,
     bool? isDefault,
     bool? isIgnoredForBudget,
+    Value<String?> externalId = const Value.absent(),
   }) => CategoryRow(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -336,6 +374,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     isArchived: isArchived ?? this.isArchived,
     isDefault: isDefault ?? this.isDefault,
     isIgnoredForBudget: isIgnoredForBudget ?? this.isIgnoredForBudget,
+    externalId: externalId.present ? externalId.value : this.externalId,
   );
   CategoryRow copyWithCompanion(CategoriesCompanion data) {
     return CategoryRow(
@@ -353,6 +392,9 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
       isIgnoredForBudget: data.isIgnoredForBudget.present
           ? data.isIgnoredForBudget.value
           : this.isIgnoredForBudget,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
     );
   }
 
@@ -366,7 +408,8 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           ..write('sortOrder: $sortOrder, ')
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
-          ..write('isIgnoredForBudget: $isIgnoredForBudget')
+          ..write('isIgnoredForBudget: $isIgnoredForBudget, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -381,6 +424,7 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
     isArchived,
     isDefault,
     isIgnoredForBudget,
+    externalId,
   );
   @override
   bool operator ==(Object other) =>
@@ -393,7 +437,8 @@ class CategoryRow extends DataClass implements Insertable<CategoryRow> {
           other.sortOrder == this.sortOrder &&
           other.isArchived == this.isArchived &&
           other.isDefault == this.isDefault &&
-          other.isIgnoredForBudget == this.isIgnoredForBudget);
+          other.isIgnoredForBudget == this.isIgnoredForBudget &&
+          other.externalId == this.externalId);
 }
 
 class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
@@ -405,6 +450,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
   final Value<bool> isArchived;
   final Value<bool> isDefault;
   final Value<bool> isIgnoredForBudget;
+  final Value<String?> externalId;
   const CategoriesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -414,6 +460,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.isIgnoredForBudget = const Value.absent(),
+    this.externalId = const Value.absent(),
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
@@ -424,6 +471,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.isIgnoredForBudget = const Value.absent(),
+    this.externalId = const Value.absent(),
   }) : name = Value(name),
        icon = Value(icon),
        colorValue = Value(colorValue);
@@ -436,6 +484,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     Expression<bool>? isArchived,
     Expression<bool>? isDefault,
     Expression<bool>? isIgnoredForBudget,
+    Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -447,6 +496,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
       if (isDefault != null) 'is_default': isDefault,
       if (isIgnoredForBudget != null)
         'is_ignored_for_budget': isIgnoredForBudget,
+      if (externalId != null) 'external_id': externalId,
     });
   }
 
@@ -459,6 +509,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     Value<bool>? isArchived,
     Value<bool>? isDefault,
     Value<bool>? isIgnoredForBudget,
+    Value<String?>? externalId,
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
@@ -469,6 +520,7 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
       isArchived: isArchived ?? this.isArchived,
       isDefault: isDefault ?? this.isDefault,
       isIgnoredForBudget: isIgnoredForBudget ?? this.isIgnoredForBudget,
+      externalId: externalId ?? this.externalId,
     );
   }
 
@@ -499,6 +551,9 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
     if (isIgnoredForBudget.present) {
       map['is_ignored_for_budget'] = Variable<bool>(isIgnoredForBudget.value);
     }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
     return map;
   }
 
@@ -512,7 +567,8 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
           ..write('sortOrder: $sortOrder, ')
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
-          ..write('isIgnoredForBudget: $isIgnoredForBudget')
+          ..write('isIgnoredForBudget: $isIgnoredForBudget, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -587,6 +643,18 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: generateExternalId,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -594,6 +662,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
     colorValue,
     isArchived,
     createdAt,
+    externalId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -638,6 +707,12 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
     return context;
   }
 
@@ -667,6 +742,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
     );
   }
 
@@ -682,12 +761,16 @@ class TagRow extends DataClass implements Insertable<TagRow> {
   final int colorValue;
   final bool isArchived;
   final DateTime createdAt;
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  final String? externalId;
   const TagRow({
     required this.id,
     required this.name,
     required this.colorValue,
     required this.isArchived,
     required this.createdAt,
+    this.externalId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -697,6 +780,9 @@ class TagRow extends DataClass implements Insertable<TagRow> {
     map['color_value'] = Variable<int>(colorValue);
     map['is_archived'] = Variable<bool>(isArchived);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     return map;
   }
 
@@ -707,6 +793,9 @@ class TagRow extends DataClass implements Insertable<TagRow> {
       colorValue: Value(colorValue),
       isArchived: Value(isArchived),
       createdAt: Value(createdAt),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
     );
   }
 
@@ -721,6 +810,7 @@ class TagRow extends DataClass implements Insertable<TagRow> {
       colorValue: serializer.fromJson<int>(json['colorValue']),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
   @override
@@ -732,6 +822,7 @@ class TagRow extends DataClass implements Insertable<TagRow> {
       'colorValue': serializer.toJson<int>(colorValue),
       'isArchived': serializer.toJson<bool>(isArchived),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'externalId': serializer.toJson<String?>(externalId),
     };
   }
 
@@ -741,12 +832,14 @@ class TagRow extends DataClass implements Insertable<TagRow> {
     int? colorValue,
     bool? isArchived,
     DateTime? createdAt,
+    Value<String?> externalId = const Value.absent(),
   }) => TagRow(
     id: id ?? this.id,
     name: name ?? this.name,
     colorValue: colorValue ?? this.colorValue,
     isArchived: isArchived ?? this.isArchived,
     createdAt: createdAt ?? this.createdAt,
+    externalId: externalId.present ? externalId.value : this.externalId,
   );
   TagRow copyWithCompanion(TagsCompanion data) {
     return TagRow(
@@ -759,6 +852,9 @@ class TagRow extends DataClass implements Insertable<TagRow> {
           ? data.isArchived.value
           : this.isArchived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
     );
   }
 
@@ -769,13 +865,15 @@ class TagRow extends DataClass implements Insertable<TagRow> {
           ..write('name: $name, ')
           ..write('colorValue: $colorValue, ')
           ..write('isArchived: $isArchived, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, colorValue, isArchived, createdAt);
+  int get hashCode =>
+      Object.hash(id, name, colorValue, isArchived, createdAt, externalId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -784,7 +882,8 @@ class TagRow extends DataClass implements Insertable<TagRow> {
           other.name == this.name &&
           other.colorValue == this.colorValue &&
           other.isArchived == this.isArchived &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.externalId == this.externalId);
 }
 
 class TagsCompanion extends UpdateCompanion<TagRow> {
@@ -793,12 +892,14 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
   final Value<int> colorValue;
   final Value<bool> isArchived;
   final Value<DateTime> createdAt;
+  final Value<String?> externalId;
   const TagsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.colorValue = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.externalId = const Value.absent(),
   });
   TagsCompanion.insert({
     this.id = const Value.absent(),
@@ -806,6 +907,7 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     required int colorValue,
     this.isArchived = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.externalId = const Value.absent(),
   }) : name = Value(name),
        colorValue = Value(colorValue);
   static Insertable<TagRow> custom({
@@ -814,6 +916,7 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     Expression<int>? colorValue,
     Expression<bool>? isArchived,
     Expression<DateTime>? createdAt,
+    Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -821,6 +924,7 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
       if (colorValue != null) 'color_value': colorValue,
       if (isArchived != null) 'is_archived': isArchived,
       if (createdAt != null) 'created_at': createdAt,
+      if (externalId != null) 'external_id': externalId,
     });
   }
 
@@ -830,6 +934,7 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     Value<int>? colorValue,
     Value<bool>? isArchived,
     Value<DateTime>? createdAt,
+    Value<String?>? externalId,
   }) {
     return TagsCompanion(
       id: id ?? this.id,
@@ -837,6 +942,7 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
       colorValue: colorValue ?? this.colorValue,
       isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt ?? this.createdAt,
+      externalId: externalId ?? this.externalId,
     );
   }
 
@@ -858,6 +964,9 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
     return map;
   }
 
@@ -868,7 +977,8 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
           ..write('name: $name, ')
           ..write('colorValue: $colorValue, ')
           ..write('isArchived: $isArchived, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -1007,6 +1117,18 @@ class $ExpensesTable extends Expenses
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: generateExternalId,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1020,6 +1142,7 @@ class $ExpensesTable extends Expenses
     tagId,
     createdAt,
     updatedAt,
+    externalId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1105,6 +1228,12 @@ class $ExpensesTable extends Expenses
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
       );
     }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
     return context;
   }
 
@@ -1160,6 +1289,10 @@ class $ExpensesTable extends Expenses
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
     );
   }
 
@@ -1191,6 +1324,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
   final int? tagId;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  final String? externalId;
   const ExpenseRow({
     required this.id,
     required this.amountMinor,
@@ -1203,6 +1339,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     this.tagId,
     required this.createdAt,
     required this.updatedAt,
+    this.externalId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1228,6 +1365,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     return map;
   }
 
@@ -1250,6 +1390,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           : Value(tagId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
     );
   }
 
@@ -1272,6 +1415,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       tagId: serializer.fromJson<int?>(json['tagId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
   @override
@@ -1291,6 +1435,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       'tagId': serializer.toJson<int?>(tagId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'externalId': serializer.toJson<String?>(externalId),
     };
   }
 
@@ -1306,6 +1451,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     Value<int?> tagId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
+    Value<String?> externalId = const Value.absent(),
   }) => ExpenseRow(
     id: id ?? this.id,
     amountMinor: amountMinor ?? this.amountMinor,
@@ -1320,6 +1466,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     tagId: tagId.present ? tagId.value : this.tagId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    externalId: externalId.present ? externalId.value : this.externalId,
   );
   ExpenseRow copyWithCompanion(ExpensesCompanion data) {
     return ExpenseRow(
@@ -1344,6 +1491,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       tagId: data.tagId.present ? data.tagId.value : this.tagId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
     );
   }
 
@@ -1360,7 +1510,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           ..write('recurrence: $recurrence, ')
           ..write('tagId: $tagId, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -1378,6 +1529,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     tagId,
     createdAt,
     updatedAt,
+    externalId,
   );
   @override
   bool operator ==(Object other) =>
@@ -1393,7 +1545,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           other.recurrence == this.recurrence &&
           other.tagId == this.tagId &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.externalId == this.externalId);
 }
 
 class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
@@ -1408,6 +1561,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
   final Value<int?> tagId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String?> externalId;
   const ExpensesCompanion({
     this.id = const Value.absent(),
     this.amountMinor = const Value.absent(),
@@ -1420,6 +1574,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.tagId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.externalId = const Value.absent(),
   });
   ExpensesCompanion.insert({
     this.id = const Value.absent(),
@@ -1433,6 +1588,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.tagId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.externalId = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        categoryId = Value(categoryId),
        date = Value(date);
@@ -1448,6 +1604,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Expression<int>? tagId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1461,6 +1618,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       if (tagId != null) 'tag_id': tagId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (externalId != null) 'external_id': externalId,
     });
   }
 
@@ -1476,6 +1634,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Value<int?>? tagId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String?>? externalId,
   }) {
     return ExpensesCompanion(
       id: id ?? this.id,
@@ -1489,6 +1648,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       tagId: tagId ?? this.tagId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      externalId: externalId ?? this.externalId,
     );
   }
 
@@ -1530,6 +1690,9 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
     return map;
   }
 
@@ -1546,7 +1709,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
           ..write('recurrence: $recurrence, ')
           ..write('tagId: $tagId, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -1616,6 +1780,18 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: generateExternalId,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1623,6 +1799,7 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     amountMinor,
     period,
     monthKey,
+    externalId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1664,6 +1841,12 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
     } else if (isInserting) {
       context.missing(_monthKeyMeta);
     }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
     return context;
   }
 
@@ -1695,6 +1878,10 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, BudgetRow> {
         DriftSqlType.string,
         data['${effectivePrefix}month_key'],
       )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
     );
   }
 
@@ -1717,12 +1904,16 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
 
   /// 'YYYY-MM' — which month this budget applies to. See [monthKeyFor].
   final String monthKey;
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  final String? externalId;
   const BudgetRow({
     required this.id,
     this.categoryId,
     required this.amountMinor,
     required this.period,
     required this.monthKey,
+    this.externalId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1738,6 +1929,9 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       );
     }
     map['month_key'] = Variable<String>(monthKey);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
     return map;
   }
 
@@ -1750,6 +1944,9 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
       amountMinor: Value(amountMinor),
       period: Value(period),
       monthKey: Value(monthKey),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
     );
   }
 
@@ -1766,6 +1963,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
         serializer.fromJson<String>(json['period']),
       ),
       monthKey: serializer.fromJson<String>(json['monthKey']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
   @override
@@ -1779,6 +1977,7 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
         $BudgetsTable.$converterperiod.toJson(period),
       ),
       'monthKey': serializer.toJson<String>(monthKey),
+      'externalId': serializer.toJson<String?>(externalId),
     };
   }
 
@@ -1788,12 +1987,14 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
     int? amountMinor,
     BudgetPeriod? period,
     String? monthKey,
+    Value<String?> externalId = const Value.absent(),
   }) => BudgetRow(
     id: id ?? this.id,
     categoryId: categoryId.present ? categoryId.value : this.categoryId,
     amountMinor: amountMinor ?? this.amountMinor,
     period: period ?? this.period,
     monthKey: monthKey ?? this.monthKey,
+    externalId: externalId.present ? externalId.value : this.externalId,
   );
   BudgetRow copyWithCompanion(BudgetsCompanion data) {
     return BudgetRow(
@@ -1806,6 +2007,9 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           : this.amountMinor,
       period: data.period.present ? data.period.value : this.period,
       monthKey: data.monthKey.present ? data.monthKey.value : this.monthKey,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
     );
   }
 
@@ -1816,14 +2020,15 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           ..write('categoryId: $categoryId, ')
           ..write('amountMinor: $amountMinor, ')
           ..write('period: $period, ')
-          ..write('monthKey: $monthKey')
+          ..write('monthKey: $monthKey, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, categoryId, amountMinor, period, monthKey);
+      Object.hash(id, categoryId, amountMinor, period, monthKey, externalId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1832,7 +2037,8 @@ class BudgetRow extends DataClass implements Insertable<BudgetRow> {
           other.categoryId == this.categoryId &&
           other.amountMinor == this.amountMinor &&
           other.period == this.period &&
-          other.monthKey == this.monthKey);
+          other.monthKey == this.monthKey &&
+          other.externalId == this.externalId);
 }
 
 class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
@@ -1841,12 +2047,14 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
   final Value<int> amountMinor;
   final Value<BudgetPeriod> period;
   final Value<String> monthKey;
+  final Value<String?> externalId;
   const BudgetsCompanion({
     this.id = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.amountMinor = const Value.absent(),
     this.period = const Value.absent(),
     this.monthKey = const Value.absent(),
+    this.externalId = const Value.absent(),
   });
   BudgetsCompanion.insert({
     this.id = const Value.absent(),
@@ -1854,6 +2062,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     required int amountMinor,
     this.period = const Value.absent(),
     required String monthKey,
+    this.externalId = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        monthKey = Value(monthKey);
   static Insertable<BudgetRow> custom({
@@ -1862,6 +2071,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     Expression<int>? amountMinor,
     Expression<String>? period,
     Expression<String>? monthKey,
+    Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1869,6 +2079,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
       if (amountMinor != null) 'amount_minor': amountMinor,
       if (period != null) 'period': period,
       if (monthKey != null) 'month_key': monthKey,
+      if (externalId != null) 'external_id': externalId,
     });
   }
 
@@ -1878,6 +2089,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     Value<int>? amountMinor,
     Value<BudgetPeriod>? period,
     Value<String>? monthKey,
+    Value<String?>? externalId,
   }) {
     return BudgetsCompanion(
       id: id ?? this.id,
@@ -1885,6 +2097,7 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
       amountMinor: amountMinor ?? this.amountMinor,
       period: period ?? this.period,
       monthKey: monthKey ?? this.monthKey,
+      externalId: externalId ?? this.externalId,
     );
   }
 
@@ -1908,6 +2121,9 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
     if (monthKey.present) {
       map['month_key'] = Variable<String>(monthKey.value);
     }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
     return map;
   }
 
@@ -1918,7 +2134,8 @@ class BudgetsCompanion extends UpdateCompanion<BudgetRow> {
           ..write('categoryId: $categoryId, ')
           ..write('amountMinor: $amountMinor, ')
           ..write('period: $period, ')
-          ..write('monthKey: $monthKey')
+          ..write('monthKey: $monthKey, ')
+          ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
@@ -2187,6 +2404,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       Value<bool> isArchived,
       Value<bool> isDefault,
       Value<bool> isIgnoredForBudget,
+      Value<String?> externalId,
     });
 typedef $$CategoriesTableUpdateCompanionBuilder =
     CategoriesCompanion Function({
@@ -2198,6 +2416,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<bool> isArchived,
       Value<bool> isDefault,
       Value<bool> isIgnoredForBudget,
+      Value<String?> externalId,
     });
 
 final class $$CategoriesTableReferences
@@ -2288,6 +2507,11 @@ class $$CategoriesTableFilterComposer
 
   ColumnFilters<bool> get isIgnoredForBudget => $composableBuilder(
     column: $table.isIgnoredForBudget,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2390,6 +2614,11 @@ class $$CategoriesTableOrderingComposer
     column: $table.isIgnoredForBudget,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CategoriesTableAnnotationComposer
@@ -2428,6 +2657,11 @@ class $$CategoriesTableAnnotationComposer
 
   GeneratedColumn<bool> get isIgnoredForBudget => $composableBuilder(
     column: $table.isIgnoredForBudget,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => column,
   );
 
@@ -2518,6 +2752,7 @@ class $$CategoriesTableTableManager
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<bool> isIgnoredForBudget = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
                 name: name,
@@ -2527,6 +2762,7 @@ class $$CategoriesTableTableManager
                 isArchived: isArchived,
                 isDefault: isDefault,
                 isIgnoredForBudget: isIgnoredForBudget,
+                externalId: externalId,
               ),
           createCompanionCallback:
               ({
@@ -2538,6 +2774,7 @@ class $$CategoriesTableTableManager
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<bool> isIgnoredForBudget = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => CategoriesCompanion.insert(
                 id: id,
                 name: name,
@@ -2547,6 +2784,7 @@ class $$CategoriesTableTableManager
                 isArchived: isArchived,
                 isDefault: isDefault,
                 isIgnoredForBudget: isIgnoredForBudget,
+                externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -2633,6 +2871,7 @@ typedef $$TagsTableCreateCompanionBuilder =
       required int colorValue,
       Value<bool> isArchived,
       Value<DateTime> createdAt,
+      Value<String?> externalId,
     });
 typedef $$TagsTableUpdateCompanionBuilder =
     TagsCompanion Function({
@@ -2641,6 +2880,7 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<int> colorValue,
       Value<bool> isArchived,
       Value<DateTime> createdAt,
+      Value<String?> externalId,
     });
 
 final class $$TagsTableReferences
@@ -2696,6 +2936,11 @@ class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2757,6 +3002,11 @@ class $$TagsTableOrderingComposer extends Composer<_$AppDatabase, $TagsTable> {
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$TagsTableAnnotationComposer
@@ -2786,6 +3036,11 @@ class $$TagsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
 
   Expression<T> expensesRefs<T extends Object>(
     Expression<T> Function($$ExpensesTableAnnotationComposer a) f,
@@ -2846,12 +3101,14 @@ class $$TagsTableTableManager
                 Value<int> colorValue = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => TagsCompanion(
                 id: id,
                 name: name,
                 colorValue: colorValue,
                 isArchived: isArchived,
                 createdAt: createdAt,
+                externalId: externalId,
               ),
           createCompanionCallback:
               ({
@@ -2860,12 +3117,14 @@ class $$TagsTableTableManager
                 required int colorValue,
                 Value<bool> isArchived = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => TagsCompanion.insert(
                 id: id,
                 name: name,
                 colorValue: colorValue,
                 isArchived: isArchived,
                 createdAt: createdAt,
+                externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -2927,6 +3186,7 @@ typedef $$ExpensesTableCreateCompanionBuilder =
       Value<int?> tagId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String?> externalId,
     });
 typedef $$ExpensesTableUpdateCompanionBuilder =
     ExpensesCompanion Function({
@@ -2941,6 +3201,7 @@ typedef $$ExpensesTableUpdateCompanionBuilder =
       Value<int?> tagId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String?> externalId,
     });
 
 final class $$ExpensesTableReferences
@@ -3034,6 +3295,11 @@ class $$ExpensesTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3138,6 +3404,11 @@ class $$ExpensesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3230,6 +3501,11 @@ class $$ExpensesTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -3316,6 +3592,7 @@ class $$ExpensesTableTableManager
                 Value<int?> tagId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => ExpensesCompanion(
                 id: id,
                 amountMinor: amountMinor,
@@ -3328,6 +3605,7 @@ class $$ExpensesTableTableManager
                 tagId: tagId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                externalId: externalId,
               ),
           createCompanionCallback:
               ({
@@ -3342,6 +3620,7 @@ class $$ExpensesTableTableManager
                 Value<int?> tagId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => ExpensesCompanion.insert(
                 id: id,
                 amountMinor: amountMinor,
@@ -3354,6 +3633,7 @@ class $$ExpensesTableTableManager
                 tagId: tagId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -3442,6 +3722,7 @@ typedef $$BudgetsTableCreateCompanionBuilder =
       required int amountMinor,
       Value<BudgetPeriod> period,
       required String monthKey,
+      Value<String?> externalId,
     });
 typedef $$BudgetsTableUpdateCompanionBuilder =
     BudgetsCompanion Function({
@@ -3450,6 +3731,7 @@ typedef $$BudgetsTableUpdateCompanionBuilder =
       Value<int> amountMinor,
       Value<BudgetPeriod> period,
       Value<String> monthKey,
+      Value<String?> externalId,
     });
 
 final class $$BudgetsTableReferences
@@ -3501,6 +3783,11 @@ class $$BudgetsTableFilterComposer
 
   ColumnFilters<String> get monthKey => $composableBuilder(
     column: $table.monthKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3557,6 +3844,11 @@ class $$BudgetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3603,6 +3895,11 @@ class $$BudgetsTableAnnotationComposer
 
   GeneratedColumn<String> get monthKey =>
       $composableBuilder(column: $table.monthKey, builder: (column) => column);
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
 
   $$CategoriesTableAnnotationComposer get categoryId {
     final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
@@ -3661,12 +3958,14 @@ class $$BudgetsTableTableManager
                 Value<int> amountMinor = const Value.absent(),
                 Value<BudgetPeriod> period = const Value.absent(),
                 Value<String> monthKey = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
               }) => BudgetsCompanion(
                 id: id,
                 categoryId: categoryId,
                 amountMinor: amountMinor,
                 period: period,
                 monthKey: monthKey,
+                externalId: externalId,
               ),
           createCompanionCallback:
               ({
@@ -3675,12 +3974,14 @@ class $$BudgetsTableTableManager
                 required int amountMinor,
                 Value<BudgetPeriod> period = const Value.absent(),
                 required String monthKey,
+                Value<String?> externalId = const Value.absent(),
               }) => BudgetsCompanion.insert(
                 id: id,
                 categoryId: categoryId,
                 amountMinor: amountMinor,
                 period: period,
                 monthKey: monthKey,
+                externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
