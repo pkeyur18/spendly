@@ -12,6 +12,7 @@ import '../categories/category_repository.dart';
 import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../reports/report_providers.dart';
+import '../widgets/widget_refresh.dart';
 import 'budget_repository.dart';
 
 /// Budget Setup (FR-23,24) — prototype phone 6. Overall + per-category budgets,
@@ -142,9 +143,12 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                   catsById[entry.key]?.name ?? 'Category',
                 ),
                 isIgnored: catsById[entry.key]?.isIgnoredForBudget ?? false,
-                onToggleIgnored: (v) => ref
-                    .read(categoryRepositoryProvider)
-                    .setIgnoredForBudget(entry.key, v),
+                onToggleIgnored: (v) async {
+                  await ref
+                      .read(categoryRepositoryProvider)
+                      .setIgnoredForBudget(entry.key, v);
+                  await refreshWidgets(ref);
+                },
               ),
             ),
           const SizedBox(height: AppSpacing.sm),
@@ -212,6 +216,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     await ref
         .read(budgetRepositoryProvider)
         .carryForward(fromMonth: prevMonth, toMonth: _month);
+    await refreshWidgets(ref);
   }
 
   Future<void> _editOverall(
@@ -226,6 +231,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     );
     if (amount != null && amount.minor > 0) {
       await ref.read(budgetRepositoryProvider).setOverall(_month, amount);
+      await refreshWidgets(ref);
     }
   }
 
@@ -246,6 +252,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     amount.minor > 0
         ? await repo.setForCategory(_month, categoryId, amount)
         : await repo.clearForCategory(_month, categoryId);
+    await refreshWidgets(ref);
   }
 
   Future<void> _deleteCategoryBudget(
@@ -279,6 +286,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     await ref
         .read(budgetRepositoryProvider)
         .clearForCategory(_month, categoryId);
+    await refreshWidgets(ref);
   }
 
   Future<void> _addCategoryBudget(
@@ -329,6 +337,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       await ref
           .read(budgetRepositoryProvider)
           .setForCategory(_month, chosen.id, amount);
+      await refreshWidgets(ref);
     }
   }
 }
