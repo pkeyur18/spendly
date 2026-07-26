@@ -107,7 +107,7 @@ struct QuickAddView: View {
             let cats = Array(snapshot.quickAdd.prefix(4))
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 ForEach(cats, id: \.id) { cat in
-                    Link(destination: URL(string: "spendly://quickadd?category=\(cat.id)")!) {
+                    Link(destination: URL(string: "spendly://quickadd?category=\(cat.id)&homeWidget")!) {
                         Text(cat.icon).font(.system(size: 22))
                             .frame(maxWidth: .infinity, minHeight: 34)
                             .background(Color.white.opacity(0.18))
@@ -144,7 +144,7 @@ struct MonthView: View {
                 Spacer()
                 HStack(spacing: 8) {
                     ForEach(Array(snapshot.quickAdd.prefix(4)), id: \.id) { cat in
-                        Link(destination: URL(string: "spendly://quickadd?category=\(cat.id)")!) {
+                        Link(destination: URL(string: "spendly://quickadd?category=\(cat.id)&homeWidget")!) {
                             Text(cat.icon).font(.system(size: 18))
                                 .frame(width: 34, height: 34)
                                 .background(Color.white.opacity(0.18)).cornerRadius(11)
