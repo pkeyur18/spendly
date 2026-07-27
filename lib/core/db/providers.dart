@@ -39,6 +39,10 @@ class SettingsRepository {
   static const lastBackupAtKey = 'last_backup_at';
   static const lastBackupSizeKey = 'last_backup_size';
 
+  // Monthly recap (auto-show-once gate) — the monthKey of the month we last
+  // auto-showed a recap for, so it fires once per calendar month rollover.
+  static const lastRecapMonthKey = 'last_recap_month';
+
   Future<String?> get(String key) async {
     final row = await (_db.select(
       _db.settings,

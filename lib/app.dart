@@ -10,6 +10,7 @@ import 'features/expenses/quick_add_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/profile/profile_provider.dart';
+import 'features/recap/recap_providers.dart';
 import 'features/settings/theme_mode_provider.dart';
 import 'features/widgets/widget_refresh.dart';
 import 'features/widgets/widget_snapshot.dart' show widgetAppGroupId;
@@ -64,6 +65,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(autoBackupCheckProvider);
+      ref.invalidate(monthlyRecapCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
     }
   }
@@ -81,6 +83,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
   @override
   Widget build(BuildContext context) {
     ref.watch(autoBackupCheckProvider); // fires the cold-start check
+    ref.watch(monthlyRecapCheckProvider); // fires the once-per-month recap check
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);

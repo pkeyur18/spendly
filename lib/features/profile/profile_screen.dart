@@ -13,6 +13,7 @@ import 'delete_all_data_flow.dart';
 import 'edit_profile_screen.dart';
 import 'lifetime_stats.dart';
 import 'profile_provider.dart';
+import '../recap/monthly_recap_screen.dart';
 
 /// Profile (FR-51, FR-57) — prototype phone 10. The account/settings hub:
 /// avatar, lifetime stats, and links to Edit Profile, Avatar Picker, Theme,
@@ -157,6 +158,21 @@ class ProfileScreen extends ConsumerWidget {
                       builder: (_) => const BackupRestoreScreen(),
                     ),
                   ),
+                ),
+                _MenuRow(
+                  icon: Icons.calendar_month_outlined,
+                  title: 'Monthly recap',
+                  subtitle: "Revisit last month's summary",
+                  onTap: () {
+                    final now = DateTime.now();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MonthlyRecapScreen(
+                          month: DateTime(now.year, now.month - 1, 1),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
