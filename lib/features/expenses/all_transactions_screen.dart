@@ -28,6 +28,13 @@ bool _isCalendarMonth((DateTime, DateTime) range) {
   return bounds.$1 == range.$1 && bounds.$2 == range.$2;
 }
 
+/// Caps the selected-category chip row to [max] entries unless [expanded].
+List<CategoryRow> visibleCategoryChips(
+  List<CategoryRow> selected,
+  bool expanded, {
+  int max = 3,
+}) => expanded || selected.length <= max ? selected : selected.take(max).toList();
+
 /// Full transaction list for a date range, grouped by day. Opened either
 /// locked to today (from Home, no switcher) or with a month/custom-range
 /// switcher (from the report screen).
@@ -56,6 +63,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   late (DateTime, DateTime) _range = widget.initialRange;
   int _limit = _pageSize;
   Set<int> _selectedCategoryIds = {};
+  bool _categoryChipsExpanded = false;
   final _scrollController = ScrollController();
 
   String get _categoryKey => (_selectedCategoryIds.toList()..sort()).join(',');
@@ -96,6 +104,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
       _range = monthBounds(anchor);
       _limit = _pageSize;
       _selectedCategoryIds = {};
+      _categoryChipsExpanded = false;
     });
   }
 
@@ -125,6 +134,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
       _range = (start, end);
       _limit = _pageSize;
       _selectedCategoryIds = {};
+      _categoryChipsExpanded = false;
     });
   }
 
@@ -141,7 +151,12 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
         initialSelected: _selectedCategoryIds,
       ),
     );
-    if (result != null) setState(() => _selectedCategoryIds = result);
+    if (result != null) {
+      setState(() {
+        _selectedCategoryIds = result;
+        _categoryChipsExpanded = false;
+      });
+    }
   }
 
   String get _title {
@@ -166,6 +181,16 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
     final now = DateTime.now();
     final atCurrentMonth =
         monthMode && _range.$1.year == now.year && _range.$1.month == now.month;
+    final selectedList = [
+      for (final c in categoryChips)
+        if (_selectedCategoryIds.contains(c.id)) c,
+    ];
+    final visibleChips = visibleCategoryChips(
+      selectedList,
+      _categoryChipsExpanded,
+    );
+    final hiddenChipCount = selectedList.length - visibleChips.length;
+    final ghostChipShape = StadiumBorder(side: BorderSide(color: palette.line));
 
     return Scaffold(
       appBar: AppBar(
@@ -216,32 +241,61 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
                 children: [
-                  for (final c in categoryChips)
-                    if (_selectedCategoryIds.contains(c.id))
-                      InputChip(
-                        label: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CategoryGlyph(c.icon, size: 16),
-                            const SizedBox(width: AppSpacing.xs),
-                            Text(c.name),
-                          ],
-                        ),
-                        selected: true,
-                        onSelected: (_) =>
-                            setState(() => _selectedCategoryIds.remove(c.id)),
-                        onDeleted: () =>
-                            setState(() => _selectedCategoryIds.remove(c.id)),
-                        selectedColor: AppColors.primary,
-                        labelStyle: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        backgroundColor: palette.card,
-                        shape: StadiumBorder(
-                          side: BorderSide(color: palette.line),
-                        ),
+                  for (final c in visibleChips)
+                    InputChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CategoryGlyph(c.icon, size: 16),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(c.name),
+                        ],
                       ),
+                      selected: true,
+                      onSelected: (_) =>
+                          setState(() => _selectedCategoryIds.remove(c.id)),
+                      onDeleted: () =>
+                          setState(() => _selectedCategoryIds.remove(c.id)),
+                      selectedColor: AppColors.primary,
+                      labelStyle: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      backgroundColor: palette.card,
+                      shape: StadiumBorder(
+                        side: BorderSide(color: palette.line),
+                      ),
+                    ),
+                  if (hiddenChipCount > 0)
+                    ActionChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('+$hiddenChipCount more'),
+                          const SizedBox(width: AppSpacing.xs),
+                          const Icon(Icons.expand_more_rounded, size: 16),
+                        ],
+                      ),
+                      onPressed: () =>
+                          setState(() => _categoryChipsExpanded = true),
+                      backgroundColor: palette.card,
+                      shape: ghostChipShape,
+                    ),
+                  if (_categoryChipsExpanded && selectedList.length > 3)
+                    ActionChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Show less'),
+                          const SizedBox(width: AppSpacing.xs),
+                          const Icon(Icons.expand_less_rounded, size: 16),
+                        ],
+                      ),
+                      onPressed: () =>
+                          setState(() => _categoryChipsExpanded = false),
+                      backgroundColor: palette.card,
+                      shape: ghostChipShape,
+                    ),
                 ],
               ),
             ),
