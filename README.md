@@ -8,10 +8,11 @@ own a full versioned backup so your data is never truly lost.
 Single codebase (Flutter), no account, no server. Money is stored as integer minor units
 (paise) — never float. Currency is INR (₹) with device-locale formatting.
 
-> **Status:** built through the ad-hoc Sprint 12 (ignore-category-for-budget toggle).
-> Drift schema v6, backup format v3, 162 passing tests. Beta & hardening (Sprint 8) and
-> store submission (Sprint 9) are not started. See [PROGRESS.md](PROGRESS.md) for the
-> full sprint-by-sprint log and locked decisions.
+> **Status:** built through the ad-hoc Sprint 12 (ignore-category-for-budget toggle), plus
+> a post-Sprint-12 Monthly Recap feature. Drift schema v7, backup format v3, 190 passing
+> tests (37 test files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are
+> not started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
+> locked decisions.
 
 ---
 
@@ -37,6 +38,12 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 - **Reports** — auto-generated end-of-month report (scheduled local notification), on-demand
   custom-range reports, top-5 expenses, previous-period comparison, daily average; export as
   PDF or CSV and share via the OS share sheet.
+- **Monthly Recap** — a full-screen "hero" takeover auto-shown once per new month on app
+  launch/resume (skipped on fresh installs with no prior-month expenses; gated by a
+  persisted last-shown-month flag): a gradient hero card ("you saved this month" with a
+  falling-emoji confetti overlay, "you went over budget" in amber, or a plain total if no
+  budget is set) plus a top-3 spending categories card. Also reachable any time via a
+  permanent "Monthly recap" row in Profile.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -59,7 +66,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v6 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v7 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |
@@ -95,17 +102,22 @@ lib/
     ├── categories/                 # manager, edit sheet (strip+popup), archived
     ├── budgets/                    # per-month budget setup + repository
     ├── reports/                    # monthly/custom reports, export (PDF/CSV)
+    ├── recap/                      # monthly recap: auto-shown summary + manual replay from Profile
     ├── tags/                       # trips: manager, edit, per-trip reports
     ├── profile/                    # profile hub, edit, avatar picker, lifetime stats
     ├── backup/                     # backup/restore, crypto, format, auto-backup
     ├── widgets/                    # home-widget snapshot + refresh bridge
-    └── settings/                   # theme mode provider
+    ├── settings/                   # theme mode provider
+    └── dev/                        # debug data screen (dev-only tooling)
 
 ios/SpendlyWidget/                  # Swift WidgetKit extension (4 widget variants)
 android/app/src/main/kotlin/.../widget/   # Kotlin Glance widget + receiver
+docs/architecture.md                # arc42 architecture doc
+docs/adr/                           # 9 architecture decision records
+docs/known-issues.md                # known-issues ledger
 docs/backup-schema.md               # versioned backup file format (v1→v3)
-requirement_docs/                   # requirements + interactive prototype
-test/                               # 29 test files (money, repos, backup, reports, …)
+docs/requirement_docs/              # requirements + interactive prototype
+test/                               # 37 test files (money, repos, backup, reports, recap, …)
 ```
 
 ---
@@ -116,7 +128,7 @@ test/                               # 29 test files (money, repos, backup, repor
 flutter pub get
 dart run build_runner build      # regenerate Drift code after any schema change
 flutter run                      # pick an iOS simulator or Android emulator
-flutter analyze && flutter test  # 162 tests
+flutter analyze && flutter test  # 190 tests
 ```
 
 The DB (`spendly.sqlite`) is created on first launch in the app documents directory and
@@ -126,10 +138,15 @@ seeded with 18 default categories. No configuration or account is required.
 
 ## Documentation
 
-- 📋 **[Product Requirements](requirement_docs/spendly-requirements.md)** — full functional
+- 📋 **[Product Requirements](docs/requirement_docs/spendly-requirements.md)** — full functional
   (FR-*) and non-functional spec, information architecture, screen list.
-- 🎨 **[Interactive Prototype](requirement_docs/spendly-prototype.html)** — clickable
+- 🎨 **[Interactive Prototype](docs/requirement_docs/spendly-prototype.html)** — clickable
   mockups of every screen in light & dark themes (open in a browser).
+- 🏛️ **[Architecture](docs/architecture.md)** — arc42-format architecture overview.
+- 🧭 **[ADRs](docs/adr/)** — 9 architecture decision records (feature-first structure,
+  Riverpod state/DI, Drift local persistence, no-cloud-sync, widget-bridge shared storage,
+  push-based widget refresh, imperative navigation, money/currency model, testing strategy).
+- ⚠️ **[Known Issues](docs/known-issues.md)** — ledger of known gaps/limitations.
 - 💾 **[Backup Schema](docs/backup-schema.md)** — the versioned JSON backup file format and
   Merge/Replace algorithms.
 - 📈 **[PROGRESS.md](PROGRESS.md)** — sprint-by-sprint build log, locked decisions, and
@@ -144,3 +161,5 @@ seeded with 18 default categories. No configuration or account is required.
 - **Recurring expenses remind, never auto-log** — the user confirms on the due date.
 - **Backups are optionally password-protected** (AES-256-GCM + PBKDF2), per the user's choice.
 - **Auto-backup runs on app launch/resume** (no background service), default weekly.
+- **Categories and expenses carry a stable `externalId`** (schema v7), independent of the
+  local row ID, used to match records across devices during a backup Merge.
