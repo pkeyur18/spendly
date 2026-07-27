@@ -50,14 +50,34 @@ fragile in ways that are easy to miss.
 
 Ranked by how likely a recurrence is, per `docs/architecture.md` §8/§11.
 
-### 1. No systemic fix for the reactive-read staleness pattern
+### 1. ~~No systemic fix for the reactive-read staleness pattern~~ — Resolved
 
-**Fragile because:** the fix has been applied three times at three call sites, never at the
-root. Nothing stops a fourth screen from being built the same wrong way tomorrow.
-**Trigger to revisit:** a 4th independent instance of the same bug class in a new feature.
-**Fix direction:** a written convention (ideally a lint) — any provider feeding a
-just-written UI surface must use a fresh stream subscription, never a cached last-value
-`Provider`. Point at the three commits above as the reason it exists.
+A real `custom_lint`/`riverpod_lint` rule was considered and rejected: this repo uses
+classic Riverpod provider declarations (no `@riverpod` codegen), and both packages pin
+`analyzer` version ranges that carry the same lockstep-conflict risk already documented in
+push-back #4 below (where it actually blocked `drift_dev`) — untested added risk, not a
+quick win.
+
+Landed a source-scanning test instead, `test/reactive_read_staleness_test.dart` (same style
+as `migration_test.dart`): it classifies every Riverpod provider in `lib/` as "data-backed"
+(a `StreamProvider`, a `FutureProvider`, or a plain `Provider` derived from
+`ref.watch(x).value`) or safe (repo/service instances, self-mutating `Notifier`/
+`AsyncNotifierProvider`s), then fails if any data-backed provider is read via `ref.read()`
+anywhere — the shared shape behind all three original incidents, generalized: `ref.watch()`
+in a widget build is always safe (the widget rebuilds on the next emission); `ref.read()` on
+a data-backed provider serves neither live reactivity nor a guaranteed-fresh value, so it's
+banned outright rather than checked case-by-case.
+
+Writing the test's manual-grep precursor immediately caught a previously-undocumented
+**4th live instance**, never fixed until now:
+`lib/features/expenses/quick_add_screen.dart`'s `_checkBudgetAlerts` — called right after
+every expense add/edit — read `perCategoryBudgetsForMonthProvider`, `categoriesByIdProvider`,
+and `overallBudgetForMonthProvider` via `ref.read(...)` right after the write the alert is
+supposed to react to, so an 80%/100% budget-threshold notification could evaluate against
+pre-write budget/category data. A 5th, lower-stakes instance turned up in
+`widget_refresh.dart` itself (`lastUsedCategoryIdProvider`, used to order the widget's
+quick-add category chips). Both fixed with fresh one-shot repository reads, matching the
+pattern `widget_refresh.dart` already established for the three original fixes.
 
 ### 2. Widget bridge schema is hand-triplicated across Dart, Swift, and Kotlin
 
@@ -71,23 +91,64 @@ this scale) — instead, a regression test that snapshot-writes known keys and a
 Swift/Kotlin source still references them, so a renamed/removed key fails CI instead of
 breaking a widget silently at runtime.
 
-### 3. No centralized "on write, refresh widgets" hook
+### 3. ~~No centralized "on write, refresh widgets" hook~~ — Resolved
 
-**Fragile because:** 7 call sites manually invoke `refreshWidgets(ref)`; already missed once
-(`b45de67`). Every new mutating screen has to remember to add the call itself.
-**Trigger to revisit:** a 4th missed call site.
-**Fix direction:** a repository-level "totals changed" notifier that `widget_refresh.dart`
-subscribes to once, removing the per-call-site burden — worth it only once the current
-per-screen discipline actually fails again.
+Was worse than "7 call sites to remember": there were 10, plus at least 8 more mutations
+(`ExpenseRepository.delete`, all of `CategoryRepository`'s and `TagRepository`'s CRUD) that
+already shipped with no refresh call at all — the widget was silently stale for a swipe-delete
+or a category rename, independent of any future missed site.
 
-### 4. No migration-safety test harness
+`widget_refresh.dart` now subscribes once to Drift's own `AppDatabase.tableUpdates()` stream
+(`widgetRefreshHookProvider`, armed once in `app.dart`), scoped to the `expenses`/`categories`/
+`budgets` tables and debounced 250ms. Every write through Drift — insert, update, delete, batch,
+transaction — fires it, so no call site can forget. All 10 manual `refreshWidgets(ref)` call
+sites were deleted; `refreshWidgets` itself now takes a `Ref` (Riverpod 3 split `Ref` and
+`WidgetRef` into unrelated types, so the two remaining widget-tree calls — app cold-start/resume,
+not writes — go through a new `refreshWidgetsActionProvider` closure instead of calling it
+directly). Covered by `test/widget_refresh_hook_test.dart`: inserts an expense with no explicit
+refresh call and asserts the widget snapshot updates anyway.
 
-**Fragile because:** schema is at manual version 6, upgraded via a linear `if (from < N)`
-chain in `onUpgrade`, with no automated check that upgrading v1→v6 actually produces the
-expected schema. `drift_dev` is present but only used for codegen, not schema verification.
-**Trigger to revisit:** before the next schema-changing sprint — cheap now, expensive to
-retrofit after more versions accumulate untested.
-**Fix direction:** add `drift_dev`'s schema export + a golden migration test.
+### 4. ~~No migration-safety test harness~~ — Resolved
+
+Schema is at manual version 7 (corrected from "6" above — v7/externalId already shipped by
+the time this was written), upgraded via a linear `if (from < N)` chain in `onUpgrade`. Added
+`test/migration_test.dart`: seeds a real v1 schema (raw SQL, reconstructed from commit
+`aaf6d2f`) with pre-existing rows, opens it as the current `AppDatabase`, and lets the real
+`onUpgrade` chain run v1→v7 in one pass — the same thing a user who hasn't updated in a long
+time would hit.
+
+The original fix direction (`drift_dev`'s schema-export + `SchemaVerifier` tooling) turned out
+to be blocked in this environment: `drift_dev`'s `schema dump` command crashes even on the
+current schema (patch mismatch between the pinned `drift 2.34.2` / `drift_dev 2.34.0`), and
+bumping `drift_dev` past it requires an `analyzer` major bump that collides with `test_api`
+pinned by the installed Flutter SDK itself — not fixable via `pubspec.yaml` alone. Landed a
+hand-rolled raw-SQL harness instead: no new dependencies, same coverage.
+
+Writing the very first version of this test immediately caught three real, already-shipping
+bugs in the `onUpgrade` chain — all three followed the same pattern (a migration step reached
+for a "live schema" helper — `m.createTable`, `insertAll` with a `clientDefault` column —
+instead of raw SQL scoped to the historical shape at that point in the chain):
+
+1. `budgets.monthKey` added via `m.addColumn` with no default — SQLite rejects `ADD COLUMN
+   ... NOT NULL` with no default the moment the table has an existing row. Any user with a
+   saved budget upgrading from v1 would crash on every launch. Fixed with a raw
+   `ALTER TABLE ... ADD COLUMN month_key TEXT` (nullable at the DDL level; the existing
+   immediate `UPDATE` backfill still runs right after).
+2. The v3 category-seed step used `CategoriesCompanion.insert`, which always writes every
+   *current* column via `clientDefault` — including `external_id`, four migration blocks
+   before that column exists. Crashed for anyone upgrading from v1/v2/v3. Fixed with a raw
+   `INSERT` naming only the columns that existed at v3.
+3. `m.createTable(tags)` (from<4) always builds the table using the live, current `Tags`
+   definition — meaning anyone upgrading from below v4 got `tags` created *already* with
+   `external_id`, and the later unconditional `m.addColumn(tags, tags.externalId)` (from<7)
+   then failed with a duplicate-column error. Fixed by checking `PRAGMA table_info(tags)`
+   before adding the column.
+
+None of these had ever been exercised — every existing DB test only opened a fresh
+`AppDatabase` at the current version (`onCreate`), never simulated an upgrade (`onUpgrade`).
+See `lib/core/db/database.dart`'s `onUpgrade` chain and the doc comment above `schemaVersion`
+for the go-forward convention: extend `test/migration_test.dart` with a new seeded row whenever
+a schema bump adds an `onUpgrade` block.
 
 ### 5. ~~Backup Merge matches records by name/content-fingerprint, not stable ID~~ — Resolved
 

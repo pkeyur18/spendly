@@ -447,6 +447,7 @@ class _CategoryEditSheetState extends ConsumerState<CategoryEditSheet> {
 
   Future<void> _openColorPicker() async {
     final palette = Theme.of(context).extension<AppPalette>()!;
+    // staleness-ok: reads the same list build() already watches, to avoid suggesting a used color.
     final otherCategories = ref
         .read(allCategoriesProvider)
         .value

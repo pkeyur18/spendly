@@ -38,8 +38,9 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
     });
     HomeWidget.widgetClicked.listen(_handleWidgetUri);
+    ref.read(widgetRefreshHookProvider); // arms the on-write refresh hook once
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      refreshWidgets(ref);
+      ref.read(refreshWidgetsActionProvider)();
       _initNotifications();
     });
   }
@@ -63,7 +64,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(autoBackupCheckProvider);
-      refreshWidgets(ref);
+      ref.read(refreshWidgetsActionProvider)();
     }
   }
 

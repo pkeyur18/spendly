@@ -335,13 +335,6 @@ final currentMonthTotalProvider = FutureProvider<Money>(
   (ref) => ref.watch(expenseRepositoryProvider).monthTotal(DateTime.now()),
 );
 
-final currentMonthCategoryTotalsProvider = FutureProvider<Map<int, Money>>((
-  ref,
-) {
-  final (start, end) = monthBounds(DateTime.now());
-  return ref.watch(expenseRepositoryProvider).totalsByCategory(start, end);
-});
-
 /// Live lifetime spend per tag — feeds the Tags report list.
 final tagTotalsProvider = StreamProvider<Map<int, Money>>(
   (ref) => ref.watch(expenseRepositoryProvider).watchTotalsByTag(),

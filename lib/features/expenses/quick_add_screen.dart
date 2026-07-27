@@ -15,7 +15,6 @@ import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../tags/tag_edit_sheet.dart';
 import '../tags/tag_repository.dart';
-import '../widgets/widget_refresh.dart';
 import 'expense_repository.dart';
 import 'widgets/expense_tile.dart' show relativeDayLabel;
 
@@ -203,7 +202,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   void _applyDefaultCategory(List<CategoryRow> categories) {
     if (_defaulted || _categoryId != null || categories.isEmpty) return;
-    final lastUsed = ref.read(lastUsedCategoryIdProvider);
+    final lastUsed = ref.watch(lastUsedCategoryIdProvider);
     final exists = categories.any((c) => c.id == lastUsed);
     _categoryId = exists ? lastUsed : categories.first.id;
     _defaulted = true;
@@ -657,9 +656,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final sameCategory = _isEdit && widget.editing!.categoryId == categoryId;
     final delta = sameCategory ? amount - oldAmount : amount;
     await _checkBudgetAlerts(categoryId, delta);
-    await refreshWidgets(
-      ref,
-    ); // FR-29: keep the home/lock-screen widgets current
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -671,19 +667,33 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final (start, end) = monthBounds(_selectedDate);
     final byCategory = await expenses.totalsByCategory(start, end);
     final notifier = ref.read(notificationServiceProvider);
-    final monthKey = monthKeyFor(_selectedDate);
 
-    final perCategoryBudgets = ref.read(
-      perCategoryBudgetsForMonthProvider(monthKey),
-    );
-    final ignored = ignoredCategoryIds(ref.read(categoriesByIdProvider));
+    // Fresh one-shot reads, not the cached perCategoryBudgetsForMonthProvider/
+    // categoriesByIdProvider/overallBudgetForMonthProvider — those are
+    // Providers built from a Drift stream's cached `.value`, which lags the
+    // write just above by at least one microtask (docs/architecture.md §8.1).
+    final budgetRows = await ref
+        .read(budgetRepositoryProvider)
+        .watchAllForMonth(_selectedDate)
+        .first;
+    final perCategoryBudgets = {
+      for (final r in budgetRows)
+        if (r.categoryId != null) r.categoryId!: Money.fromMinor(r.amountMinor),
+    };
+    final categoriesById = {
+      for (final c in await ref
+          .read(categoryRepositoryProvider)
+          .watchAll()
+          .first)
+        c.id: c,
+    };
+    final ignored = ignoredCategoryIds(categoriesById);
 
     // Per-category budget.
     final catBudget = perCategoryBudgets[categoryId];
     if (catBudget != null) {
       final after = byCategory[categoryId] ?? Money.zero;
-      final name =
-          ref.read(categoriesByIdProvider)[categoryId]?.name ?? 'Category';
+      final name = categoriesById[categoryId]?.name ?? 'Category';
       for (final pct in crossedThresholds(after - delta, after, catBudget)) {
         await notifier.showBudgetAlert(name, pct);
       }
@@ -691,8 +701,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
     // Overall budget — ignored-for-budget categories don't count toward it,
     // and their own budget allocation is netted out of the target too.
+    final rawOverall = await ref
+        .read(budgetRepositoryProvider)
+        .watchOverallBudget(_selectedDate)
+        .first;
     final overall = effectiveOverallBudget(
-      ref.read(overallBudgetForMonthProvider(monthKey)).value,
+      rawOverall,
       perCategoryBudgets,
       ignored,
     );

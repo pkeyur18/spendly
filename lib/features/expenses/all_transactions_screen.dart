@@ -77,6 +77,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   void _onScroll() {
     final pos = _scrollController.position;
     if (pos.pixels < pos.maxScrollExtent - 400) return;
+    // staleness-ok: reads the same page build() already watches, for pagination bookkeeping.
     final loaded = ref
         .read(
           expensesInRangeProvider((_range.$1, _range.$2, _limit, _categoryKey)),

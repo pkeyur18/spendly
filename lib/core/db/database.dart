@@ -140,6 +140,14 @@ class AppDatabase extends _$AppDatabase {
   /// In-memory database for tests — no files touched.
   AppDatabase.forTesting(super.executor);
 
+  /// Bump this whenever the schema changes, and add the matching
+  /// `if (from < N)` block below. Before merging, extend
+  /// test/migration_test.dart's seeded v1 database with a row exercising the
+  /// new block, and re-run it — `onUpgrade` steps that use a "live schema"
+  /// helper (`m.createTable`, `insertAll`/Companions with a `clientDefault`
+  /// column) instead of raw SQL scoped to the historical shape have broken
+  /// three times already for exactly this reason (see the fixes this comment
+  /// shipped with).
   @override
   int get schemaVersion => 7;
 
@@ -153,7 +161,13 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         // Budgets used to be a single standing row per category; scope the
         // pre-existing ones onto the current month so they keep working.
-        await m.addColumn(budgets, budgets.monthKey);
+        //
+        // Raw ALTER, not m.addColumn: SQLite rejects ADD COLUMN ... NOT NULL
+        // with no default on a table that already has rows (fine on an empty
+        // table, fails the moment there's one — caught by
+        // test/migration_test.dart). Nullable at the DDL level; the UPDATE
+        // right below immediately backfills every row to a real value.
+        await customStatement('ALTER TABLE budgets ADD COLUMN month_key TEXT');
         await customStatement(
           'UPDATE budgets SET month_key = ? WHERE month_key IS NULL',
           [monthKeyFor(DateTime.now())],
@@ -162,7 +176,21 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         // New default categories added post-launch; append to existing
         // installs instead of only seeding them on fresh installs/reset.
-        await batch((b) => b.insertAll(categories, _newCategoriesV3));
+        //
+        // Raw INSERT, not b.insertAll(categories, _newCategoriesV3):
+        // CategoriesCompanion.insert always writes every current column via
+        // clientDefault, including external_id — which doesn't exist yet
+        // for anyone upgrading from below v7 (added at from<7). Caught by
+        // test/migration_test.dart.
+        final newCategories = _defaultCategorySpecs.skip(8).toList();
+        for (var i = 0; i < newCategories.length; i++) {
+          final spec = newCategories[i];
+          await customStatement(
+            'INSERT INTO categories (name, icon, color_value, sort_order, is_default) '
+            'VALUES (?, ?, ?, ?, 1)',
+            [spec.$1, spec.$2, spec.$3, 8 + i],
+          );
+        }
       }
       if (from < 4) {
         // Trip/tag grouping — additive, no data migration needed.
@@ -191,7 +219,17 @@ class AppDatabase extends _$AppDatabase {
         // fingerprint-only matching in backup Merge (docs/backup-schema.md).
         await m.addColumn(categories, categories.externalId);
         await m.addColumn(expenses, expenses.externalId);
-        await m.addColumn(tags, tags.externalId);
+        // m.createTable always builds the *current* table definition, so
+        // anyone upgrading from below v4 got `tags` created above (from<4)
+        // with external_id already on it — adding it again here would be a
+        // duplicate-column error. Caught by test/migration_test.dart.
+        final tagColumns = await customSelect('PRAGMA table_info(tags)').get();
+        final tagsHasExternalId = tagColumns.any(
+          (row) => row.data['name'] == 'external_id',
+        );
+        if (!tagsHasExternalId) {
+          await m.addColumn(tags, tags.externalId);
+        }
         await m.addColumn(budgets, budgets.externalId);
         await backfillExternalIds(this);
       }
@@ -264,9 +302,4 @@ List<CategoriesCompanion> _categoriesFrom(
 
 final List<CategoriesCompanion> _defaultCategories = _categoriesFrom(
   _defaultCategorySpecs,
-);
-
-final List<CategoriesCompanion> _newCategoriesV3 = _categoriesFrom(
-  _defaultCategorySpecs.sublist(8),
-  startIndex: 8,
 );
