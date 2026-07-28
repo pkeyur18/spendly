@@ -22,7 +22,6 @@ class RestoreScreen extends ConsumerStatefulWidget {
 
 class _RestoreScreenState extends ConsumerState<RestoreScreen> {
   BackupPreview? _preview;
-  RestoreMode _mode = RestoreMode.merge;
   bool _busy = false;
   String? _error;
 
@@ -117,19 +116,11 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
             ),
             const SectionTitle('How should we restore?'),
             _RestoreModeCard(
-              title: 'Merge',
-              description:
-                  "Add backup data to what's already on this device. Duplicate-safe.",
-              selected: _mode == RestoreMode.merge,
-              onTap: () => setState(() => _mode = RestoreMode.merge),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _RestoreModeCard(
               title: 'Replace',
               description:
                   'Erase current data on this device and restore only from the backup file.',
-              selected: _mode == RestoreMode.replace,
-              onTap: () => setState(() => _mode = RestoreMode.replace),
+              selected: true,
+              onTap: () {},
             ),
             const SizedBox(height: AppSpacing.lg),
             PrimaryButton(
@@ -243,7 +234,7 @@ class _RestoreScreenState extends ConsumerState<RestoreScreen> {
     final navigator = Navigator.of(context);
     try {
       final repo = ref.read(backupRepositoryProvider);
-      await executeRestore(preview.payload, _mode, repo);
+      await executeRestore(preview.payload, RestoreMode.replace, repo);
       messenger.showSnackBar(const SnackBar(content: Text('Data restored')));
       navigator.pop();
     } catch (e) {

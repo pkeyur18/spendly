@@ -1,7 +1,7 @@
 # Spendly — Architecture Documentation
 
-Written against the codebase as of Sprint 12 (Drift schema v6, backup format v3, 162 tests
-passing). Follows the [arc42](https://arc42.org) template. This document reflects what the
+Written against the codebase as of Sprint 12+ (Drift schema v7, backup format v3). Follows
+the [arc42](https://arc42.org) template. This document reflects what the
 code actually does, verified against source — not an idealized target architecture. Where a
 decision has trade-offs or a documented weak spot, that is stated plainly rather than glossed
 over; see §11 for the consolidated risk register.
@@ -318,20 +318,19 @@ it. A cheaper, still-effective option: a small regression test that snapshot-wri
 key/id and asserts the Swift and Kotlin source files still reference it (a regex-based drift
 check), so a renamed or removed key fails CI instead of silently breaking a widget at runtime.
 
-### 8.3 No centralized write→refresh hook for widgets
+### 8.3 Centralized write→refresh hook for widgets — resolved
 
-`refreshWidgets(ref)` is called explicitly from 7 separate sites: `app.dart` (cold start,
-resume), `quick_add_screen.dart` (after save), `restore_screen.dart` (after restore), and 5
-places in `budget_setup_screen.dart` (added in commit `b45de67`). There is no shared
-"on any total-affecting write, refresh" hook — every screen that changes totals has to
-remember to call it itself, and that discipline has already been missed once: budget-setup
-edits shipped without calling `refreshWidgets` at all until `b45de67` added it retroactively.
-
-**Recommended fix direction:** if a fourth miss occurs, it's worth introducing a
-repository-level "totals changed" notifier that `widget_refresh.dart` subscribes to once,
-removing the per-call-site burden. Until then, the current cost (one extra line per new
-mutating screen) is judged acceptable for the app's size — but this judgment should be
-revisited, not assumed to still hold, the next time a widget-staleness bug ships.
+Previously `refreshWidgets(ref)` was called explicitly from every mutating screen — at peak,
+10 manual call sites, plus at least 8 further mutations (`ExpenseRepository.delete`, all
+`CategoryRepository`/`TagRepository` CRUD) that had already shipped with no refresh call at
+all. This is now fixed structurally: `widgetRefreshHookProvider`
+(`lib/features/widgets/widget_refresh.dart`) subscribes once to Drift's own
+`AppDatabase.tableUpdates()` stream, scoped to the `expenses`/`categories`/`budgets` tables
+and debounced 250ms, so every write triggers a refresh with no per-call-site discipline
+required. All prior manual call sites were deleted; the only two remaining calls to
+`refreshWidgets` are cold-start and app-resume, routed through
+`refreshWidgetsActionProvider`. Regression-guarded by
+`test/widget_refresh_hook_test.dart`.
 
 ### 8.4 No migration-safety test harness
 
@@ -368,7 +367,7 @@ Full detail (context, alternatives considered, consequences) lives in `docs/adr/
 | [ADR-003](adr/003-drift-local-persistence.md) | Drift/SQLite for local persistence, no repository-interface abstraction over it |
 | [ADR-004](adr/004-no-cloud-sync.md) | No cloud sync — local export/import via the OS share sheet only |
 | [ADR-005](adr/005-widget-bridge-shared-storage.md) | Widget bridge via `home_widget` + hand-mirrored shared-storage schema |
-| [ADR-006](adr/006-push-based-widget-refresh.md) | Push-based widget refresh via explicit per-call-site `refreshWidgets()` |
+| [ADR-006](adr/006-push-based-widget-refresh.md) | Push-based widget refresh via a centralized Drift `tableUpdates()` hook |
 | [ADR-007](adr/007-imperative-navigation.md) | Imperative `Navigator` + `MaterialPageRoute`, no router package |
 | [ADR-008](adr/008-money-and-currency-model.md) | Integer-minor-units `Money`, single hardcoded currency (INR) for v1 |
 | [ADR-009](adr/009-testing-strategy.md) | Testing via `ProviderContainer` + in-memory Drift, no widget-pump/`pumpAndSettle`, no golden or integration tests yet |
@@ -401,7 +400,7 @@ caused.
 |---|---|---|---|---|
 | 1 | Reactive-read staleness after writes (§8.1) | Low per-incident, but has recurred 3× independently | A 4th independent instance in a new feature | Convention + lint: always fresh-read after a write, never cached-provider |
 | 2 | Widget-bridge schema triplication (§8.2) | Two shipped bugs so far, both iOS-specific | Any new snapshot key or widget-kind added | Regex-based drift test between Dart source and Swift/Kotlin source, not full codegen |
-| 3 | No centralized widget-refresh hook (§8.3) | One missed call site so far (`b45de67`), fixed reactively | A 4th missed call site | Repository-level "totals changed" notifier |
+| 3 | Widget-refresh hook centralization (§8.3) | **Fixed** — Drift `tableUpdates()` hook replaces all manual call sites | n/a | Guarded by `test/widget_refresh_hook_test.dart` |
 | 4 | No migration-safety test harness (§8.4) | None yet realized — schema is at v6 with no incident | Before the next schema-changing sprint | `drift_dev` schema export + golden migration test |
 | 5 | Backup Merge natural-key/fingerprint fallback (§1.2 #3) | **Fixed** for `externalId`-bearing rows (schema v7+). Residual: rows from before the migration and backup files exported before it still rely on the old natural-key/fingerprint matching | A future backup file predating schema v7 gets merged | None needed further — the fallback is an intentionally permanent compatibility path, not a gap to close |
 

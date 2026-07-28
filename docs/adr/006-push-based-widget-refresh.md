@@ -1,8 +1,10 @@
-# ADR-006: Push-based widget refresh via explicit per-call-site `refreshWidgets()`
+# ADR-006: Push-based widget refresh via a centralized Drift `tableUpdates()` hook
 
 ## Status
 
-Accepted, with an acknowledged unresolved tension (see Consequences).
+Accepted, with one acknowledged unresolved tension (see Consequences) — the OS reload-budget
+point. The centralized-hook question this ADR originally left open has since been resolved
+(see Decision).
 
 ## Context
 
@@ -13,14 +15,24 @@ poll/refresh on a fixed timer regardless of whether anything changed.
 
 ## Decision
 
-Push-based: `refreshWidgets(ref)` (`lib/features/widgets/widget_refresh.dart`) is called
-explicitly from every screen/flow that mutates totals-affecting data — 7 call sites today
-(`app.dart` cold start and resume, `quick_add_screen.dart` after save, `restore_screen.dart`
-after restore, and 5 sites in `budget_setup_screen.dart`). Each call recomputes the snapshot
-from fresh one-shot reads and calls `HomeWidget.updateWidget`, which on iOS maps to
+Push-based, via a single centralized hook rather than per-call-site discipline.
+`widgetRefreshHookProvider` (`lib/features/widgets/widget_refresh.dart`) subscribes once to
+Drift's own `AppDatabase.tableUpdates()` stream, scoped to the `expenses`/`categories`/
+`budgets` tables and debounced 250ms so a burst of rapid writes collapses into a single
+push. Any write to those tables — through any repository, from any screen — triggers
+`refreshWidgets(ref)` automatically; no mutating screen needs to remember to call it. The
+only two remaining explicit calls are cold-start and app-resume, routed through
+`refreshWidgetsActionProvider`. Each refresh recomputes the snapshot from fresh one-shot
+reads and calls `HomeWidget.updateWidget`, which on iOS maps to
 `WidgetCenter.reloadTimelines(ofKind:)`. iOS additionally schedules a periodic timeline entry
 roughly every hour purely as a safety net for missed pushes, not as the primary refresh
 mechanism (`SpendlyWidget.swift`, `Provider.getTimeline`).
+
+This supersedes the ADR's original decision (a manual `refreshWidgets(ref)` call at every
+mutating call site — 10 at peak, plus at least 8 further mutations that shipped with no
+refresh call at all). That approach caused a real miss (`b45de67`, budget-setup edits
+shipped without a refresh call) and was replaced by the table-hook design above; see
+`docs/known-issues.md` push-back #3 for the full incident history.
 
 ## Alternatives Considered
 
@@ -34,15 +46,11 @@ mechanism (`SpendlyWidget.swift`, `Provider.getTimeline`).
 
 ## Consequences
 
-- Freshness is good in the common case and the pattern is simple to reason about per call
-  site.
-- **Two real costs, both open**, not resolved by this decision:
-  1. There is no centralized "on any total-affecting write, refresh" hook — every mutating
-     screen must remember to call `refreshWidgets(ref)` itself. This has already been missed
-     once (budget-setup edits shipped without it, fixed retroactively in `b45de67`). See
-     `docs/architecture.md` §8.3, §11 risk #3 for the recommended fix direction (a
-     repository-level notifier) if a fourth miss occurs.
-  2. iOS's `reloadTimelines` calls are subject to an OS-managed budget that this app does not
+- Freshness is good in the common case, and the table-hook design removes the per-call-site
+  discipline burden entirely — a write can't ship without triggering a refresh, since the
+  hook lives beneath the repository layer, not inside each screen.
+- **One real cost remains open**, not resolved by this decision:
+  1. iOS's `reloadTimelines` calls are subject to an OS-managed budget that this app does not
      currently account for — under rapid successive writes (e.g. several Quick Adds in a
      row), some pushes may be silently dropped by the OS, and the 1-hour safety net is a
      coarse fallback, not a real answer. This is stated as an open tension in
