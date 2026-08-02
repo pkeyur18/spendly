@@ -20,7 +20,7 @@ export 'backup_crypto.dart' show BackupWrongPasswordException;
 /// expense. Same additive pattern — an older file simply lacks both keys,
 /// which [BackupPayload.fromJson]/[BackupExpense.fromJson] read as an empty
 /// list / null respectively.
-const currentBackupVersion = 3;
+const currentBackupVersion = 5;
 
 class BackupCorruptException implements Exception {
   const BackupCorruptException(this.reason);

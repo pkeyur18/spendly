@@ -176,13 +176,30 @@ class ExpenseTile extends ConsumerWidget {
                   ],
                 ),
               ),
-              Text(
-                '-${expense.amount.format(locale: 'en_IN')}',
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '-${expense.amount.format(locale: 'en_IN')}',
+                    style: const TextStyle(
+                      fontFamily: 'Sora',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  // What was actually paid abroad. Only rendered when there
+                  // is one — a domestic row keeps its single-line layout,
+                  // no placeholder.
+                  if (expense.isForeign)
+                    Text(
+                      expense.fxAmount!.formatAs(expense.fxCurrency!),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
               ),
             ],
           ),

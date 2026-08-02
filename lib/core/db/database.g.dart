@@ -643,6 +643,51 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _fxCurrencyMeta = const VerificationMeta(
+    'fxCurrency',
+  );
+  @override
+  late final GeneratedColumn<String> fxCurrency = GeneratedColumn<String>(
+    'fx_currency',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fxRateMicrosMeta = const VerificationMeta(
+    'fxRateMicros',
+  );
+  @override
+  late final GeneratedColumn<int> fxRateMicros = GeneratedColumn<int>(
+    'fx_rate_micros',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _tripStartDateMeta = const VerificationMeta(
+    'tripStartDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> tripStartDate =
+      GeneratedColumn<DateTime>(
+        'trip_start_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _tripEndDateMeta = const VerificationMeta(
+    'tripEndDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> tripEndDate = GeneratedColumn<DateTime>(
+    'trip_end_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _externalIdMeta = const VerificationMeta(
     'externalId',
   );
@@ -662,6 +707,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
     colorValue,
     isArchived,
     createdAt,
+    fxCurrency,
+    fxRateMicros,
+    tripStartDate,
+    tripEndDate,
     externalId,
   ];
   @override
@@ -707,6 +756,39 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('fx_currency')) {
+      context.handle(
+        _fxCurrencyMeta,
+        fxCurrency.isAcceptableOrUnknown(data['fx_currency']!, _fxCurrencyMeta),
+      );
+    }
+    if (data.containsKey('fx_rate_micros')) {
+      context.handle(
+        _fxRateMicrosMeta,
+        fxRateMicros.isAcceptableOrUnknown(
+          data['fx_rate_micros']!,
+          _fxRateMicrosMeta,
+        ),
+      );
+    }
+    if (data.containsKey('trip_start_date')) {
+      context.handle(
+        _tripStartDateMeta,
+        tripStartDate.isAcceptableOrUnknown(
+          data['trip_start_date']!,
+          _tripStartDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('trip_end_date')) {
+      context.handle(
+        _tripEndDateMeta,
+        tripEndDate.isAcceptableOrUnknown(
+          data['trip_end_date']!,
+          _tripEndDateMeta,
+        ),
+      );
+    }
     if (data.containsKey('external_id')) {
       context.handle(
         _externalIdMeta,
@@ -742,6 +824,22 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      fxCurrency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fx_currency'],
+      ),
+      fxRateMicros: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fx_rate_micros'],
+      ),
+      tripStartDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}trip_start_date'],
+      ),
+      tripEndDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}trip_end_date'],
+      ),
       externalId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
@@ -762,6 +860,22 @@ class TagRow extends DataClass implements Insertable<TagRow> {
   final bool isArchived;
   final DateTime createdAt;
 
+  /// ISO 4217 code for a trip abroad; null = an ordinary tag. Expenses tagged
+  /// with this are entered in this currency and converted on save.
+  final String? fxCurrency;
+
+  /// Home-currency units per 1 unit of [fxCurrency], scaled by 1e6
+  /// (2.62 INR per THB is stored as 2_620_000). Integer so a rate never rides
+  /// a double. See `lib/core/money/fx.dart`.
+  final int? fxRateMicros;
+
+  /// Trip date range for auto-tagging (inclusive, date-only — time of day is
+  /// ignored). Both null = no auto-tagging. Independent of [fxCurrency] — a
+  /// domestic trip can use this without ever touching the currency switch.
+  /// Always set together; never one without the other.
+  final DateTime? tripStartDate;
+  final DateTime? tripEndDate;
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
   const TagRow({
@@ -770,6 +884,10 @@ class TagRow extends DataClass implements Insertable<TagRow> {
     required this.colorValue,
     required this.isArchived,
     required this.createdAt,
+    this.fxCurrency,
+    this.fxRateMicros,
+    this.tripStartDate,
+    this.tripEndDate,
     this.externalId,
   });
   @override
@@ -780,6 +898,18 @@ class TagRow extends DataClass implements Insertable<TagRow> {
     map['color_value'] = Variable<int>(colorValue);
     map['is_archived'] = Variable<bool>(isArchived);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || fxCurrency != null) {
+      map['fx_currency'] = Variable<String>(fxCurrency);
+    }
+    if (!nullToAbsent || fxRateMicros != null) {
+      map['fx_rate_micros'] = Variable<int>(fxRateMicros);
+    }
+    if (!nullToAbsent || tripStartDate != null) {
+      map['trip_start_date'] = Variable<DateTime>(tripStartDate);
+    }
+    if (!nullToAbsent || tripEndDate != null) {
+      map['trip_end_date'] = Variable<DateTime>(tripEndDate);
+    }
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
@@ -793,6 +923,18 @@ class TagRow extends DataClass implements Insertable<TagRow> {
       colorValue: Value(colorValue),
       isArchived: Value(isArchived),
       createdAt: Value(createdAt),
+      fxCurrency: fxCurrency == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fxCurrency),
+      fxRateMicros: fxRateMicros == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fxRateMicros),
+      tripStartDate: tripStartDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tripStartDate),
+      tripEndDate: tripEndDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(tripEndDate),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
@@ -810,6 +952,10 @@ class TagRow extends DataClass implements Insertable<TagRow> {
       colorValue: serializer.fromJson<int>(json['colorValue']),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      fxCurrency: serializer.fromJson<String?>(json['fxCurrency']),
+      fxRateMicros: serializer.fromJson<int?>(json['fxRateMicros']),
+      tripStartDate: serializer.fromJson<DateTime?>(json['tripStartDate']),
+      tripEndDate: serializer.fromJson<DateTime?>(json['tripEndDate']),
       externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
@@ -822,6 +968,10 @@ class TagRow extends DataClass implements Insertable<TagRow> {
       'colorValue': serializer.toJson<int>(colorValue),
       'isArchived': serializer.toJson<bool>(isArchived),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'fxCurrency': serializer.toJson<String?>(fxCurrency),
+      'fxRateMicros': serializer.toJson<int?>(fxRateMicros),
+      'tripStartDate': serializer.toJson<DateTime?>(tripStartDate),
+      'tripEndDate': serializer.toJson<DateTime?>(tripEndDate),
       'externalId': serializer.toJson<String?>(externalId),
     };
   }
@@ -832,6 +982,10 @@ class TagRow extends DataClass implements Insertable<TagRow> {
     int? colorValue,
     bool? isArchived,
     DateTime? createdAt,
+    Value<String?> fxCurrency = const Value.absent(),
+    Value<int?> fxRateMicros = const Value.absent(),
+    Value<DateTime?> tripStartDate = const Value.absent(),
+    Value<DateTime?> tripEndDate = const Value.absent(),
     Value<String?> externalId = const Value.absent(),
   }) => TagRow(
     id: id ?? this.id,
@@ -839,6 +993,12 @@ class TagRow extends DataClass implements Insertable<TagRow> {
     colorValue: colorValue ?? this.colorValue,
     isArchived: isArchived ?? this.isArchived,
     createdAt: createdAt ?? this.createdAt,
+    fxCurrency: fxCurrency.present ? fxCurrency.value : this.fxCurrency,
+    fxRateMicros: fxRateMicros.present ? fxRateMicros.value : this.fxRateMicros,
+    tripStartDate: tripStartDate.present
+        ? tripStartDate.value
+        : this.tripStartDate,
+    tripEndDate: tripEndDate.present ? tripEndDate.value : this.tripEndDate,
     externalId: externalId.present ? externalId.value : this.externalId,
   );
   TagRow copyWithCompanion(TagsCompanion data) {
@@ -852,6 +1012,18 @@ class TagRow extends DataClass implements Insertable<TagRow> {
           ? data.isArchived.value
           : this.isArchived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      fxCurrency: data.fxCurrency.present
+          ? data.fxCurrency.value
+          : this.fxCurrency,
+      fxRateMicros: data.fxRateMicros.present
+          ? data.fxRateMicros.value
+          : this.fxRateMicros,
+      tripStartDate: data.tripStartDate.present
+          ? data.tripStartDate.value
+          : this.tripStartDate,
+      tripEndDate: data.tripEndDate.present
+          ? data.tripEndDate.value
+          : this.tripEndDate,
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
@@ -866,14 +1038,28 @@ class TagRow extends DataClass implements Insertable<TagRow> {
           ..write('colorValue: $colorValue, ')
           ..write('isArchived: $isArchived, ')
           ..write('createdAt: $createdAt, ')
+          ..write('fxCurrency: $fxCurrency, ')
+          ..write('fxRateMicros: $fxRateMicros, ')
+          ..write('tripStartDate: $tripStartDate, ')
+          ..write('tripEndDate: $tripEndDate, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, colorValue, isArchived, createdAt, externalId);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    colorValue,
+    isArchived,
+    createdAt,
+    fxCurrency,
+    fxRateMicros,
+    tripStartDate,
+    tripEndDate,
+    externalId,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -883,6 +1069,10 @@ class TagRow extends DataClass implements Insertable<TagRow> {
           other.colorValue == this.colorValue &&
           other.isArchived == this.isArchived &&
           other.createdAt == this.createdAt &&
+          other.fxCurrency == this.fxCurrency &&
+          other.fxRateMicros == this.fxRateMicros &&
+          other.tripStartDate == this.tripStartDate &&
+          other.tripEndDate == this.tripEndDate &&
           other.externalId == this.externalId);
 }
 
@@ -892,6 +1082,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
   final Value<int> colorValue;
   final Value<bool> isArchived;
   final Value<DateTime> createdAt;
+  final Value<String?> fxCurrency;
+  final Value<int?> fxRateMicros;
+  final Value<DateTime?> tripStartDate;
+  final Value<DateTime?> tripEndDate;
   final Value<String?> externalId;
   const TagsCompanion({
     this.id = const Value.absent(),
@@ -899,6 +1093,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     this.colorValue = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.fxCurrency = const Value.absent(),
+    this.fxRateMicros = const Value.absent(),
+    this.tripStartDate = const Value.absent(),
+    this.tripEndDate = const Value.absent(),
     this.externalId = const Value.absent(),
   });
   TagsCompanion.insert({
@@ -907,6 +1105,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     required int colorValue,
     this.isArchived = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.fxCurrency = const Value.absent(),
+    this.fxRateMicros = const Value.absent(),
+    this.tripStartDate = const Value.absent(),
+    this.tripEndDate = const Value.absent(),
     this.externalId = const Value.absent(),
   }) : name = Value(name),
        colorValue = Value(colorValue);
@@ -916,6 +1118,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     Expression<int>? colorValue,
     Expression<bool>? isArchived,
     Expression<DateTime>? createdAt,
+    Expression<String>? fxCurrency,
+    Expression<int>? fxRateMicros,
+    Expression<DateTime>? tripStartDate,
+    Expression<DateTime>? tripEndDate,
     Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
@@ -924,6 +1130,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
       if (colorValue != null) 'color_value': colorValue,
       if (isArchived != null) 'is_archived': isArchived,
       if (createdAt != null) 'created_at': createdAt,
+      if (fxCurrency != null) 'fx_currency': fxCurrency,
+      if (fxRateMicros != null) 'fx_rate_micros': fxRateMicros,
+      if (tripStartDate != null) 'trip_start_date': tripStartDate,
+      if (tripEndDate != null) 'trip_end_date': tripEndDate,
       if (externalId != null) 'external_id': externalId,
     });
   }
@@ -934,6 +1144,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     Value<int>? colorValue,
     Value<bool>? isArchived,
     Value<DateTime>? createdAt,
+    Value<String?>? fxCurrency,
+    Value<int?>? fxRateMicros,
+    Value<DateTime?>? tripStartDate,
+    Value<DateTime?>? tripEndDate,
     Value<String?>? externalId,
   }) {
     return TagsCompanion(
@@ -942,6 +1156,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
       colorValue: colorValue ?? this.colorValue,
       isArchived: isArchived ?? this.isArchived,
       createdAt: createdAt ?? this.createdAt,
+      fxCurrency: fxCurrency ?? this.fxCurrency,
+      fxRateMicros: fxRateMicros ?? this.fxRateMicros,
+      tripStartDate: tripStartDate ?? this.tripStartDate,
+      tripEndDate: tripEndDate ?? this.tripEndDate,
       externalId: externalId ?? this.externalId,
     );
   }
@@ -964,6 +1182,18 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (fxCurrency.present) {
+      map['fx_currency'] = Variable<String>(fxCurrency.value);
+    }
+    if (fxRateMicros.present) {
+      map['fx_rate_micros'] = Variable<int>(fxRateMicros.value);
+    }
+    if (tripStartDate.present) {
+      map['trip_start_date'] = Variable<DateTime>(tripStartDate.value);
+    }
+    if (tripEndDate.present) {
+      map['trip_end_date'] = Variable<DateTime>(tripEndDate.value);
+    }
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
@@ -978,6 +1208,10 @@ class TagsCompanion extends UpdateCompanion<TagRow> {
           ..write('colorValue: $colorValue, ')
           ..write('isArchived: $isArchived, ')
           ..write('createdAt: $createdAt, ')
+          ..write('fxCurrency: $fxCurrency, ')
+          ..write('fxRateMicros: $fxRateMicros, ')
+          ..write('tripStartDate: $tripStartDate, ')
+          ..write('tripEndDate: $tripEndDate, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -1093,6 +1327,28 @@ class $ExpensesTable extends Expenses
       'REFERENCES tags (id)',
     ),
   );
+  static const VerificationMeta _fxCurrencyMeta = const VerificationMeta(
+    'fxCurrency',
+  );
+  @override
+  late final GeneratedColumn<String> fxCurrency = GeneratedColumn<String>(
+    'fx_currency',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fxAmountMinorMeta = const VerificationMeta(
+    'fxAmountMinor',
+  );
+  @override
+  late final GeneratedColumn<int> fxAmountMinor = GeneratedColumn<int>(
+    'fx_amount_minor',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -1140,6 +1396,8 @@ class $ExpensesTable extends Expenses
     isRecurring,
     recurrence,
     tagId,
+    fxCurrency,
+    fxAmountMinor,
     createdAt,
     updatedAt,
     externalId,
@@ -1216,6 +1474,21 @@ class $ExpensesTable extends Expenses
         tagId.isAcceptableOrUnknown(data['tag_id']!, _tagIdMeta),
       );
     }
+    if (data.containsKey('fx_currency')) {
+      context.handle(
+        _fxCurrencyMeta,
+        fxCurrency.isAcceptableOrUnknown(data['fx_currency']!, _fxCurrencyMeta),
+      );
+    }
+    if (data.containsKey('fx_amount_minor')) {
+      context.handle(
+        _fxAmountMinorMeta,
+        fxAmountMinor.isAcceptableOrUnknown(
+          data['fx_amount_minor']!,
+          _fxAmountMinorMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1281,6 +1554,14 @@ class $ExpensesTable extends Expenses
         DriftSqlType.int,
         data['${effectivePrefix}tag_id'],
       ),
+      fxCurrency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fx_currency'],
+      ),
+      fxAmountMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fx_amount_minor'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1322,6 +1603,20 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
   /// Optional grouping across categories (e.g. a vacation trip) — orthogonal
   /// to [categoryId], which an expense keeps regardless of its tag.
   final int? tagId;
+
+  /// ISO 4217 code this expense was actually paid in, or null for a
+  /// home-currency expense. Always set together with [fxAmountMinor] — never
+  /// one without the other.
+  final String? fxCurrency;
+
+  /// Original amount in [fxCurrency] minor units — a receipt, for display
+  /// only. [amountMinor] holds the converted home-currency amount and stays
+  /// the single source of truth for every total.
+  ///
+  /// ponytail: two-decimal minor units for every currency, so JPY stores
+  /// 150000 for ¥1500 and formatting drops the digits it doesn't use. Add a
+  /// per-currency exponent table only if a real 3-decimal case turns up.
+  final int? fxAmountMinor;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -1337,6 +1632,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     required this.isRecurring,
     this.recurrence,
     this.tagId,
+    this.fxCurrency,
+    this.fxAmountMinor,
     required this.createdAt,
     required this.updatedAt,
     this.externalId,
@@ -1363,6 +1660,12 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     if (!nullToAbsent || tagId != null) {
       map['tag_id'] = Variable<int>(tagId);
     }
+    if (!nullToAbsent || fxCurrency != null) {
+      map['fx_currency'] = Variable<String>(fxCurrency);
+    }
+    if (!nullToAbsent || fxAmountMinor != null) {
+      map['fx_amount_minor'] = Variable<int>(fxAmountMinor);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || externalId != null) {
@@ -1388,6 +1691,12 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       tagId: tagId == null && nullToAbsent
           ? const Value.absent()
           : Value(tagId),
+      fxCurrency: fxCurrency == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fxCurrency),
+      fxAmountMinor: fxAmountMinor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fxAmountMinor),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       externalId: externalId == null && nullToAbsent
@@ -1413,6 +1722,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
         serializer.fromJson<String?>(json['recurrence']),
       ),
       tagId: serializer.fromJson<int?>(json['tagId']),
+      fxCurrency: serializer.fromJson<String?>(json['fxCurrency']),
+      fxAmountMinor: serializer.fromJson<int?>(json['fxAmountMinor']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       externalId: serializer.fromJson<String?>(json['externalId']),
@@ -1433,6 +1744,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
         $ExpensesTable.$converterrecurrencen.toJson(recurrence),
       ),
       'tagId': serializer.toJson<int?>(tagId),
+      'fxCurrency': serializer.toJson<String?>(fxCurrency),
+      'fxAmountMinor': serializer.toJson<int?>(fxAmountMinor),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'externalId': serializer.toJson<String?>(externalId),
@@ -1449,6 +1762,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     bool? isRecurring,
     Value<Recurrence?> recurrence = const Value.absent(),
     Value<int?> tagId = const Value.absent(),
+    Value<String?> fxCurrency = const Value.absent(),
+    Value<int?> fxAmountMinor = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<String?> externalId = const Value.absent(),
@@ -1464,6 +1779,10 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     isRecurring: isRecurring ?? this.isRecurring,
     recurrence: recurrence.present ? recurrence.value : this.recurrence,
     tagId: tagId.present ? tagId.value : this.tagId,
+    fxCurrency: fxCurrency.present ? fxCurrency.value : this.fxCurrency,
+    fxAmountMinor: fxAmountMinor.present
+        ? fxAmountMinor.value
+        : this.fxAmountMinor,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     externalId: externalId.present ? externalId.value : this.externalId,
@@ -1489,6 +1808,12 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           ? data.recurrence.value
           : this.recurrence,
       tagId: data.tagId.present ? data.tagId.value : this.tagId,
+      fxCurrency: data.fxCurrency.present
+          ? data.fxCurrency.value
+          : this.fxCurrency,
+      fxAmountMinor: data.fxAmountMinor.present
+          ? data.fxAmountMinor.value
+          : this.fxAmountMinor,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       externalId: data.externalId.present
@@ -1509,6 +1834,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           ..write('isRecurring: $isRecurring, ')
           ..write('recurrence: $recurrence, ')
           ..write('tagId: $tagId, ')
+          ..write('fxCurrency: $fxCurrency, ')
+          ..write('fxAmountMinor: $fxAmountMinor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('externalId: $externalId')
@@ -1527,6 +1854,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     isRecurring,
     recurrence,
     tagId,
+    fxCurrency,
+    fxAmountMinor,
     createdAt,
     updatedAt,
     externalId,
@@ -1544,6 +1873,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           other.isRecurring == this.isRecurring &&
           other.recurrence == this.recurrence &&
           other.tagId == this.tagId &&
+          other.fxCurrency == this.fxCurrency &&
+          other.fxAmountMinor == this.fxAmountMinor &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.externalId == this.externalId);
@@ -1559,6 +1890,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
   final Value<bool> isRecurring;
   final Value<Recurrence?> recurrence;
   final Value<int?> tagId;
+  final Value<String?> fxCurrency;
+  final Value<int?> fxAmountMinor;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<String?> externalId;
@@ -1572,6 +1905,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.isRecurring = const Value.absent(),
     this.recurrence = const Value.absent(),
     this.tagId = const Value.absent(),
+    this.fxCurrency = const Value.absent(),
+    this.fxAmountMinor = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.externalId = const Value.absent(),
@@ -1586,6 +1921,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.isRecurring = const Value.absent(),
     this.recurrence = const Value.absent(),
     this.tagId = const Value.absent(),
+    this.fxCurrency = const Value.absent(),
+    this.fxAmountMinor = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.externalId = const Value.absent(),
@@ -1602,6 +1939,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Expression<bool>? isRecurring,
     Expression<String>? recurrence,
     Expression<int>? tagId,
+    Expression<String>? fxCurrency,
+    Expression<int>? fxAmountMinor,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<String>? externalId,
@@ -1616,6 +1955,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       if (isRecurring != null) 'is_recurring': isRecurring,
       if (recurrence != null) 'recurrence': recurrence,
       if (tagId != null) 'tag_id': tagId,
+      if (fxCurrency != null) 'fx_currency': fxCurrency,
+      if (fxAmountMinor != null) 'fx_amount_minor': fxAmountMinor,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (externalId != null) 'external_id': externalId,
@@ -1632,6 +1973,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Value<bool>? isRecurring,
     Value<Recurrence?>? recurrence,
     Value<int?>? tagId,
+    Value<String?>? fxCurrency,
+    Value<int?>? fxAmountMinor,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<String?>? externalId,
@@ -1646,6 +1989,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       isRecurring: isRecurring ?? this.isRecurring,
       recurrence: recurrence ?? this.recurrence,
       tagId: tagId ?? this.tagId,
+      fxCurrency: fxCurrency ?? this.fxCurrency,
+      fxAmountMinor: fxAmountMinor ?? this.fxAmountMinor,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       externalId: externalId ?? this.externalId,
@@ -1684,6 +2029,12 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     if (tagId.present) {
       map['tag_id'] = Variable<int>(tagId.value);
     }
+    if (fxCurrency.present) {
+      map['fx_currency'] = Variable<String>(fxCurrency.value);
+    }
+    if (fxAmountMinor.present) {
+      map['fx_amount_minor'] = Variable<int>(fxAmountMinor.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1708,6 +2059,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
           ..write('isRecurring: $isRecurring, ')
           ..write('recurrence: $recurrence, ')
           ..write('tagId: $tagId, ')
+          ..write('fxCurrency: $fxCurrency, ')
+          ..write('fxAmountMinor: $fxAmountMinor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('externalId: $externalId')
@@ -2871,6 +3224,10 @@ typedef $$TagsTableCreateCompanionBuilder =
       required int colorValue,
       Value<bool> isArchived,
       Value<DateTime> createdAt,
+      Value<String?> fxCurrency,
+      Value<int?> fxRateMicros,
+      Value<DateTime?> tripStartDate,
+      Value<DateTime?> tripEndDate,
       Value<String?> externalId,
     });
 typedef $$TagsTableUpdateCompanionBuilder =
@@ -2880,6 +3237,10 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<int> colorValue,
       Value<bool> isArchived,
       Value<DateTime> createdAt,
+      Value<String?> fxCurrency,
+      Value<int?> fxRateMicros,
+      Value<DateTime?> tripStartDate,
+      Value<DateTime?> tripEndDate,
       Value<String?> externalId,
     });
 
@@ -2936,6 +3297,26 @@ class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fxCurrency => $composableBuilder(
+    column: $table.fxCurrency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fxRateMicros => $composableBuilder(
+    column: $table.fxRateMicros,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get tripStartDate => $composableBuilder(
+    column: $table.tripStartDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get tripEndDate => $composableBuilder(
+    column: $table.tripEndDate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3003,6 +3384,26 @@ class $$TagsTableOrderingComposer extends Composer<_$AppDatabase, $TagsTable> {
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get fxCurrency => $composableBuilder(
+    column: $table.fxCurrency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fxRateMicros => $composableBuilder(
+    column: $table.fxRateMicros,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get tripStartDate => $composableBuilder(
+    column: $table.tripStartDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get tripEndDate => $composableBuilder(
+    column: $table.tripEndDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get externalId => $composableBuilder(
     column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
@@ -3036,6 +3437,26 @@ class $$TagsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get fxCurrency => $composableBuilder(
+    column: $table.fxCurrency,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get fxRateMicros => $composableBuilder(
+    column: $table.fxRateMicros,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get tripStartDate => $composableBuilder(
+    column: $table.tripStartDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get tripEndDate => $composableBuilder(
+    column: $table.tripEndDate,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get externalId => $composableBuilder(
     column: $table.externalId,
@@ -3101,6 +3522,10 @@ class $$TagsTableTableManager
                 Value<int> colorValue = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> fxCurrency = const Value.absent(),
+                Value<int?> fxRateMicros = const Value.absent(),
+                Value<DateTime?> tripStartDate = const Value.absent(),
+                Value<DateTime?> tripEndDate = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => TagsCompanion(
                 id: id,
@@ -3108,6 +3533,10 @@ class $$TagsTableTableManager
                 colorValue: colorValue,
                 isArchived: isArchived,
                 createdAt: createdAt,
+                fxCurrency: fxCurrency,
+                fxRateMicros: fxRateMicros,
+                tripStartDate: tripStartDate,
+                tripEndDate: tripEndDate,
                 externalId: externalId,
               ),
           createCompanionCallback:
@@ -3117,6 +3546,10 @@ class $$TagsTableTableManager
                 required int colorValue,
                 Value<bool> isArchived = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<String?> fxCurrency = const Value.absent(),
+                Value<int?> fxRateMicros = const Value.absent(),
+                Value<DateTime?> tripStartDate = const Value.absent(),
+                Value<DateTime?> tripEndDate = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => TagsCompanion.insert(
                 id: id,
@@ -3124,6 +3557,10 @@ class $$TagsTableTableManager
                 colorValue: colorValue,
                 isArchived: isArchived,
                 createdAt: createdAt,
+                fxCurrency: fxCurrency,
+                fxRateMicros: fxRateMicros,
+                tripStartDate: tripStartDate,
+                tripEndDate: tripEndDate,
                 externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0
@@ -3184,6 +3621,8 @@ typedef $$ExpensesTableCreateCompanionBuilder =
       Value<bool> isRecurring,
       Value<Recurrence?> recurrence,
       Value<int?> tagId,
+      Value<String?> fxCurrency,
+      Value<int?> fxAmountMinor,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<String?> externalId,
@@ -3199,6 +3638,8 @@ typedef $$ExpensesTableUpdateCompanionBuilder =
       Value<bool> isRecurring,
       Value<Recurrence?> recurrence,
       Value<int?> tagId,
+      Value<String?> fxCurrency,
+      Value<int?> fxAmountMinor,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<String?> externalId,
@@ -3286,6 +3727,16 @@ class $$ExpensesTableFilterComposer
   get recurrence => $composableBuilder(
     column: $table.recurrence,
     builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get fxCurrency => $composableBuilder(
+    column: $table.fxCurrency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fxAmountMinor => $composableBuilder(
+    column: $table.fxAmountMinor,
+    builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
@@ -3394,6 +3845,16 @@ class $$ExpensesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get fxCurrency => $composableBuilder(
+    column: $table.fxCurrency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fxAmountMinor => $composableBuilder(
+    column: $table.fxAmountMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -3495,6 +3956,16 @@ class $$ExpensesTableAnnotationComposer
         builder: (column) => column,
       );
 
+  GeneratedColumn<String> get fxCurrency => $composableBuilder(
+    column: $table.fxCurrency,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get fxAmountMinor => $composableBuilder(
+    column: $table.fxAmountMinor,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -3590,6 +4061,8 @@ class $$ExpensesTableTableManager
                 Value<bool> isRecurring = const Value.absent(),
                 Value<Recurrence?> recurrence = const Value.absent(),
                 Value<int?> tagId = const Value.absent(),
+                Value<String?> fxCurrency = const Value.absent(),
+                Value<int?> fxAmountMinor = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
@@ -3603,6 +4076,8 @@ class $$ExpensesTableTableManager
                 isRecurring: isRecurring,
                 recurrence: recurrence,
                 tagId: tagId,
+                fxCurrency: fxCurrency,
+                fxAmountMinor: fxAmountMinor,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 externalId: externalId,
@@ -3618,6 +4093,8 @@ class $$ExpensesTableTableManager
                 Value<bool> isRecurring = const Value.absent(),
                 Value<Recurrence?> recurrence = const Value.absent(),
                 Value<int?> tagId = const Value.absent(),
+                Value<String?> fxCurrency = const Value.absent(),
+                Value<int?> fxAmountMinor = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
@@ -3631,6 +4108,8 @@ class $$ExpensesTableTableManager
                 isRecurring: isRecurring,
                 recurrence: recurrence,
                 tagId: tagId,
+                fxCurrency: fxCurrency,
+                fxAmountMinor: fxAmountMinor,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 externalId: externalId,

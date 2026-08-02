@@ -114,6 +114,10 @@ class BackupTag {
     required this.colorValue,
     required this.isArchived,
     required this.externalId,
+    required this.fxCurrency,
+    required this.fxRateMicros,
+    required this.tripStartDate,
+    required this.tripEndDate,
   });
 
   final int id;
@@ -122,12 +126,27 @@ class BackupTag {
   final bool isArchived;
   final String? externalId;
 
+  /// Trip-abroad currency + rate (backup v4). Null on an ordinary tag, and on
+  /// every tag in a pre-v4 file.
+  final String? fxCurrency;
+  final int? fxRateMicros;
+
+  /// Trip date range for auto-tagging (backup v5). Independent of
+  /// [fxCurrency] — null on a tag with no date range, and on every tag in a
+  /// pre-v5 file.
+  final DateTime? tripStartDate;
+  final DateTime? tripEndDate;
+
   factory BackupTag.fromRow(TagRow row) => BackupTag(
     id: row.id,
     name: row.name,
     colorValue: row.colorValue,
     isArchived: row.isArchived,
     externalId: row.externalId,
+    fxCurrency: row.fxCurrency,
+    fxRateMicros: row.fxRateMicros,
+    tripStartDate: row.tripStartDate,
+    tripEndDate: row.tripEndDate,
   );
 
   factory BackupTag.fromJson(Map<String, dynamic> j) => BackupTag(
@@ -136,6 +155,16 @@ class BackupTag {
     colorValue: j['colorValue'] as int,
     isArchived: j['isArchived'] as bool,
     externalId: j['externalId'] as String?,
+    // Pre-v4 files have no fx keys; absent = an ordinary, non-travel tag.
+    fxCurrency: j['fxCurrency'] as String?,
+    fxRateMicros: j['fxRateMicros'] as int?,
+    // Pre-v5 files have no trip-date keys; absent = no auto-tagging.
+    tripStartDate: j['tripStartDate'] == null
+        ? null
+        : DateTime.parse(j['tripStartDate'] as String),
+    tripEndDate: j['tripEndDate'] == null
+        ? null
+        : DateTime.parse(j['tripEndDate'] as String),
   );
 
   Map<String, dynamic> toJson() => {
@@ -144,6 +173,10 @@ class BackupTag {
     'colorValue': colorValue,
     'isArchived': isArchived,
     'externalId': externalId,
+    'fxCurrency': fxCurrency,
+    'fxRateMicros': fxRateMicros,
+    'tripStartDate': tripStartDate?.toIso8601String(),
+    'tripEndDate': tripEndDate?.toIso8601String(),
   };
 
   /// Merge: new row, id auto-assigned.
@@ -154,6 +187,10 @@ class BackupTag {
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
+    fxCurrency: Value(fxCurrency),
+    fxRateMicros: Value(fxRateMicros),
+    tripStartDate: Value(tripStartDate),
+    tripEndDate: Value(tripEndDate),
   );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -165,6 +202,10 @@ class BackupTag {
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
+    fxCurrency: Value(fxCurrency),
+    fxRateMicros: Value(fxRateMicros),
+    tripStartDate: Value(tripStartDate),
+    tripEndDate: Value(tripEndDate),
   );
 }
 
@@ -182,6 +223,8 @@ class BackupExpense {
     required this.createdAt,
     required this.updatedAt,
     required this.externalId,
+    required this.fxCurrency,
+    required this.fxAmountMinor,
   });
 
   final int id;
@@ -201,6 +244,12 @@ class BackupExpense {
   final DateTime updatedAt;
   final String? externalId;
 
+  /// Foreign receipt (backup v4): what was actually paid abroad. Display
+  /// only — [amountMinor] is home currency and stays the source of truth for
+  /// every total, so a pre-v4 file restores as an ordinary expense.
+  final String? fxCurrency;
+  final int? fxAmountMinor;
+
   factory BackupExpense.fromRow(ExpenseRow row) => BackupExpense(
     id: row.id,
     amountMinor: row.amountMinor,
@@ -214,6 +263,8 @@ class BackupExpense {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     externalId: row.externalId,
+    fxCurrency: row.fxCurrency,
+    fxAmountMinor: row.fxAmountMinor,
   );
 
   factory BackupExpense.fromJson(Map<String, dynamic> j) => BackupExpense(
@@ -232,6 +283,9 @@ class BackupExpense {
     createdAt: DateTime.parse(j['createdAt'] as String),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
     externalId: j['externalId'] as String?,
+    // Pre-v4 files have no fx keys; absent = a home-currency expense.
+    fxCurrency: j['fxCurrency'] as String?,
+    fxAmountMinor: j['fxAmountMinor'] as int?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -247,6 +301,8 @@ class BackupExpense {
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
     'externalId': externalId,
+    'fxCurrency': fxCurrency,
+    'fxAmountMinor': fxAmountMinor,
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
@@ -269,6 +325,8 @@ class BackupExpense {
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
+    fxCurrency: Value(fxCurrency),
+    fxAmountMinor: Value(fxAmountMinor),
   );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -287,6 +345,8 @@ class BackupExpense {
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
+    fxCurrency: Value(fxCurrency),
+    fxAmountMinor: Value(fxAmountMinor),
   );
 
   /// Content fingerprint used to dedupe on Merge — deliberately not the id,

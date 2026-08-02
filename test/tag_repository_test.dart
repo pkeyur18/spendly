@@ -76,4 +76,123 @@ void main() {
     final expense = expenses.firstWhere((e) => e.id == expenseId);
     expect(expense.tagId, isNull);
   });
+
+  group('trip dates', () {
+    test('create stores a date range and setTripDates updates it', () async {
+      final id = await repo.create(
+        name: 'Thailand',
+        colorValue: 0xFFF59E0B,
+        tripStartDate: DateTime(2026, 3, 1),
+        tripEndDate: DateTime(2026, 3, 10),
+      );
+      var tag = await repo.byId(id);
+      expect(tag!.tripStartDate, DateTime(2026, 3, 1));
+      expect(tag.tripEndDate, DateTime(2026, 3, 10));
+
+      await repo.setTripDates(id, DateTime(2026, 3, 2), DateTime(2026, 3, 12));
+      tag = await repo.byId(id);
+      expect(tag!.tripStartDate, DateTime(2026, 3, 2));
+      expect(tag.tripEndDate, DateTime(2026, 3, 12));
+
+      await repo.setTripDates(id, null, null);
+      tag = await repo.byId(id);
+      expect(tag!.tripStartDate, isNull);
+      expect(tag.tripEndDate, isNull);
+    });
+
+    test('tripForDate matches inclusive boundaries and misses outside them', () async {
+      final id = await repo.create(
+        name: 'Thailand',
+        colorValue: 0xFFF59E0B,
+        tripStartDate: DateTime(2026, 3, 1),
+        tripEndDate: DateTime(2026, 3, 10),
+      );
+
+      expect((await repo.tripForDate(DateTime(2026, 3, 1)))?.id, id);
+      expect((await repo.tripForDate(DateTime(2026, 3, 10)))?.id, id);
+      expect((await repo.tripForDate(DateTime(2026, 3, 5)))?.id, id);
+      expect(await repo.tripForDate(DateTime(2026, 2, 28)), isNull);
+      expect(await repo.tripForDate(DateTime(2026, 3, 11)), isNull);
+    });
+
+    test('tripForDate ignores archived trips', () async {
+      final id = await repo.create(
+        name: 'Thailand',
+        colorValue: 0xFFF59E0B,
+        tripStartDate: DateTime(2026, 3, 1),
+        tripEndDate: DateTime(2026, 3, 10),
+      );
+      await repo.archive(id);
+      expect(await repo.tripForDate(DateTime(2026, 3, 5)), isNull);
+    });
+
+    test('tripForDate ignores a tag with no date range', () async {
+      await repo.create(name: 'Groceries', colorValue: 0xFF6366F1);
+      expect(await repo.tripForDate(DateTime(2026, 3, 5)), isNull);
+    });
+
+    test('hasOverlappingDateRange detects any-day overlap', () async {
+      await repo.create(
+        name: 'Thailand',
+        colorValue: 0xFFF59E0B,
+        tripStartDate: DateTime(2026, 3, 1),
+        tripEndDate: DateTime(2026, 3, 10),
+      );
+
+      expect(
+        await repo.hasOverlappingDateRange(
+          null,
+          DateTime(2026, 3, 8),
+          DateTime(2026, 3, 15),
+        ),
+        isTrue,
+      );
+      expect(
+        await repo.hasOverlappingDateRange(
+          null,
+          DateTime(2026, 3, 10),
+          DateTime(2026, 3, 10),
+        ),
+        isTrue,
+        reason: 'a single shared boundary day still counts as overlap',
+      );
+    });
+
+    test('hasOverlappingDateRange allows adjacent, non-overlapping ranges', () async {
+      await repo.create(
+        name: 'Thailand',
+        colorValue: 0xFFF59E0B,
+        tripStartDate: DateTime(2026, 3, 1),
+        tripEndDate: DateTime(2026, 3, 10),
+      );
+
+      expect(
+        await repo.hasOverlappingDateRange(
+          null,
+          DateTime(2026, 3, 11),
+          DateTime(2026, 3, 15),
+        ),
+        isFalse,
+      );
+    });
+
+    test('hasOverlappingDateRange excludes the tag being edited', () async {
+      final id = await repo.create(
+        name: 'Thailand',
+        colorValue: 0xFFF59E0B,
+        tripStartDate: DateTime(2026, 3, 1),
+        tripEndDate: DateTime(2026, 3, 10),
+      );
+
+      // Editing the same trip's own dates must not collide with itself.
+      expect(
+        await repo.hasOverlappingDateRange(
+          id,
+          DateTime(2026, 3, 1),
+          DateTime(2026, 3, 12),
+        ),
+        isFalse,
+      );
+    });
+  });
 }

@@ -69,12 +69,21 @@ class AmountKeypad extends StatelessWidget {
   }
 }
 
-/// Big ₹ + digits display shared by Quick Add and the budget sheet.
+/// Big symbol + digits display shared by Quick Add and the budget sheet.
 class AmountDisplay extends StatelessWidget {
-  const AmountDisplay(this.amount, {super.key, this.fontSize = 48});
+  const AmountDisplay(
+    this.amount, {
+    super.key,
+    this.fontSize = 48,
+    this.symbol = '₹',
+  });
 
   final String amount;
   final double fontSize;
+
+  /// Currency symbol shown before the digits. Defaults to home currency;
+  /// Quick Add passes a foreign symbol when the selected trip is abroad.
+  final String symbol;
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +102,7 @@ class AmountDisplay extends StatelessWidget {
           ),
           children: [
             TextSpan(
-              text: '₹',
+              text: symbol,
               style: TextStyle(
                 color: palette.textDim,
                 fontSize: fontSize * 0.62,

@@ -34,15 +34,22 @@ BackupPayload _samplePayload() => BackupPayload(
       createdAt: DateTime(2026, 7, 1, 9, 3),
       updatedAt: DateTime(2026, 7, 1, 9, 3),
       externalId: null,
+      // Foreign receipt (v4): ¥45,000 that converted to the ₹245.00 above.
+      fxCurrency: 'JPY',
+      fxAmountMinor: 4500000,
     ),
   ],
-  tags: const [
+  tags: [
     BackupTag(
       id: 1,
       name: 'Japan Trip',
       colorValue: 0xFF6366F1,
       isArchived: false,
       externalId: null,
+      fxCurrency: 'JPY',
+      fxRateMicros: 550000,
+      tripStartDate: DateTime(2026, 7, 1),
+      tripEndDate: DateTime(2026, 7, 10),
     ),
   ],
   budgets: const [
@@ -181,6 +188,86 @@ void main() {
       expect(decodedNoTagId.expenses.single.tagId, isNull);
     },
   );
+
+  test(
+    'a pre-v4 file (no fx keys) decodes as ordinary home-currency data',
+    () async {
+      final v3Json = jsonEncode({
+        'spendlyBackup': true,
+        'version': 3,
+        'encrypted': false,
+        'data': _samplePayload().toJson()
+          ..['expenses'] = [
+            _samplePayload().expenses.single.toJson()
+              ..remove('fxCurrency')
+              ..remove('fxAmountMinor'),
+          ]
+          ..['tags'] = [
+            _samplePayload().tags.single.toJson()
+              ..remove('fxCurrency')
+              ..remove('fxRateMicros'),
+          ],
+      });
+
+      final decoded = await decodePayload(v3Json);
+      final expense = decoded.expenses.single;
+      final tag = decoded.tags.single;
+
+      // Absent fx keys mean "home currency" — the amount itself is untouched.
+      expect(expense.amountMinor, 24500);
+      expect(expense.fxCurrency, isNull);
+      expect(expense.fxAmountMinor, isNull);
+      expect(tag.fxCurrency, isNull);
+      expect(tag.fxRateMicros, isNull);
+    },
+  );
+
+  test('a v4 foreign expense round-trips both amounts', () async {
+    final envelope = await encodeEnvelope(_samplePayload());
+    final decoded = await decodePayload(envelope);
+
+    final expense = decoded.expenses.single;
+    expect(expense.amountMinor, 24500, reason: 'home currency, unchanged');
+    expect(expense.fxCurrency, 'JPY');
+    expect(expense.fxAmountMinor, 4500000);
+
+    final tag = decoded.tags.single;
+    expect(tag.fxCurrency, 'JPY');
+    expect(tag.fxRateMicros, 550000);
+  });
+
+  test(
+    'a pre-v5 file (no trip-date keys) decodes with no auto-tagging',
+    () async {
+      final v4Json = jsonEncode({
+        'spendlyBackup': true,
+        'version': 4,
+        'encrypted': false,
+        'data': _samplePayload().toJson()
+          ..['tags'] = [
+            _samplePayload().tags.single.toJson()
+              ..remove('tripStartDate')
+              ..remove('tripEndDate'),
+          ],
+      });
+
+      final decoded = await decodePayload(v4Json);
+      final tag = decoded.tags.single;
+      expect(tag.tripStartDate, isNull);
+      expect(tag.tripEndDate, isNull);
+      // The fx pair from v4 is untouched by the missing v5 keys.
+      expect(tag.fxCurrency, 'JPY');
+    },
+  );
+
+  test('a v5 trip date range round-trips', () async {
+    final envelope = await encodeEnvelope(_samplePayload());
+    final decoded = await decodePayload(envelope);
+
+    final tag = decoded.tags.single;
+    expect(tag.tripStartDate, DateTime(2026, 7, 1));
+    expect(tag.tripEndDate, DateTime(2026, 7, 10));
+  });
 
   test('the photo travels as an ordinary settings row and round-trips', () async {
     final payload = BackupPayload(

@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
+import '../../core/money/fx.dart';
+import '../../core/money/fx_rate_service.dart' show homeCurrencyCode;
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
@@ -15,6 +17,7 @@ import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../home/widgets/trend_bars.dart';
 import '../profile/profile_provider.dart';
+import '../reports/report_model.dart';
 import '../reports/report_providers.dart';
 import '../reports/report_widgets.dart';
 import 'tag_manager_screen.dart';
@@ -173,6 +176,7 @@ class TagDetailScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 children: [
                   ReportHero(label: tag.name, data: data),
+                  if (tag.isTravel) _TravelSummary(tag: tag, data: data),
                   const SectionTitle('Spending trend'),
                   TrendBarsView(bars: data.weekly),
                   const SectionTitle('By category'),
@@ -203,6 +207,71 @@ class TagDetailScreen extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.lg),
                 ],
               ),
+      ),
+    );
+  }
+}
+
+/// Foreign-currency summary for a trip abroad: what was actually spent in the
+/// local currency, and the rate that produced the home-currency total above.
+///
+/// Both figures are derived from the expenses already loaded for the report —
+/// no extra query, and nothing here is stored. The average rate is
+/// `sum(home) / sum(foreign)`, so a rate edited mid-trip shows up honestly as
+/// a blend of everything actually used rather than whatever the tag happens
+/// to hold right now.
+class _TravelSummary extends StatelessWidget {
+  const _TravelSummary({required this.tag, required this.data});
+
+  final TagRow tag;
+  final ReportData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    var fxMinor = 0;
+    var homeMinor = 0;
+    // ponytail: sums the raw expense list, so a travel expense in a
+    // budget-ignored category counts here but not in the hero total above.
+    // Tagging rent to a holiday isn't a real case; filter by
+    // ignoredCategoryIds if it ever becomes one.
+    for (final e in data.expenses) {
+      if (e.fxCurrency != tag.fxCurrency || e.fxAmountMinor == null) continue;
+      fxMinor += e.fxAmountMinor!;
+      homeMinor += e.amountMinor;
+    }
+    if (fxMinor == 0) return const SizedBox.shrink();
+
+    final avg = averageRateMicros(homeMinor, fxMinor);
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: AppCard(
+        child: Column(
+          children: [
+            Text(
+              'Spent abroad',
+              style: TextStyle(fontSize: 12, color: palette.textDim),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              Money.fromMinor(fxMinor).formatAs(tag.fxCurrency!),
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+              ),
+            ),
+            if (avg != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'avg 1 ${tag.fxCurrency} = ${rateToString(avg)} '
+                '$homeCurrencyCode',
+                style: TextStyle(fontSize: 11.5, color: palette.textDim),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

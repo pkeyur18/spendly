@@ -80,6 +80,20 @@ class Expenses extends Table {
   /// Optional grouping across categories (e.g. a vacation trip) — orthogonal
   /// to [categoryId], which an expense keeps regardless of its tag.
   IntColumn get tagId => integer().nullable().references(Tags, #id)();
+
+  /// ISO 4217 code this expense was actually paid in, or null for a
+  /// home-currency expense. Always set together with [fxAmountMinor] — never
+  /// one without the other.
+  TextColumn get fxCurrency => text().nullable()();
+
+  /// Original amount in [fxCurrency] minor units — a receipt, for display
+  /// only. [amountMinor] holds the converted home-currency amount and stays
+  /// the single source of truth for every total.
+  ///
+  /// ponytail: two-decimal minor units for every currency, so JPY stores
+  /// 150000 for ¥1500 and formatting drops the digits it doesn't use. Add a
+  /// per-currency exponent table only if a real 3-decimal case turns up.
+  IntColumn get fxAmountMinor => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
@@ -97,6 +111,22 @@ class Tags extends Table {
   IntColumn get colorValue => integer()(); // ARGB int
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// ISO 4217 code for a trip abroad; null = an ordinary tag. Expenses tagged
+  /// with this are entered in this currency and converted on save.
+  TextColumn get fxCurrency => text().nullable()();
+
+  /// Home-currency units per 1 unit of [fxCurrency], scaled by 1e6
+  /// (2.62 INR per THB is stored as 2_620_000). Integer so a rate never rides
+  /// a double. See `lib/core/money/fx.dart`.
+  IntColumn get fxRateMicros => integer().nullable()();
+
+  /// Trip date range for auto-tagging (inclusive, date-only — time of day is
+  /// ignored). Both null = no auto-tagging. Independent of [fxCurrency] — a
+  /// domestic trip can use this without ever touching the currency switch.
+  /// Always set together; never one without the other.
+  DateTimeColumn get tripStartDate => dateTime().nullable()();
+  DateTimeColumn get tripEndDate => dateTime().nullable()();
 
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
@@ -149,7 +179,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -223,18 +253,49 @@ class AppDatabase extends _$AppDatabase {
         // anyone upgrading from below v4 got `tags` created above (from<4)
         // with external_id already on it — adding it again here would be a
         // duplicate-column error. Caught by test/migration_test.dart.
-        final tagColumns = await customSelect('PRAGMA table_info(tags)').get();
-        final tagsHasExternalId = tagColumns.any(
-          (row) => row.data['name'] == 'external_id',
-        );
-        if (!tagsHasExternalId) {
+        if (!await _hasColumn('tags', 'external_id')) {
           await m.addColumn(tags, tags.externalId);
         }
         await m.addColumn(budgets, budgets.externalId);
         await backfillExternalIds(this);
       }
+      if (from < 8) {
+        // Foreign-currency spending on trips. All four nullable with no
+        // default, so ADD COLUMN is safe on a populated table and existing
+        // rows need no backfill — null means "home currency", which is what
+        // every pre-v8 expense and tag already was.
+        await m.addColumn(expenses, expenses.fxCurrency);
+        await m.addColumn(expenses, expenses.fxAmountMinor);
+        // Same createTable trap as external_id above: `tags` is built from
+        // the current definition at from<4, so a pre-v4 install already has
+        // these two. Caught by test/migration_test.dart.
+        if (!await _hasColumn('tags', 'fx_currency')) {
+          await m.addColumn(tags, tags.fxCurrency);
+          await m.addColumn(tags, tags.fxRateMicros);
+        }
+      }
+      if (from < 9) {
+        // Trip date-range auto-tagging. Same createTable trap as above —
+        // guard before adding to `tags`.
+        if (!await _hasColumn('tags', 'trip_start_date')) {
+          await m.addColumn(tags, tags.tripStartDate);
+          await m.addColumn(tags, tags.tripEndDate);
+        }
+      }
     },
   );
+
+  /// Whether [table] already has [column], by its snake_case SQL name.
+  ///
+  /// Needed because `m.createTable` always emits the CURRENT table
+  /// definition: a table created by an earlier migration step already carries
+  /// every column added since, so a later `addColumn` for one of them would
+  /// fail with "duplicate column name". Has bitten `tags` twice now (v7's
+  /// external_id, v8's fx columns) — both caught by test/migration_test.dart.
+  Future<bool> _hasColumn(String table, String column) async {
+    final columns = await customSelect('PRAGMA table_info($table)').get();
+    return columns.any((row) => row.data['name'] == column);
+  }
 
   /// Wipes expenses/budgets/categories/settings (profile, theme, prefs — all
   /// of it) and re-seeds the default categories, matching a fresh install.

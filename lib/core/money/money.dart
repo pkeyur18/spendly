@@ -62,6 +62,16 @@ class Money {
     ).format(major);
   }
 
+  /// Formats as [currencyCode] (ISO 4217) instead of the home currency — for
+  /// showing what was actually paid abroad alongside the home-currency amount.
+  ///
+  /// Digit count follows the currency's own convention, so a JPY amount stored
+  /// as 150000 minor units renders "¥1,500", not "¥1,500.00".
+  String formatAs(String currencyCode) {
+    final format = NumberFormat.simpleCurrency(name: currencyCode);
+    return format.format(major);
+  }
+
   /// Compact form for tight UI, e.g. "₹24.3k".
   String formatCompact({String? locale, String? symbol}) {
     return NumberFormat.compactCurrency(

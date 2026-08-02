@@ -1,9 +1,12 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
+import '../../core/money/fx.dart';
+import '../../core/money/fx_rate_service.dart' show homeCurrencyCode;
 import '../../core/money/money.dart';
 import '../../core/notify/notifications.dart';
 import '../../core/theme/tokens.dart';
@@ -50,6 +53,29 @@ const _backdateWindowDays = 90;
   );
 }
 
+/// The active trip whose date range covers [date] (inclusive, date-only), or
+/// null. Pure matching rule behind Quick Add's auto-tagging — pulled out as a
+/// free function, same as [backdatePickerBounds] and [visibleCategoryTiles],
+/// so it's unit-testable without a widget harness.
+TagRow? tripForDate(List<TagRow> tags, DateTime date) {
+  final d = DateTime(date.year, date.month, date.day);
+  for (final t in tags) {
+    if (t.tripStartDate == null || t.tripEndDate == null) continue;
+    final start = DateTime(
+      t.tripStartDate!.year,
+      t.tripStartDate!.month,
+      t.tripStartDate!.day,
+    );
+    final end = DateTime(
+      t.tripEndDate!.year,
+      t.tripEndDate!.month,
+      t.tripEndDate!.day,
+    );
+    if (!d.isBefore(start) && !d.isAfter(end)) return t;
+  }
+  return null;
+}
+
 /// First [visibleCount] categories, with [selectedId] swapped into the last
 /// slot if it would otherwise be cut off.
 List<CategoryRow> visibleCategoryTiles(
@@ -70,10 +96,20 @@ List<CategoryRow> visibleCategoryTiles(
 
 class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late String _amount;
+
+  /// What [_amount] was when the screen opened. Only used to tell a retyped
+  /// amount from an untouched one — see [_resolveAmounts].
+  late String _initialAmount;
   int? _categoryId;
   int? _tagId;
   late DateTime _selectedDate;
   bool _defaulted = false;
+
+  /// True once the trip has been decided by the user rather than by
+  /// auto-tagging — set on any explicit tag-picker action, including picking
+  /// "No trip". [_applyAutoTag] never overrides it, so a manual removal
+  /// stays removed even if the date still falls inside a trip's range.
+  late bool _tagManuallySet = widget.editing?.tagId != null;
   final _noteController = TextEditingController();
   final _noteFocusNode = FocusNode();
 
@@ -90,6 +126,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         : (e.amount.minor % 100 == 0
               ? (e.amount.minor ~/ 100).toString()
               : e.amount.major.toStringAsFixed(2));
+    // The freeze rule (see _resolveAmounts) needs to know whether the user
+    // actually retyped the amount, so remember what it started as.
+    _initialAmount = _amount;
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
     _tagId = e?.tagId;
     _selectedDate = e?.date ?? DateTime.now();
@@ -118,6 +157,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           ),
           data: (categories) {
             _applyDefaultCategory(categories);
+            _applyAutoTag(ref.watch(activeTagsProvider).value ?? const <TagRow>[]);
             final selected = categories
                 .where((c) => c.id == _categoryId)
                 .cast<CategoryRow?>()
@@ -136,7 +176,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                     ),
                     children: [
                       const SizedBox(height: AppSpacing.sm),
-                      AmountDisplay(_amount),
+                      AmountDisplay(_amount, symbol: _amountSymbol),
+                      _conversionLine(palette),
                       _subLine(context, selected, palette),
                       const SizedBox(height: AppSpacing.sm),
                       Center(
@@ -208,6 +249,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _defaulted = true;
   }
 
+  /// Re-evaluated on every build (unlike [_applyDefaultCategory]'s one-shot
+  /// [_defaulted] flag) because [_selectedDate] can change repeatedly via
+  /// [_pickDate], and each change must re-check for a trip covering the new
+  /// date. Never runs once [_tagManuallySet] is true.
+  void _applyAutoTag(List<TagRow> tags) {
+    if (_tagManuallySet) return;
+    _tagId = tripForDate(tags, _selectedDate)?.id;
+  }
+
   Widget _titleBar(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Padding(
@@ -245,6 +295,106 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         ],
       ),
     );
+  }
+
+  /// Symbol on the big amount: the trip's currency when it's abroad, else ₹.
+  String get _amountSymbol {
+    final tag = _selectedTag;
+    if (tag == null || !tag.isTravel) return '₹';
+    return NumberFormat.simpleCurrency(name: tag.fxCurrency!).currencySymbol;
+  }
+
+  /// "≈ ₹1,179.00" under the foreign amount, plus a tappable rate pill.
+  /// Only rendered on a trip abroad — a domestic entry looks exactly as
+  /// it always has.
+  Widget _conversionLine(AppPalette palette) {
+    final tag = _selectedTag;
+    if (tag == null || !tag.isTravel) return const SizedBox.shrink();
+    final home = Money.fromMinor(
+      convertToHomeMinor(Money.parse(_amount).minor, tag.fxRateMicros!),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Column(
+        children: [
+          Text(
+            '≈ ${home.format(locale: 'en_IN')}',
+            style: TextStyle(color: palette.textDim, fontSize: 14),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Semantics(
+            button: true,
+            label:
+                'Exchange rate, 1 ${tag.fxCurrency} equals '
+                '${rateToString(tag.fxRateMicros!)} rupees. Tap to change.',
+            child: GestureDetector(
+              onTap: () => _editRate(tag),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                ),
+                child: Text(
+                  '1 ${tag.fxCurrency} = '
+                  '${rateToString(tag.fxRateMicros!)} $homeCurrencyCode',
+                  style: const TextStyle(
+                    color: AppColors.accent,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Correcting the rate mid-trip — the ATM gave worse than the fetched rate.
+  /// Saves to the tag, so it applies to this entry and every later one, and
+  /// never to what is already saved.
+  Future<void> _editRate(TagRow tag) async {
+    final controller = TextEditingController(
+      text: rateToString(tag.fxRateMicros!),
+    );
+    final micros = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('1 ${tag.fxCurrency} equals'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            suffixText: homeCurrencyCode,
+            border: OutlineInputBorder(),
+            helperText: 'Applies to new entries, not ones already saved',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(parseRateMicros(controller.text)),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (micros == null) return;
+    // No setState: _selectedTag watches activeTagsProvider, so the Drift
+    // stream rebuilds the conversion line on its own.
+    await ref.read(tagRepositoryProvider).setFxRate(tag.id, micros);
   }
 
   Widget _subLine(
@@ -390,7 +540,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                           Navigator.of(sheetContext).pop();
                           final newId = await showTagEditSheet(context);
                           if (newId != null && mounted) {
-                            setState(() => _tagId = newId);
+                            setState(() {
+                              _tagId = newId;
+                              _tagManuallySet = true;
+                            });
                           }
                         },
                       );
@@ -439,7 +592,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     // same as picking "No trip" — distinguish via a sentinel so dismissal
     // never wipes an existing selection.
     if (chosen == null || !mounted) return;
-    setState(() => _tagId = chosen == _noTripChoice ? null : chosen);
+    setState(() {
+      _tagId = chosen == _noTripChoice ? null : chosen;
+      _tagManuallySet = true;
+    });
   }
 
   static const _noTripChoice = -1;
@@ -620,14 +776,75 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
+  /// The trip currently selected, or null. Watched, not read, so an edited
+  /// rate re-renders the conversion line — and so this never serves a value
+  /// that lags a write (see test/reactive_read_staleness_test.dart).
+  /// The write path in [_save] does NOT use this; it re-reads the tag.
+  TagRow? get _selectedTag {
+    if (_tagId == null) return null;
+    final tags = ref.watch(activeTagsProvider).value ?? const <TagRow>[];
+    return tags.where((t) => t.id == _tagId).cast<TagRow?>().firstOrNull;
+  }
+
+  /// Resolves what actually gets stored: the home-currency amount, plus the
+  /// foreign receipt when the selected trip is abroad. [typed] is what the
+  /// user keyed in — in the trip's currency when it has one. [tag] must be a
+  /// freshly-read row, not a cached one, so a rate edited moments ago is the
+  /// one that gets applied.
+  ///
+  /// **The freeze rule lives here.** Reopening an already-converted expense
+  /// and saving it without retyping the amount keeps its ORIGINAL home
+  /// amount, even if the trip's rate has since moved. Only a retyped amount
+  /// (or a changed trip) re-converts at the current rate. Rewriting the
+  /// former would silently move totals for a month the user already
+  /// reconciled.
+  ({Money home, String? fxCurrency, Money? fxAmount}) _resolveAmounts(
+    Money typed,
+    TagRow? tag,
+  ) {
+    if (tag == null || !tag.isTravel) {
+      return (home: typed, fxCurrency: null, fxAmount: null);
+    }
+    final editing = widget.editing;
+    final untouched =
+        editing != null &&
+        editing.isForeign &&
+        editing.tagId == tag.id &&
+        _amount == _initialAmount;
+    if (untouched) {
+      return (
+        home: editing.amount,
+        fxCurrency: editing.fxCurrency,
+        fxAmount: editing.fxAmount,
+      );
+    }
+    return (
+      home: Money.fromMinor(
+        convertToHomeMinor(typed.minor, tag.fxRateMicros!),
+      ),
+      fxCurrency: tag.fxCurrency,
+      fxAmount: typed,
+    );
+  }
+
   Future<void> _save() async {
-    final amount = Money.parse(_amount);
-    if (amount.minor <= 0 || _categoryId == null) {
+    final typed = Money.parse(_amount);
+    if (typed.minor <= 0 || _categoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter an amount and pick a category')),
       );
       return;
     }
+    // Fresh read, not the cached tag list: _editRate may have just written a
+    // new rate, and converting at a stale one would store the wrong amount.
+    final tag = _tagId == null
+        ? null
+        : await ref.read(tagRepositoryProvider).byId(_tagId!);
+    if (!mounted) return;
+    // Everything below this line deals in `amount`, which is ALWAYS home
+    // currency — budgets, alerts and every total downstream depend on that.
+    final resolved = _resolveAmounts(typed, tag);
+    final amount = resolved.home;
     final categoryId = _categoryId!;
     final oldAmount = widget.editing?.amount ?? Money.zero;
     final note = _noteController.text.trim();
@@ -640,6 +857,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         date: _selectedDate,
         note: Value(note.isEmpty ? null : note),
         tagId: Value(_tagId),
+        // Always passed, never absent: moving an expense off a trip has to
+        // clear the foreign receipt, not leave a stale one behind.
+        fxCurrency: Value(resolved.fxCurrency),
+        fxAmount: Value(resolved.fxAmount),
       );
     } else {
       await repo.add(
@@ -648,6 +869,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         date: _selectedDate,
         note: note.isEmpty ? null : note,
         tagId: _tagId,
+        fxCurrency: resolved.fxCurrency,
+        fxAmount: resolved.fxAmount,
       );
     }
     // Fire budget-threshold alerts for the affected category + overall (FR-25).

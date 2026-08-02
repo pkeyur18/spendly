@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/money/currencies.dart';
+import '../../core/money/fx.dart';
+import '../../core/money/fx_rate_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
+import 'currency_picker_screen.dart';
 import 'tag_repository.dart';
 
 /// Add/edit a trip/tag. [existing] null = create mode. Archive hides it from
@@ -25,12 +30,83 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
   late int _color =
       widget.existing?.colorValue ?? AppColors.swatchPalette.first.toARGB32();
 
+  /// Travel state. [_fxCurrency] null = an ordinary tag. The rate lives in a
+  /// controller because it is a plain editable field — a fetched rate is only
+  /// ever a prefill.
+  late String? _fxCurrency = widget.existing?.fxCurrency;
+  late final TextEditingController _rate = TextEditingController(
+    text: widget.existing?.fxRateMicros == null
+        ? ''
+        : rateToString(widget.existing!.fxRateMicros!),
+  );
+  bool _fetching = false;
+
+  /// True once a fetch came back empty, so the caption can say "type it"
+  /// instead of pretending a rate is on the way.
+  bool _fetchFailed = false;
+
+  /// Trip date range for auto-tagging — independent of the currency switch,
+  /// so a domestic trip can use this without ever touching [_fxCurrency].
+  late DateTime? _tripStart = widget.existing?.tripStartDate;
+  late DateTime? _tripEnd = widget.existing?.tripEndDate;
+
   bool get _isEdit => widget.existing != null;
+  bool get _isTravel => _fxCurrency != null;
+  bool get _hasTripDates => _tripStart != null && _tripEnd != null;
 
   @override
   void dispose() {
     _name.dispose();
+    _rate.dispose();
     super.dispose();
+  }
+
+  /// Picking a currency kicks off one fetch. Offline or a failed call leaves
+  /// the field empty and the save path still works — being offline abroad is
+  /// the normal case, not an error.
+  Future<void> _pickCurrency(String code) async {
+    setState(() {
+      _fxCurrency = code;
+      _rate.clear();
+      _fetching = true;
+      _fetchFailed = false;
+    });
+    final micros = await ref.read(fxRateServiceProvider).fetchRateMicros(code);
+    if (!mounted) return;
+    setState(() {
+      _fetching = false;
+      _fetchFailed = micros == null;
+      if (micros != null) _rate.text = rateToString(micros);
+    });
+  }
+
+  /// Blocks changing the currency once expenses exist — a trip mixing two
+  /// currencies makes its own total meaningless. Changing the RATE is always
+  /// allowed (that is the documented mid-trip behavior).
+  Future<bool> _canChangeCurrency() async {
+    if (!_isEdit || widget.existing!.fxCurrency == null) return true;
+    final hasExpenses = await ref
+        .read(tagRepositoryProvider)
+        .hasExpenses(widget.existing!.id);
+    if (!hasExpenses) return true;
+    if (!mounted) return false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Currency is locked'),
+        content: Text(
+          'This trip already has expenses in ${widget.existing!.fxCurrency}. '
+          'Create a new trip for a different currency.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    return false;
   }
 
   @override
@@ -107,6 +183,10 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
                   ),
               ],
             ),
+            const SizedBox(height: AppSpacing.lg),
+            _travelSection(palette),
+            const SizedBox(height: AppSpacing.lg),
+            _tripDatesSection(palette),
             const SizedBox(height: AppSpacing.xl),
             _saveButton(),
             if (_isEdit) ...[
@@ -119,6 +199,204 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
         ),
       ),
     );
+  }
+
+  /// The travel switch and, when on, the currency picker + rate field.
+  /// Everything above this in the sheet behaves identically whether or not a
+  /// tag is a trip abroad.
+  Widget _travelSection(AppPalette palette) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          value: _isTravel,
+          title: const Text(
+            'Spending in another currency',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            'For trips abroad',
+            style: TextStyle(color: palette.textDim, fontSize: 12),
+          ),
+          onChanged: (on) async {
+            if (!on) {
+              if (!await _canChangeCurrency()) return;
+              setState(() {
+                _fxCurrency = null;
+                _rate.clear();
+                _fetchFailed = false;
+              });
+              return;
+            }
+            if (!await _canChangeCurrency()) return;
+            if (mounted) await _showCurrencyPicker();
+          },
+        ),
+        if (_isTravel) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _currencyRow(palette),
+          const SizedBox(height: AppSpacing.lg),
+          TextField(
+            controller: _rate,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: '1 $_fxCurrency equals',
+              suffixText: homeCurrencyCode,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _rateCaption(palette),
+        ],
+      ],
+    );
+  }
+
+  Widget _currencyRow(AppPalette palette) {
+    final option = currencyFor(_fxCurrency);
+    return InkWell(
+      onTap: () async {
+        if (!await _canChangeCurrency()) return;
+        if (mounted) await _showCurrencyPicker();
+      },
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Currency',
+          border: OutlineInputBorder(),
+        ),
+        child: Row(
+          children: [
+            Text(option?.flag ?? '🌐', style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: Text(option?.name ?? _fxCurrency!)),
+            Text(
+              _fxCurrency!,
+              style: TextStyle(
+                color: palette.textDim,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            Icon(Icons.expand_more, color: palette.textDim, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Says what the rate field currently is: fetching, fetched, or yours to
+  /// type. A failed fetch is stated plainly, not raised as an error.
+  Widget _rateCaption(AppPalette palette) {
+    final (text, color) = switch ((_fetching, _fetchFailed)) {
+      (true, _) => ('Fetching today\'s rate…', palette.textDim),
+      (_, true) => ('Couldn\'t fetch a rate — enter today\'s rate', palette.textDim),
+      _ => ('Today\'s rate — tap to change', AppColors.teal),
+    };
+    return Text(text, style: TextStyle(color: color, fontSize: 11.5));
+  }
+
+  Future<void> _showCurrencyPicker() async {
+    final picked = await showCurrencyPickerScreen(
+      context,
+      selected: _fxCurrency,
+    );
+    if (picked != null) await _pickCurrency(picked);
+  }
+
+  /// Trip dates: expenses logged on a day inside this range auto-attach to
+  /// the trip in Quick Add, without picking it manually. Optional, and
+  /// independent of the currency switch — a domestic weekend trip can use
+  /// this too.
+  Widget _tripDatesSection(AppPalette palette) {
+    final df = DateFormat('MMM d, yyyy');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Trip dates',
+          style: TextStyle(color: palette.textDim, fontSize: 13),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Expenses logged on these days auto-attach to this trip',
+          style: TextStyle(color: palette.textDim, fontSize: 11.5),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: _dateField(
+                label: 'Start date',
+                text: _tripStart == null ? null : df.format(_tripStart!),
+                onTap: () => _pickTripDate(isStart: true),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: _dateField(
+                label: 'End date',
+                text: _tripEnd == null ? null : df.format(_tripEnd!),
+                onTap: () => _pickTripDate(isStart: false),
+              ),
+            ),
+          ],
+        ),
+        if (_tripStart != null || _tripEnd != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          TextButton(
+            onPressed: () =>
+                setState(() {
+                  _tripStart = null;
+                  _tripEnd = null;
+                }),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 0),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              alignment: Alignment.centerLeft,
+            ),
+            child: Text(
+              'Clear dates',
+              style: TextStyle(color: palette.textDim, fontSize: 12),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _dateField({
+    required String label,
+    required String? text,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        child: Text(text ?? 'Not set'),
+      ),
+    );
+  }
+
+  Future<void> _pickTripDate({required bool isStart}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: (isStart ? _tripStart : _tripEnd) ?? DateTime.now(),
+      firstDate: DateTime(DateTime.now().year - 5),
+      lastDate: DateTime(DateTime.now().year + 5),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _tripStart = picked;
+      } else {
+        _tripEnd = picked;
+      }
+    });
   }
 
   Widget _saveButton() {
@@ -211,16 +489,75 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
       ).showSnackBar(const SnackBar(content: Text('Enter a name')));
       return;
     }
+    // A travel tag with no usable rate can't convert anything, so it isn't
+    // saveable. Everything else about the tag stays optional.
+    final rateMicros = _isTravel ? parseRateMicros(_rate.text) : null;
+    if (_isTravel && rateMicros == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Enter how much 1 $_fxCurrency is worth')),
+      );
+      return;
+    }
+
+    if (_tripStart != null && _tripEnd != null && _tripEnd!.isBefore(_tripStart!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End date is before the start date')),
+      );
+      return;
+    }
+
     final repo = ref.read(tagRepositoryProvider);
+    if (_hasTripDates) {
+      final overlapsAnother = await repo.hasOverlappingDateRange(
+        widget.existing?.id,
+        _tripStart!,
+        _tripEnd!,
+      );
+      if (overlapsAnother) {
+        if (mounted) await _showOverlapDialog();
+        return;
+      }
+    }
+
     final int id;
     if (_isEdit) {
       id = widget.existing!.id;
       await repo.rename(id, name);
       await repo.recolor(id, _color);
+      await repo.setCurrency(id, _fxCurrency, rateMicros);
+      await repo.setTripDates(id, _tripStart, _tripEnd);
     } else {
-      id = await repo.create(name: name, colorValue: _color);
+      id = await repo.create(
+        name: name,
+        colorValue: _color,
+        fxCurrency: _fxCurrency,
+        fxRateMicros: rateMicros,
+        tripStartDate: _tripStart,
+        tripEndDate: _tripEnd,
+      );
     }
     if (mounted) Navigator.of(context).pop(id);
+  }
+
+  Future<void> _showOverlapDialog() async {
+    final df = DateFormat('MMM d');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Dates overlap another trip'),
+        content: Text(
+          '${df.format(_tripStart!)}–${df.format(_tripEnd!)} overlaps '
+          'another active trip\'s dates. Two trips can\'t auto-tag the same '
+          'day — adjust the range.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

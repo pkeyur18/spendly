@@ -12,6 +12,10 @@ class ExpenseRepository {
   ExpenseRepository(this._db);
   final AppDatabase _db;
 
+  /// [amount] is ALWAYS home currency. For a trip abroad the caller converts
+  /// first (see `lib/core/money/fx.dart`) and passes the original alongside as
+  /// [fxCurrency] + [fxAmount] — this repository stores what it is given and
+  /// never does rate math.
   Future<int> add({
     required Money amount,
     required int categoryId,
@@ -21,6 +25,8 @@ class ExpenseRepository {
     bool isRecurring = false,
     Recurrence? recurrence,
     int? tagId,
+    String? fxCurrency,
+    Money? fxAmount,
   }) {
     return _db
         .into(_db.expenses)
@@ -34,6 +40,8 @@ class ExpenseRepository {
             isRecurring: Value(isRecurring),
             recurrence: Value(recurrence),
             tagId: Value(tagId),
+            fxCurrency: Value(fxCurrency),
+            fxAmountMinor: Value(fxAmount?.minor),
           ),
         );
   }
@@ -48,6 +56,8 @@ class ExpenseRepository {
     bool? isRecurring,
     Value<Recurrence?> recurrence = const Value.absent(),
     Value<int?> tagId = const Value.absent(),
+    Value<String?> fxCurrency = const Value.absent(),
+    Value<Money?> fxAmount = const Value.absent(),
   }) async {
     await (_db.update(_db.expenses)..where((t) => t.id.equals(id))).write(
       ExpensesCompanion(
@@ -65,6 +75,10 @@ class ExpenseRepository {
             : Value(isRecurring),
         recurrence: recurrence,
         tagId: tagId,
+        fxCurrency: fxCurrency,
+        fxAmountMinor: fxAmount.present
+            ? Value(fxAmount.value?.minor)
+            : const Value.absent(),
         updatedAt: Value(DateTime.now()),
       ),
     );

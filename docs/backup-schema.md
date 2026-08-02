@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 3,
+  "version": 5,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 3,
+  "version": 5,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -74,7 +74,9 @@ unencrypted case.
       "recurrence": null,
       "tagId": 1,
       "createdAt": "2026-07-01T09:03:11.000Z",
-      "updatedAt": "2026-07-01T09:03:11.000Z"
+      "updatedAt": "2026-07-01T09:03:11.000Z",
+      "fxCurrency": "JPY",
+      "fxAmountMinor": 4500000
     }
   ],
   "budgets": [
@@ -87,7 +89,16 @@ unencrypted case.
     { "key": "profile_photo_base64", "value": "<base64, key absent entirely if no photo is set>" }
   ],
   "tags": [
-    { "id": 1, "name": "Japan Trip 2026", "colorValue": 1667510321, "isArchived": false }
+    {
+      "id": 1,
+      "name": "Japan Trip 2026",
+      "colorValue": 1667510321,
+      "isArchived": false,
+      "fxCurrency": "JPY",
+      "fxRateMicros": 550000,
+      "tripStartDate": "2026-07-01T00:00:00.000Z",
+      "tripEndDate": "2026-07-10T00:00:00.000Z"
+    }
   ]
 }
 ```
@@ -95,7 +106,10 @@ unencrypted case.
 Rules:
 
 - `amountMinor` is always an integer (paise) — never a decimal or float. This
-  is what makes export→import round-trip exact.
+  is what makes export→import round-trip exact. It is also always **home
+  currency**, in every version of this format; a foreign amount rides
+  alongside it in `fxAmountMinor` (v4) and is never the value a total is
+  built from.
 - `id` values are the *source device's* autoincrement ids, kept only so
   `expenses`/`budgets` can reference `categories` within the same file.
   - **Replace** wipes all four tables first, then reuses these ids verbatim
@@ -185,6 +199,72 @@ a freshly generated id immediately (not lazily), via `backfillExternalIds()` in
 
 - **Replace** carries the backup's `externalId` through verbatim, same as `id`.
 - **Merge** — see below, this is what `externalId` was added to fix.
+
+## v4 — trip currency (schema v8)
+
+A trip abroad is entered in the local currency and converted to home currency
+once, at save time. The converted amount is what gets stored in
+`amountMinor`; the original travels alongside it as a receipt for display.
+**`amountMinor` is always home currency, in every version of this format** —
+that's why no total, budget, chart or export needed changing, and why a v4
+file restored into an older build is still correct.
+
+On each `tags` entry:
+
+- `fxCurrency` (string, nullable) — ISO 4217 code for a trip abroad, e.g.
+  `"THB"`. `null` on an ordinary tag.
+- `fxRateMicros` (int, nullable) — home-currency units per 1 unit of
+  `fxCurrency`, scaled by 1e6 (2.62 INR/THB is `2620000`). Integer so a rate
+  never rides a double, same discipline as `amountMinor`. See
+  `lib/core/money/fx.dart`.
+
+On each `expenses` entry:
+
+- `fxCurrency` (string, nullable) — what this expense was actually paid in.
+- `fxAmountMinor` (int, nullable) — the original amount, in that currency's
+  minor units. Stored as two-decimal minor units for **every** currency, so
+  ¥1500 is `150000`; formatting drops the digits a currency doesn't use.
+
+Both fields on a row are set together or not at all — never one without the
+other.
+
+- A pre-v4 file has none of these keys, and `fromJson` reads each missing key
+  as `null` — same additive, no-version-branch pattern as every field above.
+  Such a file restores as ordinary home-currency data.
+- The rate is deliberately **not** recorded per expense. Editing a trip's
+  rate mid-trip applies only to expenses saved afterwards; ones already saved
+  keep the home amount they were converted to, so restoring a backup can
+  never move a month's total. A trip report derives its average rate as
+  `sum(amountMinor) / sum(fxAmountMinor)` over the trip's expenses.
+- **Replace** restores all four verbatim.
+- **Merge** — a brand-new tag inserted by Merge carries over its
+  `fxCurrency`/`fxRateMicros`; a matched pre-existing tag is left untouched,
+  same as `isArchived`. Expenses carry their own receipt regardless, since
+  it's frozen data rather than a live setting.
+
+## v5 — trip dates (schema v9)
+
+A trip tag can carry a start/end date so Quick Add auto-attaches it to any expense
+logged on a day inside that range, without the user re-picking it each time — see
+`tripForDate` in `lib/features/expenses/quick_add_screen.dart`. Independent of the v4
+currency fields; a domestic trip can use dates without ever setting `fxCurrency`.
+
+On each `tags` entry:
+
+- `tripStartDate` (string, nullable, ISO 8601) — first day the trip auto-tags.
+- `tripEndDate` (string, nullable, ISO 8601) — last day the trip auto-tags, inclusive.
+
+Both null on a tag with no date range. A pre-v5 file has neither key, and
+`BackupTag.fromJson` reads a missing key as `null` — same additive, no-version-branch
+pattern as every field above.
+
+- **Replace** restores both verbatim, same as every other tag field.
+- **Merge** — a brand-new tag inserted by Merge carries over its dates; a matched
+  pre-existing tag is left untouched, same as `isArchived`/`fxCurrency`.
+- The app enforces at most one active trip covering any given day (blocked at save time
+  in `tag_edit_sheet.dart`, via `TagRepository.hasOverlappingDateRange`), but a restored
+  backup is trusted as-is — Merge/Replace never re-validates this, the same way it never
+  re-validates any other field.
 
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
