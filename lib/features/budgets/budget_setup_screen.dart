@@ -51,7 +51,9 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       );
     } else {
       final overall = overallAsync.value;
-      final perCategory = ref.watch(perCategoryBudgetsForMonthProvider(monthKey));
+      final perCategory = ref.watch(
+        perCategoryBudgetsForMonthProvider(monthKey),
+      );
       final catsById = ref.watch(categoriesByIdProvider);
       final report = ref.watch(reportProvider(monthBounds(_month))).value;
       final monthTotal = report?.total ?? Money.zero;
@@ -242,12 +244,41 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       initial: current,
       title: 'Category budget',
     );
-    if (amount == null) return;
+    if (amount == null || !context.mounted) return;
     final repo = ref.read(budgetRepositoryProvider);
-    // Zero clears the budget (FR-24 — a way to remove it).
-    amount.minor > 0
-        ? await repo.setForCategory(_month, categoryId, amount)
-        : await repo.clearForCategory(_month, categoryId);
+    if (amount.minor > 0) {
+      await repo.setForCategory(_month, categoryId, amount);
+      return;
+    }
+    // Zero clears an existing budget (FR-24) — confirm first, since typing
+    // "0" while reconsidering an amount shouldn't silently delete it.
+    if (current.minor > 0) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => Theme(
+          data: AppTheme.boldDialogActions(dialogContext),
+          child: AlertDialog(
+            title: const Text('Clear this budget?'),
+            content: const Text(
+              'Setting the amount to zero removes the budget for this month.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep budget'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    await repo.clearForCategory(_month, categoryId);
   }
 
   Future<void> _deleteCategoryBudget(
@@ -311,7 +342,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                 children: [
                   for (final c in budgetable)
                     ListTile(
-                      leading: Text(c.icon, style: const TextStyle(fontSize: 20)),
+                      leading: Text(
+                        c.icon,
+                        style: const TextStyle(fontSize: 20),
+                      ),
                       title: Text(c.name),
                       onTap: () => Navigator.of(context).pop(c),
                     ),
@@ -361,8 +395,9 @@ class _BudgetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final has = budget != null && budget!.minor > 0;
-    final ratio = has ? spent.ratioOf(budget!).clamp(0.0, 1.0) : 0.0;
-    final pct = (ratio * 100).round();
+    final rawRatio = has ? spent.ratioOf(budget!) : 0.0;
+    final ratio = rawRatio.clamp(0.0, 1.0);
+    final pct = (rawRatio * 100).round();
 
     // Usage state colour (FR-25 thresholds mirrored visually).
     final (barColor, statusText, statusColor) = !has
@@ -411,9 +446,6 @@ class _BudgetCard extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline, size: 20),
                     color: palette.textDim,
                     tooltip: 'Delete budget',
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
                   ),
               ],
             ),
@@ -522,8 +554,9 @@ class _CategoryTotalCard extends StatelessWidget {
       );
     }
 
-    final ratio = total.ratioOf(overall!).clamp(0.0, 1.0);
-    final pct = (ratio * 100).round();
+    final rawRatio = total.ratioOf(overall!);
+    final ratio = rawRatio.clamp(0.0, 1.0);
+    final pct = (rawRatio * 100).round();
     final barColor = overrun != null
         ? AppColors.red
         : pct >= 80

@@ -121,7 +121,10 @@ class TrendBarsView extends StatelessWidget {
                               begin: Alignment.bottomCenter,
                               end: Alignment.topCenter,
                               colors: bars[i].$3
-                                  ? const [Color(0xFFEA580C), AppColors.accent]
+                                  ? const [
+                                      AppColors.amberDeep,
+                                      AppColors.accent,
+                                    ]
                                   : const [
                                       AppColors.primary,
                                       AppColors.primarySoft,

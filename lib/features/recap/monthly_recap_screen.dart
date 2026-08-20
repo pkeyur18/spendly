@@ -167,7 +167,7 @@ class _RecapHero extends StatelessWidget {
   static const _overGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [AppColors.accent, Color(0xFFB45309)],
+    colors: [AppColors.accent, AppColors.amberDeeper],
   );
 
   @override
@@ -223,7 +223,10 @@ class _RecapHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 4),
           Text(
             amount,
@@ -238,7 +241,11 @@ class _RecapHero extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             sub,
-            style: const TextStyle(color: Colors.white, fontSize: 12.5, height: 1.4),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
           ),
         ],
       ),

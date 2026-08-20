@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
@@ -88,6 +89,12 @@ class CategoryManagerScreen extends ConsumerWidget {
                   category: active[i],
                   budget: budgets[active[i].id],
                   reorderIndex: i,
+                  onMoveUp: i > 0
+                      ? () => _reorder(ref, active, i, i - 1)
+                      : null,
+                  onMoveDown: i < active.length - 1
+                      ? () => _reorder(ref, active, i, i + 1)
+                      : null,
                 ),
             ],
           );
@@ -116,11 +123,15 @@ class CategoryListTile extends StatelessWidget {
     required this.category,
     required this.budget,
     required this.reorderIndex,
+    this.onMoveUp,
+    this.onMoveDown,
   });
 
   final CategoryRow category;
   final Money? budget;
   final int? reorderIndex; // null = archived (not draggable)
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
 
   @override
   Widget build(BuildContext context) {
@@ -133,53 +144,63 @@ class CategoryListTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: InkWell(
-        onTap: () => showCategoryEditSheet(context, existing: category),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: palette.line),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: category.color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadius.icon),
+      child: Semantics(
+        button: true,
+        label: '${category.name}, $subtitle',
+        customSemanticsActions: {
+          if (onMoveUp != null)
+            const CustomSemanticsAction(label: 'Move up'): onMoveUp!,
+          if (onMoveDown != null)
+            const CustomSemanticsAction(label: 'Move down'): onMoveDown!,
+        },
+        child: InkWell(
+          onTap: () => showCategoryEditSheet(context, existing: category),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: palette.line),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: category.color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(AppRadius.icon),
+                  ),
+                  alignment: Alignment.center,
+                  child: CategoryGlyph(category.icon, size: 17),
                 ),
-                alignment: Alignment.center,
-                child: CategoryGlyph(category.icon, size: 17),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        category.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 12, color: palette.textDim),
-                    ),
-                  ],
+                      Text(
+                        subtitle,
+                        style: TextStyle(fontSize: 12, color: palette.textDim),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              if (reorderIndex != null)
-                ReorderableDragStartListener(
-                  index: reorderIndex!,
-                  child: Icon(Icons.drag_handle, color: palette.textDim),
-                ),
-            ],
+                if (reorderIndex != null)
+                  ReorderableDragStartListener(
+                    index: reorderIndex!,
+                    child: Icon(Icons.drag_handle, color: palette.textDim),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

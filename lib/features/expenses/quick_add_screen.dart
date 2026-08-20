@@ -9,6 +9,7 @@ import '../../core/money/fx.dart';
 import '../../core/money/fx_rate_service.dart' show homeCurrencyCode;
 import '../../core/money/money.dart';
 import '../../core/notify/notifications.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
@@ -105,6 +106,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late DateTime _selectedDate;
   bool _defaulted = false;
 
+  /// Latest categories from the last build — read (not watched) in [_save]
+  /// for the post-save confirmation's category name, since a fresh
+  /// `ref.read` of the stream provider there could race a just-committed
+  /// write (docs/architecture.md §8.1).
+  List<CategoryRow> _categories = const [];
+
   /// True once the trip has been decided by the user rather than by
   /// auto-tagging — set on any explicit tag-picker action, including picking
   /// "No trip". [_applyAutoTag] never overrides it, so a manual removal
@@ -113,7 +120,19 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   final _noteController = TextEditingController();
   final _noteFocusNode = FocusNode();
 
+  /// The note text when the screen opened — compared against the live
+  /// controller text in [_isDirty], since note changes don't route through
+  /// setState the way the other fields do.
+  late String _initialNote;
+
+  /// Set by any explicit user edit (keypad, category/date/trip pick). Auto
+  /// defaults ([_applyDefaultCategory], [_applyAutoTag]) never set this, so
+  /// closing an untouched form never prompts.
+  bool _touched = false;
+
   bool get _isEdit => widget.editing != null;
+
+  bool get _isDirty => _touched || _noteController.text.trim() != _initialNote;
 
   @override
   void initState() {
@@ -133,6 +152,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _tagId = e?.tagId;
     _selectedDate = e?.date ?? DateTime.now();
     _noteController.text = e?.note ?? '';
+    _initialNote = _noteController.text;
   }
 
   @override
@@ -147,98 +167,135 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final categoriesAsync = ref.watch(activeCategoriesProvider);
 
-    return Scaffold(
-      body: SafeArea(
-        child: categoriesAsync.when(
-          loading: () => const LoadingView(),
-          error: (e, _) => ErrorView(
-            message: 'Couldn\'t load categories.',
-            onRetry: () => ref.invalidate(activeCategoriesProvider),
-          ),
-          data: (categories) {
-            _applyDefaultCategory(categories);
-            _applyAutoTag(ref.watch(activeTagsProvider).value ?? const <TagRow>[]);
-            final selected = categories
-                .where((c) => c.id == _categoryId)
-                .cast<CategoryRow?>()
-                .firstOrNull;
+    return PopScope<void>(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeOrConfirm(context);
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: categoriesAsync.when(
+            loading: () => const LoadingView(),
+            error: (e, _) => ErrorView(
+              message: 'Couldn\'t load categories.',
+              onRetry: () => ref.invalidate(activeCategoriesProvider),
+            ),
+            data: (categories) {
+              _categories = categories;
+              _applyDefaultCategory(categories);
+              _applyAutoTag(
+                ref.watch(activeTagsProvider).value ?? const <TagRow>[],
+              );
+              final selected = categories
+                  .where((c) => c.id == _categoryId)
+                  .cast<CategoryRow?>()
+                  .firstOrNull;
 
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: Column(
-              children: [
-                _titleBar(context),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                    ),
-                    children: [
-                      const SizedBox(height: AppSpacing.sm),
-                      AmountDisplay(_amount, symbol: _amountSymbol),
-                      _conversionLine(palette),
-                      _subLine(context, selected, palette),
-                      const SizedBox(height: AppSpacing.sm),
-                      Center(
-                        child: Wrap(
-                          spacing: AppSpacing.sm,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            _dateChip(context, palette),
-                            _tripChip(context, palette),
-                          ],
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: Column(
+                  children: [
+                    _titleBar(context),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
                         ),
+                        children: [
+                          const SizedBox(height: AppSpacing.sm),
+                          AmountDisplay(_amount, symbol: _amountSymbol),
+                          _conversionLine(palette),
+                          _subLine(context, selected, palette),
+                          const SizedBox(height: AppSpacing.sm),
+                          Center(
+                            child: Wrap(
+                              spacing: AppSpacing.sm,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                _dateChip(context, palette),
+                                _tripChip(context, palette),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _noteField(context, palette),
+                          const SizedBox(height: AppSpacing.lg),
+                          _categoryGrid(categories),
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      _noteField(context, palette),
-                      const SizedBox(height: AppSpacing.lg),
-                      _categoryGrid(categories),
-                    ],
-                  ),
-                ),
-                // Keypad + save pinned to the bottom (not in the scroll view)
-                // so both stay reachable with one thumb regardless of how
-                // many categories are above.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                  ),
-                  child: Column(
-                    children: [
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 200),
-                        alignment: Alignment.topCenter,
-                        child: _noteFocusNode.hasFocus
-                            ? const SizedBox.shrink()
-                            : Column(
-                                children: [
-                                  AmountKeypad(
-                                    onKey: (k) => setState(
-                                      () => _amount = applyAmountKey(
-                                        _amount,
-                                        k,
+                    ),
+                    // Keypad + save pinned to the bottom (not in the scroll view)
+                    // so both stay reachable with one thumb regardless of how
+                    // many categories are above.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                      ),
+                      child: Column(
+                        children: [
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 200),
+                            alignment: Alignment.topCenter,
+                            child: _noteFocusNode.hasFocus
+                                ? const SizedBox.shrink()
+                                : Column(
+                                    children: [
+                                      AmountKeypad(
+                                        onKey: (k) => setState(() {
+                                          _amount = applyAmountKey(_amount, k);
+                                          _touched = true;
+                                        }),
                                       ),
-                                    ),
+                                      const SizedBox(height: AppSpacing.md),
+                                    ],
                                   ),
-                                  const SizedBox(height: AppSpacing.md),
-                                ],
-                              ),
+                          ),
+                          _saveButton(context),
+                        ],
                       ),
-                      _saveButton(context),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _closeOrConfirm(BuildContext context) async {
+    if (!_isDirty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          title: const Text('Discard this expense?'),
+          content: const Text(
+            'The amount, category, and other details you entered will be lost.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true && context.mounted) Navigator.of(context).pop();
   }
 
   void _applyDefaultCategory(List<CategoryRow> categories) {
@@ -273,17 +330,24 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             button: true,
             label: 'Close',
             child: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: palette.card,
-                  border: Border.all(color: palette.line),
-                  borderRadius: BorderRadius.circular(10),
+              onTap: () => _closeOrConfirm(context),
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: palette.card,
+                      border: Border.all(color: palette.line),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.close, size: 16),
+                  ),
                 ),
-                child: const Icon(Icons.close, size: 16),
               ),
             ),
           ),
@@ -416,36 +480,57 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   /// Backdating chip: shows the selected date, tap opens a bounded picker
   /// (today back to 90 days ago, no future dates).
-  Widget _dateChip(BuildContext context, AppPalette palette) {
+  /// Shared date/trip chip shell. [emphasized] gives it the bordered-pill
+  /// treatment; the quiet (unbordered) form is used for each chip's default
+  /// value (today, no trip) so the two highest-frequency decisions — amount
+  /// and category — aren't visually competing with defaults nobody needs to
+  /// look at. Tapping still opens the same picker either way.
+  Widget _metaChip({
+    required IconData icon,
+    required String label,
+    required String semanticsLabel,
+    required VoidCallback onTap,
+    required AppPalette palette,
+    bool emphasized = false,
+    Color? emphasisColor,
+  }) {
+    final color = emphasisColor ?? palette.textDim;
     return Semantics(
       button: true,
-      label: 'Expense date, ${relativeDayLabel(_selectedDate)}',
+      label: semanticsLabel,
       child: GestureDetector(
-        onTap: _pickDate,
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: palette.card,
-            border: Border.all(color: palette.line),
-            borderRadius: BorderRadius.circular(AppRadius.button),
-          ),
+          decoration: emphasized
+              ? BoxDecoration(
+                  color: palette.card,
+                  border: Border.all(color: emphasisColor ?? palette.line),
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                )
+              : null,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 14,
-                color: palette.textDim,
-              ),
+              Icon(icon, size: 14, color: color),
               const SizedBox(width: 6),
-              Text(
-                relativeDayLabel(_selectedDate),
-                style: TextStyle(color: palette.textDim, fontSize: 13),
-              ),
+              Text(label, style: TextStyle(color: color, fontSize: 13)),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _dateChip(BuildContext context, AppPalette palette) {
+    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+    return _metaChip(
+      icon: Icons.calendar_today_outlined,
+      label: relativeDayLabel(_selectedDate),
+      semanticsLabel: 'Expense date, ${relativeDayLabel(_selectedDate)}',
+      onTap: _pickDate,
+      palette: palette,
+      emphasized: !isToday,
     );
   }
 
@@ -457,41 +542,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         .where((t) => t.id == _tagId)
         .cast<TagRow?>()
         .firstOrNull;
-    return Semantics(
-      button: true,
-      label: selected == null ? 'Add trip' : 'Trip, ${selected.name}',
-      child: GestureDetector(
-        onTap: () => _openTagPicker(tags),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: palette.card,
-            border: Border.all(
-              color: selected == null
-                  ? palette.line
-                  : Color(selected.colorValue),
-            ),
-            borderRadius: BorderRadius.circular(AppRadius.button),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.card_travel_outlined,
-                size: 14,
-                color: selected == null
-                    ? palette.textDim
-                    : Color(selected.colorValue),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                selected?.name ?? 'Add trip',
-                style: TextStyle(color: palette.textDim, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return _metaChip(
+      icon: Icons.card_travel_outlined,
+      label: selected?.name ?? 'Add trip',
+      semanticsLabel: selected == null ? 'Add trip' : 'Trip, ${selected.name}',
+      onTap: () => _openTagPicker(tags),
+      palette: palette,
+      emphasized: selected != null,
+      emphasisColor: selected == null ? null : Color(selected.colorValue),
     );
   }
 
@@ -543,6 +601,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                             setState(() {
                               _tagId = newId;
                               _tagManuallySet = true;
+                              _touched = true;
                             });
                           }
                         },
@@ -595,6 +654,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     setState(() {
       _tagId = chosen == _noTripChoice ? null : chosen;
       _tagManuallySet = true;
+      _touched = true;
     });
   }
 
@@ -634,7 +694,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       firstDate: firstDate,
       lastDate: lastDate,
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _touched = true;
+      });
+    }
   }
 
   Widget _categoryGrid(List<CategoryRow> categories) {
@@ -678,7 +743,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           selected: sel,
           label: c.name,
           child: GestureDetector(
-            onTap: () => setState(() => _categoryId = c.id),
+            onTap: () => setState(() {
+              _categoryId = c.id;
+              _touched = true;
+            }),
             child: _CategoryTile(
               glyph: CategoryGlyph(c.icon, size: 22),
               name: c.name,
@@ -738,7 +806,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         ),
       ),
     );
-    if (chosen != null) setState(() => _categoryId = chosen.id);
+    if (chosen != null) {
+      setState(() {
+        _categoryId = chosen.id;
+        _touched = true;
+      });
+    }
   }
 
   Widget _saveButton(BuildContext context) {
@@ -819,9 +892,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       );
     }
     return (
-      home: Money.fromMinor(
-        convertToHomeMinor(typed.minor, tag.fxRateMicros!),
-      ),
+      home: Money.fromMinor(convertToHomeMinor(typed.minor, tag.fxRateMicros!)),
       fxCurrency: tag.fxCurrency,
       fxAmount: typed,
     );
@@ -830,9 +901,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   Future<void> _save() async {
     final typed = Money.parse(_amount);
     if (typed.minor <= 0 || _categoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter an amount and pick a category')),
-      );
+      final missing = typed.minor <= 0 && _categoryId == null
+          ? 'Enter an amount and pick a category'
+          : typed.minor <= 0
+          ? 'Enter an amount'
+          : 'Pick a category';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(missing)));
       return;
     }
     // Fresh read, not the cached tag list: _editRate may have just written a
@@ -879,7 +955,22 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final sameCategory = _isEdit && widget.editing!.categoryId == categoryId;
     final delta = sameCategory ? amount - oldAmount : amount;
     await _checkBudgetAlerts(categoryId, delta);
-    if (mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+    // Only a fresh add gets a confirmation — an edit is a correction, not a
+    // habit-loop moment worth celebrating.
+    if (_isEdit) {
+      Navigator.of(context).pop();
+    } else {
+      final categoryName = _categories
+          .where((c) => c.id == categoryId)
+          .cast<CategoryRow?>()
+          .firstOrNull
+          ?.name;
+      Navigator.of(context).pop(
+        '${amount.format(locale: 'en_IN')} logged'
+        '${categoryName == null ? '' : ' to $categoryName'}',
+      );
+    }
   }
 
   /// After a write, compare category + overall month totals against their
@@ -904,10 +995,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         if (r.categoryId != null) r.categoryId!: Money.fromMinor(r.amountMinor),
     };
     final categoriesById = {
-      for (final c in await ref
-          .read(categoryRepositoryProvider)
-          .watchAll()
-          .first)
+      for (final c
+          in await ref.read(categoryRepositoryProvider).watchAll().first)
         c.id: c,
     };
     final ignored = ignoredCategoryIds(categoriesById);
@@ -1007,5 +1096,29 @@ class _CategoryTile extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// Push Quick Add and show its post-save confirmation (if any) once back on
+/// this screen — the confirmation SnackBar has to live here, not inside
+/// QuickAddScreen itself, since that screen is already gone by the time it
+/// would show.
+Future<void> openQuickAddScreen(
+  BuildContext context, {
+  ExpenseRow? editing,
+  int? initialCategoryId,
+}) async {
+  final confirmation = await Navigator.of(context).push<String>(
+    MaterialPageRoute(
+      builder: (_) => QuickAddScreen(
+        editing: editing,
+        initialCategoryId: initialCategoryId,
+      ),
+    ),
+  );
+  if (confirmation != null && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(confirmation)));
   }
 }

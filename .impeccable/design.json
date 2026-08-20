@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-20T07:05:05Z",
+  "title": "Design System: Spendly",
+  "extensions": {
+    "colorMeta": {
+      "ledger-indigo": { "role": "primary", "displayName": "Ledger Indigo", "canonical": "#6366F1" },
+      "indigo-deep": { "role": "primary-variant", "displayName": "Indigo Deep", "canonical": "#4F46E5" },
+      "indigo-soft": { "role": "primary-variant", "displayName": "Indigo Soft", "canonical": "#818CF8" },
+      "signal-pink": { "role": "secondary", "displayName": "Signal Pink", "canonical": "#EC4899" },
+      "amber-accent": { "role": "warning", "displayName": "Amber Accent", "canonical": "#F59E0B" },
+      "alert-red": { "role": "error", "displayName": "Alert Red", "canonical": "#EF4444" },
+      "teal": { "role": "tertiary", "displayName": "Teal", "canonical": "#14B8A6" },
+      "paper-light": { "role": "neutral", "displayName": "Paper", "canonical": "#F5F5F7" },
+      "card-light": { "role": "neutral", "displayName": "Card", "canonical": "#FFFFFF" },
+      "ink-light": { "role": "neutral", "displayName": "Ink", "canonical": "#14141C" },
+      "ink-light-dim": { "role": "neutral", "displayName": "Ink Dim", "canonical": "#6B6B7B" },
+      "hairline-light": { "role": "neutral", "displayName": "Hairline", "canonical": "#ECECF1" },
+      "void-dark": { "role": "neutral", "displayName": "Void", "canonical": "#0B0B12" },
+      "card-dark": { "role": "neutral", "displayName": "Card (dark)", "canonical": "#16161F" },
+      "card-dark-2": { "role": "neutral", "displayName": "Card Secondary (dark)", "canonical": "#1D1D28" },
+      "ink-dark": { "role": "neutral", "displayName": "Ink (dark)", "canonical": "#F4F4F8" },
+      "ink-dark-dim": { "role": "neutral", "displayName": "Ink Dim (dark)", "canonical": "#8B8B9C" },
+      "hairline-dark": { "role": "neutral", "displayName": "Hairline (dark)", "canonical": "#26262F" },
+      "nav-plum-light": { "role": "surface", "displayName": "Nav Plum", "canonical": "#1B1533" },
+      "nav-plum-dark": { "role": "surface", "displayName": "Nav Plum (dark)", "canonical": "#201A3D" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Reserved for a future large money figure; ceiling of the type scale." },
+      "headline": { "displayName": "Headline", "purpose": "Home-screen greeting." },
+      "title": { "displayName": "Title", "purpose": "App-bar titles, dialog titles, section headers." },
+      "body": { "displayName": "Body", "purpose": "Transaction rows, dialog content, form fields." },
+      "label": { "displayName": "Label", "purpose": "Captions, chip labels, nav item labels." }
+    },
+    "shadows": [
+      { "name": "card-whisper", "value": "0 2px 10px rgba(0,0,0,0.04)", "purpose": "Default resting state for every card/content container." },
+      { "name": "hero-lift", "value": "0 12px 30px rgba(99,102,241,0.35)", "purpose": "The month-total gradient hero card only." },
+      { "name": "cta-lift", "value": "0 8px 20px rgba(99,102,241,0.4)", "purpose": "The primary gradient CTA button (Save expense / Save changes)." }
+    ],
+    "motion": [
+      { "name": "theme-crossfade", "value": "400ms", "purpose": "Light/dark theme switch crossfade duration." }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "The Midnight Ledger",
+    "overview": "Spendly reads as a well-kept ledger under lamp light: dark, confident surfaces — near-black indigo (#0B0B12) in dark mode, a cool off-white (#F5F5F7) in light — punctuated by exactly one recurring warm signature, the indigo→pink brand gradient, reserved for the moments that matter (the hero total, the primary save action, the FAB). Everything else stays quiet: flat neutral cards with hairline borders, Sora for numbers and section titles, Inter for everything read at length. The bottom navigation breaks from both the card surface and the background entirely into its own deep indigo-plum (#1B1533 / #201A3D), a small deliberate departure that gives the app a \"home base\" distinct from its content screens.\n\nThe mood serves the product's actual user: someone actively trying to stay under budget, not idly browsing a ledger. Gradient and shadow are earned by significance (money owed, money saved, the one action that commits an entry) rather than spent everywhere.",
+    "keyCharacteristics": [
+      "One brand gradient (indigo → pink), used sparingly on hero cards, the primary CTA, and the FAB — never as decoration.",
+      "Flat, hairline-bordered cards at rest; the gradient hero is the one deliberately \"lifted\" surface per screen.",
+      "Sora (display/numbers) paired with Inter (body/labels) — a confident geometric face over a quiet workhorse.",
+      "A dedicated navy-plum bottom nav surface, distinct from card and background.",
+      "Full light/dark parity — every token has a light and dark value, not a dark-mode afterthought."
+    ],
+    "rules": [
+      { "name": "The One Gradient Rule", "body": "The brand gradient (indigo → pink) appears in exactly three places per screen at most: the month-total hero, the primary save/CTA button, and the FAB ring. It is never used as a section background, a chip fill, or general decoration.", "section": "colors" },
+      { "name": "The Sora-For-Money Rule", "body": "Any text presenting a currency amount or a section/screen-level heading is Sora. Anything the user reads rather than scans is Inter. Never render a monetary figure in Inter.", "section": "typography" },
+      { "name": "The One Lift Per Screen Rule", "body": "A screen earns exactly one heavier, colored shadow — its hero or its primary CTA, never both loudly at once, and never a second competing lifted card.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do reserve the brand gradient for the month-total hero, the primary save CTA, and the FAB — nowhere else.",
+      "Do give every card a hairline border regardless of whether it also carries a shadow.",
+      "Do render every monetary figure in Sora, never Inter (The Sora-For-Money Rule).",
+      "Do keep the bottom nav on its own Nav Plum surface, distinct from Card and Background.",
+      "Do define both a light and a dark value for every new token — this system has no dark-mode afterthoughts."
+    ],
+    "donts": [
+      "Don't add a second heavy colored shadow to a screen that already has a hero or lifted CTA (The One Lift Per Screen Rule).",
+      "Don't introduce Cupertino-styled controls to differentiate iOS — the incumbent system is one unified Material-based language across iOS and Android by deliberate choice.",
+      "Don't use Teal, or any swatch-palette color beyond Indigo/Pink/Amber/Red, as a core UI chrome color — those 18 swatches are for user-chosen category/tag colors only, not system chrome.",
+      "Don't fill a chip solid unless it represents an active/selected filter; unselected and overflow chips stay ghost (card background + hairline border)."
+    ]
+  }
+}

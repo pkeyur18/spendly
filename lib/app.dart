@@ -75,15 +75,16 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
   void _handleWidgetUri(Uri? uri) {
     if (uri == null || uri.host != 'quickadd') return;
     final id = int.tryParse(uri.queryParameters['category'] ?? '');
-    appNavigatorKey.currentState?.push(
-      MaterialPageRoute(builder: (_) => QuickAddScreen(initialCategoryId: id)),
-    );
+    final context = appNavigatorKey.currentContext;
+    if (context != null) openQuickAddScreen(context, initialCategoryId: id);
   }
 
   @override
   Widget build(BuildContext context) {
     ref.watch(autoBackupCheckProvider); // fires the cold-start check
-    ref.watch(monthlyRecapCheckProvider); // fires the once-per-month recap check
+    ref.watch(
+      monthlyRecapCheckProvider,
+    ); // fires the once-per-month recap check
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);

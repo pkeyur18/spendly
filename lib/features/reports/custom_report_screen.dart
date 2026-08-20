@@ -115,7 +115,6 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
                   ),
                   backgroundColor: palette.card,
                   shape: StadiumBorder(side: BorderSide(color: palette.line)),
-                  showCheckmark: false,
                 ),
             ],
           ),

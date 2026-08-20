@@ -75,12 +75,17 @@ class SectionTitle extends StatelessWidget {
               label: actionLabel,
               child: GestureDetector(
                 onTap: onAction,
-                child: Text(
-                  actionLabel!,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.center,
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ),

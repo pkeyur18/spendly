@@ -10,9 +10,9 @@ import '../../core/theme/tokens.dart';
 const avatarGradients = <List<Color>>[
   [AppColors.primaryDeep, AppColors.primary, AppColors.pink], // default
   [AppColors.accent, AppColors.red],
-  [AppColors.teal, Color(0xFF0D9488)], // teal deep
+  [AppColors.teal, AppColors.tealDeep],
   [AppColors.primarySoft, AppColors.primary],
-  [AppColors.pink, Color(0xFFF472B6)], // pink light
+  [AppColors.pink, AppColors.pinkLight],
 ];
 
 LinearGradient gradientAt(int? index) => LinearGradient(

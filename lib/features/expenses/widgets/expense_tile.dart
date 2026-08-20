@@ -122,9 +122,7 @@ class ExpenseTile extends ConsumerWidget {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.red,
-                  ),
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.red),
                   child: const Text('Delete'),
                 ),
               ],
@@ -135,9 +133,7 @@ class ExpenseTile extends ConsumerWidget {
             ref.read(expenseRepositoryProvider).delete(expense.id),
         child: AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => QuickAddScreen(editing: expense)),
-          ),
+          onTap: () => openQuickAddScreen(context, editing: expense),
           child: Row(
             children: [
               Container(

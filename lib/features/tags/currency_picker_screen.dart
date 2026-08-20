@@ -117,20 +117,25 @@ class _CurrencyPickerScreenState extends State<CurrencyPickerScreen> {
   /// Unfiltered view: a short curated "Popular" group, then the rest A–Z.
   Widget _sectionedList(List<CurrencyOption> currencies) {
     final (popular, alphabetical) = sectionCurrencies(currencies);
-    return ListView(
-      children: [
-        _sectionLabel('Popular'),
-        for (final c in popular) _row(c),
-        _sectionLabel('A–Z'),
-        for (final c in alphabetical) _row(c),
-      ],
+    final items = [
+      _sectionLabel('Popular'),
+      for (final c in popular) _row(c),
+      _sectionLabel('A–Z'),
+      for (final c in alphabetical) _row(c),
+    ];
+    return ListView.builder(
+      itemCount: items.length,
+      itemBuilder: (_, i) => items[i],
     );
   }
 
   /// Search results: a flat list — already a small, relevant set, so
   /// sectioning it further would just add noise.
   Widget _flatList(List<CurrencyOption> currencies) {
-    return ListView(children: [for (final c in currencies) _row(c)]);
+    return ListView.builder(
+      itemCount: currencies.length,
+      itemBuilder: (_, i) => _row(currencies[i]),
+    );
   }
 
   Widget _sectionLabel(String text) {
@@ -180,8 +185,6 @@ Future<String?> showCurrencyPickerScreen(
   String? selected,
 }) {
   return Navigator.of(context).push<String>(
-    MaterialPageRoute(
-      builder: (_) => CurrencyPickerScreen(selected: selected),
-    ),
+    MaterialPageRoute(builder: (_) => CurrencyPickerScreen(selected: selected)),
   );
 }

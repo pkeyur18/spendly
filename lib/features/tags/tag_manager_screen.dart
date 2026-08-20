@@ -70,48 +70,56 @@ class TagListTile extends StatelessWidget {
     final color = Color(tag.colorValue);
     return Opacity(
       opacity: tag.isArchived ? 0.5 : 1,
-      child: InkWell(
-        onTap: () => showTagEditSheet(context, existing: tag),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: palette.card,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: palette.line),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadius.icon),
+      child: Semantics(
+        button: true,
+        label: '${tag.name}, ${tag.isArchived ? 'Archived' : 'Active'}',
+        child: InkWell(
+          onTap: () => showTagEditSheet(context, existing: tag),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: palette.line),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(AppRadius.icon),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.card_travel_outlined,
+                    size: 18,
+                    color: color,
+                  ),
                 ),
-                alignment: Alignment.center,
-                child: Icon(Icons.card_travel_outlined, size: 18, color: color),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tag.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tag.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    Text(
-                      tag.isArchived ? 'Archived' : 'Active',
-                      style: TextStyle(fontSize: 12, color: palette.textDim),
-                    ),
-                  ],
+                      Text(
+                        tag.isArchived ? 'Archived' : 'Active',
+                        style: TextStyle(fontSize: 12, color: palette.textDim),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

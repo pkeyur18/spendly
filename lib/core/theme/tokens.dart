@@ -15,6 +15,12 @@ class AppColors {
   static const teal = Color(0xFF14B8A6);
   static const red = Color(0xFFEF4444);
 
+  // Gradient companions (paired with a brand color above, never used alone)
+  static const amberDeep = Color(0xFFEA580C);
+  static const amberDeeper = Color(0xFFB45309);
+  static const tealDeep = Color(0xFF0D9488);
+  static const pinkLight = Color(0xFFF472B6);
+
   // Light
   static const lightBg = Color(0xFFF5F5F7);
   static const lightCard = Color(0xFFFFFFFF);

@@ -161,9 +161,7 @@ class HomeScreen extends ConsumerWidget {
   }
 
   void _openQuickAdd(BuildContext context, {ExpenseRow? editing}) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => QuickAddScreen(editing: editing)));
+    openQuickAddScreen(context, editing: editing);
   }
 }
 
@@ -181,7 +179,8 @@ class _HeroCard extends ConsumerWidget {
     );
 
     final hasBudget = budget != null && budget.minor > 0;
-    final ratio = hasBudget ? total.ratioOf(budget).clamp(0.0, 1.0) : 0.0;
+    final rawRatio = hasBudget ? total.ratioOf(budget) : 0.0;
+    final ratio = rawRatio.clamp(0.0, 1.0);
     final barColor = ratio >= 1.0
         ? AppColors.red
         : ratio >= 0.8
@@ -224,9 +223,6 @@ class _HeroCard extends ConsumerWidget {
                   color: Colors.white,
                   size: 20,
                 ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
@@ -257,7 +253,7 @@ class _HeroCard extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${(ratio * 100).round()}% of ${budget.format(locale: 'en_IN')} budget',
+                  '${(rawRatio * 100).round()}% of ${budget.format(locale: 'en_IN')} budget',
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
                 Text(
@@ -301,7 +297,7 @@ class _BottomNav extends StatelessWidget {
         tooltip: label,
         visualDensity: VisualDensity.compact,
         style: IconButton.styleFrom(
-          fixedSize: const Size(40, 40),
+          fixedSize: const Size(48, 48),
           backgroundColor: active
               ? Colors.white.withValues(alpha: 0.08)
               : Colors.transparent,
@@ -319,56 +315,60 @@ class _BottomNav extends StatelessWidget {
       foregroundDecoration: BoxDecoration(
         border: Border(top: BorderSide(color: palette.navBorder, width: 1)),
       ),
-      child: BottomAppBar(
-        color: palette.navBackground,
-        height: 56,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
-            item(
-              Icons.bar_chart_rounded,
-              'Reports',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => MonthlyReportScreen(month: DateTime.now()),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 40),
-            item(
-              Icons.sell_rounded,
-              'Categories',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CategoryManagerScreen(),
-                  ),
-                );
-              },
-            ),
-            item(
-              Icons.account_circle_rounded,
-              'Profile',
-              leading: ProfileAvatar(
-                name: profile?.name ?? '',
-                photoBytes: profile?.photoBytes,
-                avatarColorIndex: profile?.avatarColorIndex,
-                size: 26,
-                fontSize: 11,
+      child: SafeArea(
+        top: false,
+        child: BottomAppBar(
+          color: palette.navBackground,
+          height: 56,
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
+              item(
+                Icons.bar_chart_rounded,
+                'Reports',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          MonthlyReportScreen(month: DateTime.now()),
+                    ),
+                  );
+                },
               ),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-            ),
-          ],
+              const SizedBox(width: 40),
+              item(
+                Icons.sell_rounded,
+                'Categories',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CategoryManagerScreen(),
+                    ),
+                  );
+                },
+              ),
+              item(
+                Icons.account_circle_rounded,
+                'Profile',
+                leading: ProfileAvatar(
+                  name: profile?.name ?? '',
+                  photoBytes: profile?.photoBytes,
+                  avatarColorIndex: profile?.avatarColorIndex,
+                  size: 26,
+                  fontSize: 11,
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
