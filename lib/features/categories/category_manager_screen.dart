@@ -148,10 +148,8 @@ class CategoryListTile extends StatelessWidget {
         button: true,
         label: '${category.name}, $subtitle',
         customSemanticsActions: {
-          if (onMoveUp != null)
-            const CustomSemanticsAction(label: 'Move up'): onMoveUp!,
-          if (onMoveDown != null)
-            const CustomSemanticsAction(label: 'Move down'): onMoveDown!,
+          const CustomSemanticsAction(label: 'Move up'): ?onMoveUp,
+          const CustomSemanticsAction(label: 'Move down'): ?onMoveDown,
         },
         child: InkWell(
           onTap: () => showCategoryEditSheet(context, existing: category),
