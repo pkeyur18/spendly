@@ -279,24 +279,22 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                           AmountDisplay(_amount, symbol: _amountSymbol),
                           _conversionLine(palette),
                           _subLine(context, selected, palette),
-                          const SizedBox(height: AppSpacing.md),
-                          // Left-aligned with real runSpacing, not centered:
-                          // matches every other chip row in the app (the
-                          // category filter chips in All Transactions default
-                          // to WrapAlignment.start). On a phone-width screen
-                          // four chips wrap to two lines almost every time —
-                          // without runSpacing those two lines had zero gap
-                          // between them and visually collided, which was the
-                          // concrete cause of this row reading as "cramped."
-                          Wrap(
-                            spacing: AppSpacing.sm + 2,
-                            runSpacing: AppSpacing.sm,
-                            children: [
-                              _dateChip(context, palette),
-                              _tripChip(context, palette),
-                              _repeatChip(context, palette),
-                              _receiptChip(context, palette),
-                            ],
+                          const SizedBox(height: AppSpacing.sm),
+                          Center(
+                            child: Wrap(
+                              spacing: AppSpacing.sm,
+                              // Four chips wrap to two lines on most phones;
+                              // without runSpacing the two lines had zero gap
+                              // and touched.
+                              runSpacing: AppSpacing.sm,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                _dateChip(context, palette),
+                                _tripChip(context, palette),
+                                _repeatChip(context, palette),
+                                _receiptChip(context, palette),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.md),
                           _noteField(context, palette),
@@ -560,25 +558,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   /// Backdating chip: shows the selected date, tap opens a bounded picker
   /// (today back to 90 days ago, no future dates).
-  /// Shared date/trip/repeat/receipt chip shell. [emphasized] gives it the
-  /// bordered-pill treatment; the quiet (unbordered) form is used for each
-  /// chip's default value (today, no trip, no repeat, no receipt) so the two
-  /// highest-frequency decisions — amount and category — aren't visually
-  /// competing with defaults nobody needs to look at. Tapping still opens the
-  /// same picker either way.
-  ///
-  /// Stadium-shaped (`AppRadius.chip`), matching the chip vocabulary used
-  /// everywhere else in the app (All Transactions' filter chips, the ghost
-  /// "+N more" chip) — this row previously used the button radius instead,
-  /// the one place in the app a "chip" wasn't actually chip-shaped.
-  ///
-  /// The visible pill stays exactly as compact as before — widening it
-  /// pushed chip widths past the point where more than one fit per `Wrap`
-  /// line, which produced a tall, one-per-row stack, a worse outcome than
-  /// the original crowding. [ConstrainedBox] instead grows the TAP target
-  /// invisibly for the default (unbordered) state, and only visibly grows
-  /// the pill itself for the rarer emphasized/bordered state — the un-padded
-  /// content alone came in well under the 44pt/48dp platform floor.
+  /// Shared date/trip chip shell. [emphasized] gives it the bordered-pill
+  /// treatment; the quiet (unbordered) form is used for each chip's default
+  /// value (today, no trip) so the two highest-frequency decisions — amount
+  /// and category — aren't visually competing with defaults nobody needs to
+  /// look at. Tapping still opens the same picker either way.
   Widget _metaChip({
     required IconData icon,
     required String label,
@@ -594,34 +578,22 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       label: semanticsLabel,
       child: GestureDetector(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
-          child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: emphasized
-                ? BoxDecoration(
-                    color: palette.card,
-                    border: Border.all(color: emphasisColor ?? palette.line),
-                    borderRadius: BorderRadius.circular(AppRadius.chip),
-                  )
-                : null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 14, color: color),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: emphasized
+              ? BoxDecoration(
+                  color: palette.card,
+                  border: Border.all(color: emphasisColor ?? palette.line),
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                )
+              : null,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(color: color, fontSize: 13)),
+            ],
           ),
         ),
       ),
@@ -665,10 +637,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         ? 'Repeat'
         : recurrenceLabel(_recurrence!);
     return _metaChip(
-      // _outlined, not _rounded: the other three chips in this row are all
-      // outlined-family icons, and repeat_rounded was the one mismatched
-      // stroke weight among them.
-      icon: Icons.repeat_outlined,
+      icon: Icons.repeat_rounded,
       label: label,
       semanticsLabel: _recurrence == null
           ? 'Repeat, off'
@@ -789,17 +758,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   /// comment for why that fetch isn't synchronous like every other field).
   Widget _receiptChip(BuildContext context, AppPalette palette) {
     if (_receiptLoading) {
-      // Same footprint as the resolved chip (44pt min, matching padding) so
-      // nothing visibly shifts once the load finishes.
-      return ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       );
     }
