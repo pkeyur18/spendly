@@ -138,6 +138,14 @@ final allAccountsProvider = StreamProvider<List<AccountRow>>(
   (ref) => ref.watch(accountRepositoryProvider).watchAll(),
 );
 
+/// Every account (active and archived — a past expense may reference an
+/// archived one) keyed by id, same pattern as `categoriesByIdProvider`.
+/// Feeds the Excel/PDF export's Account column.
+final accountsByIdProvider = Provider<Map<int, AccountRow>>((ref) {
+  final accounts = ref.watch(allAccountsProvider).value ?? const [];
+  return {for (final a in accounts) a.id: a};
+});
+
 final activeAccountsProvider = StreamProvider<List<AccountRow>>(
   (ref) => ref.watch(accountRepositoryProvider).watchActive(),
 );

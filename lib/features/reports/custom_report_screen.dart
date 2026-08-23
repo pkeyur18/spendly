@@ -7,12 +7,15 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../accounts/account_repository.dart';
 import '../expenses/all_transactions_screen.dart' show groupExpensesByDay;
+import '../expenses/receipt_repository.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../home/widgets/trend_bars.dart';
 import '../profile/profile_provider.dart';
+import '../tags/tag_repository.dart';
 import 'report_providers.dart';
 import 'report_widgets.dart';
 
@@ -91,6 +94,9 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
     final df = DateFormat('MMM d, yyyy');
     final async = ref.watch(reportProvider(_range));
     final byId = ref.watch(categoriesByIdProvider);
+    final tagById = ref.watch(tagsByIdProvider);
+    final accountById = ref.watch(accountsByIdProvider);
+    final withReceipt = ref.watch(expenseIdsWithReceiptProvider).value ?? const {};
     final profile = ref.watch(profileProvider).value;
 
     return Scaffold(
@@ -177,6 +183,9 @@ class _CustomReportScreenState extends ConsumerState<CustomReportScreen> {
                         title:
                             'Report ${DateFormat('MMM d').format(_range.$1)} to ${DateFormat('MMM d').format(_range.$2.subtract(const Duration(days: 1)))}',
                         profile: profile,
+                        tagById: tagById,
+                        accountById: accountById,
+                        expenseIdsWithReceipt: withReceipt,
                       ),
                       const SizedBox(height: AppSpacing.lg),
                     ],

@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
+import '../expenses/recurring_schedule.dart' show recurrenceLabel;
 import '../profile/profile_provider.dart';
 import 'report_model.dart';
 
@@ -168,6 +169,9 @@ Uint8List buildXlsx(
   Map<int, CategoryRow> byId, {
   required String title,
   Profile? profile,
+  Map<int, TagRow> tagById = const {},
+  Map<int, AccountRow> accountById = const {},
+  Set<int> expenseIdsWithReceipt = const {},
 }) {
   final excel = xl.Excel.createExcel();
   final summary = excel['Summary'];
@@ -333,19 +337,40 @@ Uint8List buildXlsx(
     xl.CellStyle(fontColorHex: _xlColor(_dimHex), fontSize: 9),
   );
 
-  // ---- Transactions sheet — today's CSV columns, typed ----
-  txns.setColumnWidth(0, 12);
-  txns.setColumnWidth(1, 16);
-  txns.setColumnWidth(2, 28);
-  txns.setColumnWidth(3, 12);
-  txns.setColumnWidth(4, 16);
-  txns.appendRow([
-    xl.TextCellValue('Date'),
-    xl.TextCellValue('Category'),
-    xl.TextCellValue('Note'),
-    xl.TextCellValue('Amount'),
-    xl.TextCellValue('Payment method'),
-  ]);
+  // ---- Transactions sheet — every column FR-32 exports, typed ----
+  //
+  // Covers every attribute an expense can carry today: category (always),
+  // trip/tag, account, payment method (the older free-text field — kept
+  // alongside account rather than replaced by it, since account is
+  // additive, not a migration that deletes the old data), recurring
+  // schedule, receipt attachment, and the foreign-currency amount for a
+  // trip expense paid abroad.
+  const headers = [
+    'Date',
+    'Category',
+    'Note',
+    'Amount',
+    'Trip',
+    'Account',
+    'Payment method',
+    'Recurring',
+    'Receipt',
+    'Paid abroad',
+  ];
+  for (var c = 0; c < headers.length; c++) {
+    txns.setColumnWidth(c, switch (c) {
+      0 => 12,
+      1 => 16,
+      2 => 28,
+      3 => 12,
+      4 || 5 => 16,
+      6 => 16,
+      7 => 12,
+      8 => 10,
+      _ => 16,
+    });
+  }
+  txns.appendRow([for (final h in headers) xl.TextCellValue(h)]);
   for (final e in data.expenses) {
     txns.appendRow([
       xl.DateCellValue(
@@ -356,7 +381,18 @@ Uint8List buildXlsx(
       xl.TextCellValue(byId[e.categoryId]?.name ?? ''),
       xl.TextCellValue(e.note ?? ''),
       xl.DoubleCellValue(e.amountMinor / 100),
+      xl.TextCellValue(e.tagId == null ? '' : (tagById[e.tagId]?.name ?? '')),
+      xl.TextCellValue(
+        e.accountId == null ? '' : (accountById[e.accountId]?.name ?? ''),
+      ),
       xl.TextCellValue(e.paymentMethod ?? ''),
+      xl.TextCellValue(
+        e.isRecurring && e.recurrence != null
+            ? recurrenceLabel(e.recurrence!)
+            : '',
+      ),
+      xl.TextCellValue(expenseIdsWithReceipt.contains(e.id) ? 'Yes' : ''),
+      xl.TextCellValue(e.isForeign ? e.fxAmount!.formatAs(e.fxCurrency!) : ''),
     ]);
   }
 

@@ -6,13 +6,16 @@ import '../../core/db/database.dart' show monthKeyFor;
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../accounts/account_repository.dart';
 import '../budgets/budget_repository.dart';
 import '../expenses/all_transactions_screen.dart';
 import '../expenses/expense_repository.dart';
+import '../expenses/receipt_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
 import '../profile/profile_provider.dart';
 import '../tags/tag_report_screen.dart';
+import '../tags/tag_repository.dart';
 import 'custom_report_screen.dart';
 import 'report_providers.dart';
 import 'report_widgets.dart';
@@ -30,6 +33,9 @@ class MonthlyReportScreen extends ConsumerWidget {
     final title = '${DateFormat('MMMM').format(month)} Report';
     final async = ref.watch(reportProvider((start, end)));
     final byId = ref.watch(categoriesByIdProvider);
+    final tagById = ref.watch(tagsByIdProvider);
+    final accountById = ref.watch(accountsByIdProvider);
+    final withReceipt = ref.watch(expenseIdsWithReceiptProvider).value ?? const {};
     final overall = effectiveOverallBudget(
       ref.watch(overallBudgetForMonthProvider(monthKeyFor(month))).value,
       ref.watch(perCategoryBudgetsForMonthProvider(monthKeyFor(month))),
@@ -105,7 +111,15 @@ class MonthlyReportScreen extends ConsumerWidget {
                 label: const Text('View all transactions'),
               ),
               const SizedBox(height: AppSpacing.xxl),
-              ExportRow(data: data, byId: byId, title: title, profile: profile),
+              ExportRow(
+                data: data,
+                byId: byId,
+                title: title,
+                profile: profile,
+                tagById: tagById,
+                accountById: accountById,
+                expenseIdsWithReceipt: withReceipt,
+              ),
               const SizedBox(height: AppSpacing.lg),
             ],
           );

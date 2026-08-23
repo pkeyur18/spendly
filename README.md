@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v13, backup format v8, 403 passing tests (51 test
+> Recap feature. Drift schema v13, backup format v8, 404 passing tests (51 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -35,10 +35,13 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   math, top categories, and top expenses, while still tracked on its own budget card and
   still visible in All Transactions and exports.
 - **Trips (Tags)** — group any expenses into a trip (holiday, wedding, project) independent
-  of category, with a per-trip report and CSV/PDF export.
+  of category, with a per-trip report and Excel/PDF export.
 - **Reports** — auto-generated end-of-month report (scheduled local notification), on-demand
   custom-range reports, top-5 expenses, previous-period comparison, daily average; export as
-  PDF or CSV and share via the OS share sheet.
+  a PDF summary or an Excel workbook (Summary + Transactions sheets) and share via the OS
+  share sheet. The Transactions sheet carries every attribute an expense can have: date,
+  category, note, amount, trip, account, payment method, recurring frequency, whether a
+  receipt is attached, and the foreign-currency amount for a trip expense paid abroad.
 - **Monthly Recap** — a full-screen "hero" takeover auto-shown once per new month on app
   launch/resume (skipped on fresh installs with no prior-month expenses; gated by a
   persisted last-shown-month flag): a gradient hero card ("you saved this month" with a
@@ -89,7 +92,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 | Local DB | Drift (SQLite), schema v13 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
-| Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |
+| Reports/export | `pdf`, `excel`, `share_plus` |
 | Backup crypto | `cryptography` (AES-256-GCM + PBKDF2) |
 | Widgets bridge | `home_widget` → native Swift/WidgetKit (iOS) & Kotlin/Glance (Android) |
 | Media / files | `image_picker`, `file_picker`, `flutter_colorpicker`, `path_provider` |

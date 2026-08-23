@@ -10,8 +10,10 @@
   shipped. See `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the
   full phased plan and the ledger architecture decision. Branch `feat/ux-enhancements`.
   Sprints 0-7 + 10-12 and Monthly Recap shipped before this.
+  Plus an Excel-export completeness pass (trip/account/recurring/receipt/foreign-amount
+  columns) requested right after that follow-up shipped — no schema change, still v13.
   **Drift schema is now v13; backup format v8.** `flutter analyze` clean,
-  `flutter test` **403 passing** (51 test files).
+  `flutter test` **404 passing** (51 test files).
 - **Next:** Phase 5 (income, schema v14 — v13 is now taken by the default-account
   follow-up) — the first phase to touch the new `LedgerEntries` table decision, then
   phase 6 (transfers, derived balances) and phase 7 (insights, goals, app lock,
@@ -894,3 +896,46 @@ accounts feature.
   follow-up — still a flagged, not confirmed, judgment call.
 - No UI to reassign the default from *within* the edit sheet — only the tile's star
   toggle does it. One control for one action, deliberately, not a redundant second path.
+
+## Excel export completeness pass — done
+
+User asked whether the Excel export already carried everything now tracked per expense
+(trip, account, recurring, receipt, foreign amount). It didn't — the Transactions sheet
+still only had the original five columns (Date, Category, Note, Amount, Payment method);
+every feature added since (trips predate this, but account/recurring/receipt/FX all landed
+without ever touching export).
+
+- [x] `buildXlsx` gains five more columns: Trip, Account, Recurring, Receipt, Paid abroad.
+      `Payment method` (the free-text field, dead in every real install per Phase 4's
+      investigation) is kept, not replaced — Account is additive alongside it, not a
+      migration that silently drops the old column from exports.
+- [x] Two new `*ByIdProvider`s (`tagsByIdProvider`, `accountsByIdProvider`) added
+      alongside the existing `categoriesByIdProvider`, same pattern, same file each
+      belongs to.
+- [x] `ExportRow` (shared by all three export surfaces — monthly report, custom report,
+      per-trip report) takes the new lookups as optional params defaulting to empty, so
+      nothing broke before every call site was updated. All three now pass real data.
+      The per-trip report deliberately omits `tagById` — every row there already belongs
+      to the one trip being reported, so a per-row Trip column would repeat the same
+      name on every line rather than add information; Account/Recurring/Receipt/FX are
+      still wired there.
+- [x] PDF export untouched — it's a one-page summary (top-5 list, category breakdown),
+      never a per-row transaction table, so there was no column list to extend.
+
+### A test-only bug found while verifying
+The new xlsx test used whole-number amounts (4500, 50). The `excel` package's own
+encode/decode round-trip collapses a whole-number `DoubleCellValue` into an
+`IntCellValue` on the way back out — confirmed via a throwaway debug script that the
+actual export data was correct (Trip/Account/Recurring/Receipt/FX all populated
+right) while the test's `DoubleCellValue`-only cast silently found nothing and
+returned index -1. Fixed by handling both cell types when reading amounts back in a
+test — a real quirk of the library, not of `buildXlsx`.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **404 passed** (was 403 before this). New coverage: the
+  Transactions sheet header list extended to 10 columns, plus a new test seeding one
+  fully-loaded expense (tagged, accounted, recurring, receipted, paid abroad) beside a
+  bare one and asserting every new column is populated on the rich row and blank on
+  the bare one.
+- Not run on a device/simulator — same standing gap as every prior phase.

@@ -203,3 +203,11 @@ final activeTagsProvider = StreamProvider<List<TagRow>>(
 final allTagsProvider = StreamProvider<List<TagRow>>(
   (ref) => ref.watch(tagRepositoryProvider).watchAll(),
 );
+
+/// Every tag (active and archived — a past expense may reference an
+/// archived one) keyed by id, same pattern as `categoriesByIdProvider`.
+/// Feeds the Excel/PDF export's Trip column.
+final tagsByIdProvider = Provider<Map<int, TagRow>>((ref) {
+  final tags = ref.watch(allTagsProvider).value ?? const [];
+  return {for (final t in tags) t.id: t};
+});
