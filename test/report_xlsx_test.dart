@@ -3,6 +3,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/money/money.dart';
+import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 import 'package:spendly/features/profile/profile_provider.dart';
 import 'package:spendly/features/reports/report_export.dart';
@@ -97,6 +98,44 @@ void main() {
         .whereType<double>()
         .toList();
     expect(amounts, containsAll([600.0, 400.0]));
+  });
+
+  test('ignored-for-budget category gets its own "Excluded" section', () async {
+    await repo.add(
+      amount: Money.parse('600'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 2),
+    );
+    await CategoryRepository(db).setIgnoredForBudget(1, true);
+    final cats = await byId();
+    final data = await build();
+    final bytes = buildXlsx(data, cats, title: 'March 2026');
+    final wb = xl.Excel.decodeBytes(bytes);
+    final summaryText = wb['Summary'].rows
+        .expand((r) => r)
+        .map((c) => c?.value)
+        .whereType<xl.TextCellValue>()
+        .map((v) => v.value.text ?? '')
+        .toList();
+    expect(summaryText.any((t) => t.startsWith('Excluded from budget')), isTrue);
+    expect(summaryText, contains(cats[1]!.name));
+  });
+
+  test('no ignored spend → no "Excluded" section written', () async {
+    await repo.add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 2),
+    );
+    final data = await build();
+    final bytes = buildXlsx(data, await byId(), title: 'March 2026');
+    final wb = xl.Excel.decodeBytes(bytes);
+    final summaryText = wb['Summary'].rows
+        .expand((r) => r)
+        .map((c) => c?.value)
+        .whereType<xl.TextCellValue>()
+        .map((v) => v.value.text ?? '');
+    expect(summaryText.any((t) => t.startsWith('Excluded from budget')), isFalse);
   });
 
   test('profile line appears in the Summary footer, blank fields skipped', () async {

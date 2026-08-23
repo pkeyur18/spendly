@@ -142,10 +142,25 @@ void main() {
       expect(r.topCategory!.$1.id, 2);
       expect(r.top5.map((e) => e.categoryId), [2]);
       expect(r.weekly.fold<int>(0, (a, w) => a + w.$2.minor), 40000);
-      // Raw list stays complete (CSV export/"view all" must show everything).
+      // Raw list stays complete (Excel export/"view all" must show everything).
       expect(r.expenses.length, 2);
+      // ...but reported separately, not silently dropped (Excel export).
+      expect(r.ignoredTotal, Money.fromMinor(60000)); // category 1's ₹600
+      expect(r.ignoredBreakdown.map((s) => s.$1.id), [1]);
+      expect(r.ignoredBreakdown.single.$3, 1.0); // sole ignored category
     },
   );
+
+  test('no ignored categories → ignoredBreakdown/ignoredTotal are empty/zero', () async {
+    await repo.add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 2),
+    );
+    final r = await build(previousTotal: Money.zero);
+    expect(r.ignoredBreakdown, isEmpty);
+    expect(r.ignoredTotal, Money.zero);
+  });
 
   test('weekly buckets split the range into 7-day windows', () async {
     await repo.add(

@@ -19,6 +19,8 @@ class ReportData {
     required this.dailyAverage,
     required this.topCategory,
     required this.breakdown,
+    required this.ignoredBreakdown,
+    required this.ignoredTotal,
     required this.top5,
     required this.weekly,
   });
@@ -38,11 +40,38 @@ class ReportData {
   /// Highest-spend category slice, or null when the range is empty.
   final CategorySlice? topCategory;
   final List<CategorySlice> breakdown; // desc by spend
+
+  /// Spend in categories flagged "ignore for budget" — excluded from [total]
+  /// and [breakdown] above, but reported separately (FR-32 export).
+  final List<CategorySlice> ignoredBreakdown; // desc by spend
+  final Money ignoredTotal;
   final List<ExpenseRow> top5; // biggest single expenses, desc
   final List<TrendBar> weekly; // W1..Wn buckets (custom range trend)
 
   bool get isEmpty => txnCount == 0;
   bool get changeUp => (changePct ?? 0) >= 0;
+}
+
+/// Per-category totals over [expenses] → slices (fraction of [groupTotal]), desc.
+List<CategorySlice> _breakdown(
+  List<ExpenseRow> expenses,
+  Map<int, CategoryRow> categoriesById,
+  Money groupTotal,
+) {
+  final byCategory = <int, Money>{};
+  for (final e in expenses) {
+    byCategory[e.categoryId] =
+        (byCategory[e.categoryId] ?? Money.zero) + e.amount;
+  }
+  return <CategorySlice>[
+    for (final entry in byCategory.entries)
+      if (categoriesById[entry.key] != null && entry.value.minor > 0)
+        (
+          categoriesById[entry.key]!,
+          entry.value,
+          entry.value.ratioOf(groupTotal),
+        ),
+  ]..sort((a, b) => b.$2.minor.compareTo(a.$2.minor));
 }
 
 /// Build a report over [start, end) from its expenses. [previousTotal] is the
@@ -62,18 +91,17 @@ ReportData buildReport({
       .toList();
 
   final total = sumMoney(counted);
+  final breakdown = _breakdown(counted, categoriesById, total);
 
-  // Per-category totals → slices (fraction of grand total), desc.
-  final byCategory = <int, Money>{};
-  for (final e in counted) {
-    byCategory[e.categoryId] =
-        (byCategory[e.categoryId] ?? Money.zero) + e.amount;
-  }
-  final breakdown = <CategorySlice>[
-    for (final entry in byCategory.entries)
-      if (categoriesById[entry.key] != null && entry.value.minor > 0)
-        (categoriesById[entry.key]!, entry.value, entry.value.ratioOf(total)),
-  ]..sort((a, b) => b.$2.minor.compareTo(a.$2.minor));
+  final ignoredExpenses = expenses
+      .where((e) => ignored.contains(e.categoryId))
+      .toList();
+  final ignoredTotal = sumMoney(ignoredExpenses);
+  final ignoredBreakdown = _breakdown(
+    ignoredExpenses,
+    categoriesById,
+    ignoredTotal,
+  );
 
   // Top 5 single expenses by amount, desc.
   final top5 = [...counted]
@@ -98,6 +126,8 @@ ReportData buildReport({
     dailyAverage: dailyAverage,
     topCategory: breakdown.isEmpty ? null : breakdown.first,
     breakdown: breakdown,
+    ignoredBreakdown: ignoredBreakdown,
+    ignoredTotal: ignoredTotal,
     top5: top5.take(5).toList(),
     weekly: weeklyBuckets(counted, start, end),
   );
