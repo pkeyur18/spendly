@@ -25,9 +25,21 @@ import 'widgets/expense_tile.dart' show relativeDayLabel;
 /// Fast expense entry (FR-2, FR-5): keypad + category grid, ≤3-tap save.
 /// Reused for editing (FR-6, FR-15) when [editing] is supplied.
 class QuickAddScreen extends ConsumerStatefulWidget {
-  const QuickAddScreen({super.key, this.editing, this.initialCategoryId});
+  const QuickAddScreen({
+    super.key,
+    this.editing,
+    this.duplicateOf,
+    this.initialCategoryId,
+  });
 
   final ExpenseRow? editing;
+
+  /// Expense to copy the fields from, without editing it — "add again".
+  /// Prefills like [editing] does, but saves as a brand-new expense dated
+  /// today. Deliberately a separate field rather than a flag on [editing], so
+  /// every edit-only code path (`_isEdit`, the update call, the FX freeze
+  /// rule) keeps reading `editing` and stays untouched by a copy.
+  final ExpenseRow? duplicateOf;
 
   /// Preselected category for a fresh entry (widget deep-link, FR-3). Ignored
   /// when [editing] is set (the edited expense's own category wins).
@@ -35,6 +47,25 @@ class QuickAddScreen extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
+}
+
+/// What a freshly-opened Quick Add starts from: which expense supplies the
+/// prefilled fields, and which date it opens on.
+///
+/// Pulled out as a free function so the edit-vs-copy split is testable without
+/// a widget harness (same reason as [tripForDate]). The distinction matters
+/// because only one of the two modes may write back to the source row — a copy
+/// that took the edit path would overwrite the expense it was copied from.
+({ExpenseRow? source, DateTime date}) quickAddPrefill({
+  required ExpenseRow? editing,
+  required ExpenseRow? duplicateOf,
+  required DateTime now,
+}) {
+  return (
+    source: editing ?? duplicateOf,
+    // Only an edit inherits the original's date. "Add again" means again now.
+    date: editing?.date ?? now,
+  );
 }
 
 /// Categories shown in the quick-add grid before it switches to a
@@ -138,7 +169,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   void initState() {
     super.initState();
     _noteFocusNode.addListener(() => setState(() {}));
-    final e = widget.editing;
+    final prefill = quickAddPrefill(
+      editing: widget.editing,
+      duplicateOf: widget.duplicateOf,
+      now: DateTime.now(),
+    );
+    final e = prefill.source;
     // Prefill from the expense being edited; strip trailing ".00".
     _amount = e == null
         ? '0'
@@ -150,7 +186,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _initialAmount = _amount;
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
     _tagId = e?.tagId;
-    _selectedDate = e?.date ?? DateTime.now();
+    _selectedDate = prefill.date;
     _noteController.text = e?.note ?? '';
     _initialNote = _noteController.text;
   }
@@ -1106,12 +1142,14 @@ class _CategoryTile extends StatelessWidget {
 Future<void> openQuickAddScreen(
   BuildContext context, {
   ExpenseRow? editing,
+  ExpenseRow? duplicateOf,
   int? initialCategoryId,
 }) async {
   final confirmation = await Navigator.of(context).push<String>(
     MaterialPageRoute(
       builder: (_) => QuickAddScreen(
         editing: editing,
+        duplicateOf: duplicateOf,
         initialCategoryId: initialCategoryId,
       ),
     ),

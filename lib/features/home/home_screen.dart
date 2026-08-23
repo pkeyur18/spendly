@@ -6,6 +6,7 @@ import '../../core/db/database.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../budgets/budget_pace.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
@@ -189,6 +190,7 @@ class _HeroCard extends ConsumerWidget {
     final left = hasBudget
         ? Money.fromMinor((budget.minor - total.minor).clamp(0, budget.minor))
         : null;
+    final pace = budgetPace(spent: total, budget: budget, now: DateTime.now());
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -262,11 +264,70 @@ class _HeroCard extends ConsumerWidget {
                 ),
               ],
             ),
+            if (pace != null) ...[
+              const SizedBox(height: 10),
+              _PaceLine(pace: pace),
+            ],
           ] else
             const Text(
               'No monthly budget set',
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The one line on the hero that turns "61% of budget" into something the user
+/// can act on today. Status is carried by the words and the icon, never by
+/// colour alone.
+class _PaceLine extends StatelessWidget {
+  const _PaceLine({required this.pace});
+
+  final BudgetPace pace;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = pace.daysLeft == 1 ? '1 day' : '${pace.daysLeft} days';
+    final perDay = pace.perDayLeft.format(locale: 'en_IN');
+
+    final (icon, label) = switch (pace.status) {
+      PaceStatus.onTrack => (
+        Icons.trending_flat_rounded,
+        'On track · $perDay/day for $days',
+      ),
+      PaceStatus.overPace => (
+        Icons.trending_up_rounded,
+        'Over pace · $perDay/day for $days',
+      ),
+      PaceStatus.overBudget => (
+        Icons.warning_amber_rounded,
+        'Over budget by ${pace.overspend.format(locale: 'en_IN')}',
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppRadius.icon),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.white),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );

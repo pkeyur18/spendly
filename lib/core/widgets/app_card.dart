@@ -10,11 +10,19 @@ class AppCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(AppSpacing.xl),
     this.onTap,
+    this.onLongPress,
+    this.longPressHint,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  /// Spoken label for [onLongPress]. A long-press is invisible to a screen
+  /// reader unless it's named, so the action would otherwise not exist for
+  /// VoiceOver/TalkBack users.
+  final String? longPressHint;
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +43,13 @@ class AppCard extends StatelessWidget {
       ),
       child: child,
     );
-    if (onTap == null) return card;
+    if (onTap == null && onLongPress == null) return card;
     return Semantics(
       button: true,
+      onLongPressHint: longPressHint,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(AppRadius.card),
         child: card,
       ),

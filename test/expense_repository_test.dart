@@ -395,4 +395,64 @@ void main() {
 
     expect(await repo.earliestExpenseDate(), DateTime(2026, 1, 5));
   });
+
+  group('restore (undo a delete)', () {
+    Future<ExpenseRow> seed() async {
+      final id = await repo.add(
+        amount: Money.parse('24.35'),
+        categoryId: 2,
+        date: DateTime(2026, 3, 10),
+        note: 'lunch',
+        paymentMethod: 'UPI',
+        fxCurrency: 'THB',
+        fxAmount: Money.parse('100'),
+      );
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      return rows.firstWhere((e) => e.id == id);
+    }
+
+    test('brings the row back byte-for-byte', () async {
+      final original = await seed();
+      await repo.delete(original.id);
+      expect(await repo.watchMonth(DateTime(2026, 3, 1)).first, isEmpty);
+
+      await repo.restore(original);
+
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      expect(rows, hasLength(1));
+      // Every field, not just the amount — an undo that quietly drops the note
+      // or the FX receipt is a data-loss bug wearing an undo button.
+      expect(rows.single, original);
+    });
+
+    test('keeps the same externalId so backup Merge identity survives',
+        () async {
+      final original = await seed();
+      await repo.delete(original.id);
+      await repo.restore(original);
+
+      final restored =
+          (await repo.watchMonth(DateTime(2026, 3, 1)).first).single;
+      expect(restored.externalId, original.externalId);
+      expect(restored.externalId, isNotNull);
+    });
+
+    test('keeps its original id, so ids never silently shuffle', () async {
+      final original = await seed();
+      await repo.delete(original.id);
+      // A row added during the undo window must not be able to take the id
+      // back (SQLite AUTOINCREMENT guarantees this — asserted, not assumed).
+      await repo.add(
+        amount: Money.parse('5'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 11),
+      );
+
+      await repo.restore(original);
+
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      expect(rows.map((e) => e.id), containsAll([original.id]));
+      expect(rows, hasLength(2));
+    });
+  });
 }

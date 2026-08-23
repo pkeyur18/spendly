@@ -65,8 +65,31 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   Set<int> _selectedCategoryIds = {};
   bool _categoryChipsExpanded = false;
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _searching = false;
+  String _search = '';
 
   String get _categoryKey => (_selectedCategoryIds.toList()..sort()).join(',');
+
+  bool get _isSearching => _search.trim().isNotEmpty;
+
+  /// An active search escapes the visible date range and looks across all
+  /// history. Searching only the month you happen to be looking at means you
+  /// must already know when the thing happened, which is the one fact you're
+  /// usually searching to recover. The range controls are hidden while
+  /// searching so this never contradicts a visible month label.
+  (DateTime, DateTime) get _searchRange => (
+    // Comfortably before any possible expense: entry is capped at 90 days of
+    // backdating and the app has no pre-2000 history to import.
+    DateTime(2000),
+    DateTime.now().add(const Duration(days: 1)),
+  );
+
+  (DateTime, DateTime, int, String, String) get _key {
+    final range = _isSearching ? _searchRange : _range;
+    return (range.$1, range.$2, _limit, _categoryKey, _search);
+  }
 
   @override
   void initState() {
@@ -77,7 +100,30 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    // Back to page one: results the user hasn't seen shouldn't inherit a
+    // scroll-grown limit from the previous query.
+    setState(() {
+      _search = value;
+      _limit = _pageSize;
+    });
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) {
+        _searchController.clear();
+        _search = '';
+        _limit = _pageSize;
+      }
+    });
+    if (_searching) _searchFocusNode.requestFocus();
   }
 
   /// Grow the limit when the user nears the bottom and the current page is full
@@ -86,13 +132,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
     final pos = _scrollController.position;
     if (pos.pixels < pos.maxScrollExtent - 400) return;
     // staleness-ok: reads the same page build() already watches, for pagination bookkeeping.
-    final loaded = ref
-        .read(
-          expensesInRangeProvider((_range.$1, _range.$2, _limit, _categoryKey)),
-        )
-        .asData
-        ?.value
-        .length;
+    final loaded = ref.read(expensesInRangeProvider(_key)).asData?.value.length;
     if (loaded != null && loaded >= _limit) {
       setState(() => _limit += _pageSize);
     }
@@ -170,7 +210,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final key = (_range.$1, _range.$2, _limit, _categoryKey);
+    final key = _key;
     final async = ref.watch(expensesInRangeProvider(key));
     final byId = ref.watch(categoriesByIdProvider);
     final categoryChips =
@@ -194,8 +234,28 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title),
+        title: _searching
+            ? TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: _onSearchChanged,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Search note, category or amount',
+                ),
+              )
+            : Text(_title),
         actions: [
+          IconButton(
+            tooltip: _searching ? 'Close search' : 'Search transactions',
+            icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
+            onPressed: _toggleSearch,
+          ),
+          // The month/range controls are hidden while searching: the search
+          // box has already taken the title's space, and a search is usually
+          // "find that one thing", not "browse this month".
+          if (!_searching) ...[
           if (monthMode) ...[
             IconButton(
               tooltip: 'Previous month',
@@ -225,6 +285,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
                 ? null
                 : () => _openCategoryFilterSheet(categoryChips),
           ),
+          ],
         ],
       ),
       body: Column(
@@ -308,9 +369,13 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
               ),
               data: (expenses) {
                 if (expenses.isEmpty) {
-                  return const EmptyView(
-                    icon: Icons.receipt_long_outlined,
-                    message: 'No transactions in this range.',
+                  return EmptyView(
+                    icon: _isSearching
+                        ? Icons.search_off_rounded
+                        : Icons.receipt_long_outlined,
+                    message: _isSearching
+                        ? 'Nothing matches "${_search.trim()}".'
+                        : 'No transactions in this range.',
                   );
                 }
                 // Flatten day-groups into a single list (DateTime = header,
