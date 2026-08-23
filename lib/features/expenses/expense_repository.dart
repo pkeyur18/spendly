@@ -154,6 +154,10 @@ class ExpenseRepository {
   /// Expenses with date in [start, end), newest first. Pass [limit] to cap the
   /// rows loaded (lazy pagination for long lists); null = whole range. Pass
   /// [categoryIds] to restrict to those categories; null/empty = no filter.
+  /// Pass [accountIds] to restrict to those accounts the same way — an
+  /// account can easily accumulate years of history (unlike a trip, which is
+  /// naturally bounded), so the account detail screen reuses this same
+  /// paginated range query rather than an unbounded `watchByTag`-style list.
   /// Pass [search] to additionally match note text, exact amount, or category
   /// name — see [parseExpenseQuery].
   ///
@@ -165,6 +169,7 @@ class ExpenseRepository {
     DateTime end, {
     int? limit,
     Set<int>? categoryIds,
+    Set<int>? accountIds,
     ExpenseQuery? search,
   }) {
     final query = _db.select(_db.expenses)
@@ -177,6 +182,9 @@ class ExpenseRepository {
       ]);
     if (categoryIds != null && categoryIds.isNotEmpty) {
       query.where((t) => t.categoryId.isIn(categoryIds));
+    }
+    if (accountIds != null && accountIds.isNotEmpty) {
+      query.where((t) => t.accountId.isIn(accountIds));
     }
     final text = search?.text;
     if (text != null) {

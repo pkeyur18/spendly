@@ -53,7 +53,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v12 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v13 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -221,5 +221,12 @@ void main() {
       ),
       isTrue,
     );
+
+    // from<13: an install upgrading with an account already on the books
+    // (from the v12 payment-method migration, in this same pass) gets it
+    // auto-marked default — otherwise Quick Add's prefill would stay silent
+    // for every upgrading user, not just new installs.
+    final reloadedAccounts = await db.select(db.accounts).get();
+    expect(reloadedAccounts.single.isDefault, isTrue);
   });
 }

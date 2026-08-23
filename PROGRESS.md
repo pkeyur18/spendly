@@ -5,16 +5,17 @@
 
 ## Current status
 
-- **Phase:** UX-enhancement plan, phases 1-4 complete (see
-  `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the full phased plan
-  and the ledger architecture decision). Branch `feat/ux-enhancements`.
+- **Phase:** UX-enhancement plan, phases 1-4 complete, plus a Phase 4 follow-up
+  (default account + account detail screen, schema v13) requested after Phase 4
+  shipped. See `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the
+  full phased plan and the ledger architecture decision. Branch `feat/ux-enhancements`.
   Sprints 0-7 + 10-12 and Monthly Recap shipped before this.
-  **Drift schema is now v12; backup format v8.** `flutter analyze` clean,
-  `flutter test` **389 passing** (51 test files).
-- **Next:** Phase 5 (income, schema v13) — the first phase to touch the new
-  `LedgerEntries` table decision, then phase 6 (transfers, derived balances) and
-  phase 7 (insights, goals, app lock, autocomplete). Sprint 8/9 (Beta & Hardening,
-  Store Submission) still not started.
+  **Drift schema is now v13; backup format v8.** `flutter analyze` clean,
+  `flutter test` **403 passing** (51 test files).
+- **Next:** Phase 5 (income, schema v14 — v13 is now taken by the default-account
+  follow-up) — the first phase to touch the new `LedgerEntries` table decision, then
+  phase 6 (transfers, derived balances) and phase 7 (insights, goals, app lock,
+  autocomplete). Sprint 8/9 (Beta & Hardening, Store Submission) still not started.
 - **Doc drift found and fixed:** README claimed schema v7 / backup v3 / 190 tests while
   the code was already at schema v9 / backup v5 — FX spending and trip date-range
   auto-tagging had shipped with no README or PROGRESS entry. Both files now match the
@@ -818,3 +819,78 @@ table in the app is a different order of problem entirely.
 - Account picker placement in Quick Add (5th chip) is a judgment call flagged to the
   user, not confirmed — the row was already the subject of back-and-forth feedback this
   same session.
+
+## Phase 4 follow-up — done (default account + account detail)
+
+Requested right after Phase 4 shipped: a default account that prefills Quick Add, and
+account-wise transactions/total. Both genuinely needed design (not just wiring), covered
+here rather than a separate spec doc since the scope stayed bounded to the existing
+accounts feature.
+
+- [x] **Schema v13** → `accounts.isDefault`. Enforced in `AccountRepository`, not a DB
+      constraint (no partial-unique-index support in this Drift version):
+      `setDefault(id)` clears every other row's flag in the same transaction before
+      setting the target's. Hit the same "createTable trap" documented elsewhere in
+      `database.dart` (tags hit it twice already) — `accounts` gets created fresh at
+      `from<12` using the CURRENT table definition, which already includes
+      `is_default`, so `from<13`'s `addColumn` needed the same `_hasColumn` guard.
+- [x] **First account auto-defaults.** `create()` checks whether any account exists yet;
+      if not, the new one is the default. Otherwise a single-account user would have to
+      know to go flip a setting before the prefill ever did anything. Every account
+      after the first stays not-default until explicitly reassigned via the star toggle
+      on `AccountsScreen`'s tile.
+- [x] **Upgrading installs get the same rule.** The v13 migration marks the
+      earliest-id account default for anyone who already has accounts on the books
+      (from the v12 payment-method migration or created since) — otherwise every
+      upgrading user, not just fresh installs, would see a silent no-op prefill.
+- [x] **Archiving clears the default**, never auto-picks a replacement — deliberately:
+      silently redirecting future expenses onto an account the user never chose would
+      be a worse surprise than an empty prefill.
+- [x] **Quick Add** prefills `_accountId` from the default account, but only on a
+      genuinely fresh add — editing or duplicating an expense still inherits the
+      source's own account, matching how note/category/trip already work. A late-
+      arriving default fetch never clobbers a choice the user already made faster than
+      the async load resolved (`_accountId != null` guard).
+- [x] **`AccountDetailScreen`** (new) — tapping an account now opens this instead of
+      jumping straight to edit; edit moved to an app-bar icon. Shows an all-time total
+      (via `ExpenseRepository.watchInRange`/new `accountIds` filter, mirroring the
+      existing `categoryIds` filter exactly) and the full paginated transaction list,
+      reusing `groupExpensesByDay`/`DayGroupHeader`/`ExpenseTile` from
+      `all_transactions_screen.dart`/`expense_tile.dart` rather than rebuilding list
+      rendering from scratch. Deliberately does NOT show a derived balance (opening
+      balance − activity, transfers, etc.) — that stays Phase 6 scope, once transfers
+      exist to derive a real balance from; showing "total expense" is what was asked
+      for.
+- [x] **Backup** — `isDefault` is additive on the existing `accounts` array entry, no
+      version bump (same pattern as `isIgnoredForBudget`). Replace restores it
+      verbatim (safe: the backup itself never had two defaults, since this app's UI
+      never allows that). **Merge does not trust it blindly** — a matched account's
+      flag is untouched like every other field, but a newly-inserted account only
+      carries the default over when the local device had no default at all before the
+      merge started, and at most one newly-inserted account ever gets it. Naively
+      carrying over every row's own flag could otherwise produce two default accounts
+      when merging two devices that each already had one.
+- [x] **`reactive_read_staleness_test.dart` caught a real formatting issue** — the
+      scanner only checks the single line directly above a `ref.read()` call for a
+      `// staleness-ok:` comment; a two-line comment above `_accountExpensesProvider`'s
+      pagination read didn't qualify because the marker wasn't on the line immediately
+      adjacent. Fixed by collapsing it to one line, matching the exact format
+      `all_transactions_screen.dart`'s equivalent comment already uses.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **403 passed** (was 389 before this follow-up). New coverage: 7
+  default-account repository tests (first-create auto-defaults, second doesn't,
+  `setDefault` reassigns, archiving clears with no auto-replacement, unarchiving
+  doesn't restore it), an `accountIds` filter test on `watchInRange`, a v13 migration
+  assertion, and 5 backup tests specifically exercising the "at most one default"
+  merge-safety property — including a hand-authored payload where two different
+  accounts both claim `isDefault: true`, pinning that the merge still yields exactly
+  one.
+- Not run on a device/simulator — same standing gap as every prior phase.
+
+### Deferred / notes
+- Account picker's 5th-chip placement in Quick Add (from Phase 4) is unchanged by this
+  follow-up — still a flagged, not confirmed, judgment call.
+- No UI to reassign the default from *within* the edit sheet — only the tile's star
+  toggle does it. One control for one action, deliberately, not a redundant second path.

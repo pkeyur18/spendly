@@ -84,6 +84,13 @@ class Accounts extends Table {
       integer().withDefault(const Constant(0))();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
 
+  /// At most one account is default at a time (enforced in
+  /// [AccountRepository], not by a DB constraint — SQLite has no partial
+  /// unique index in this Drift version). Quick Add prefills a fresh expense
+  /// with this account, still changeable per-expense. Never true on an
+  /// archived account — archiving clears it (schema v13).
+  BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
@@ -265,7 +272,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -391,6 +398,28 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(accounts);
         await m.addColumn(expenses, expenses.accountId);
         await _migratePaymentMethodsToAccounts(this);
+      }
+      if (from < 13) {
+        // Same createTable trap as tags hit twice before (see _hasColumn's
+        // doc comment): an install upgrading from below v12 in this same
+        // pass just created `accounts` via m.createTable at from<12, which
+        // always emits the CURRENT table definition — already including
+        // is_default — so adding it again here would be a duplicate-column
+        // error for that path specifically (a v12-then-v13 two-step upgrade
+        // never hits this, only a v11-or-below-to-v13 one-pass upgrade does).
+        if (!await _hasColumn('accounts', 'is_default')) {
+          await m.addColumn(accounts, accounts.isDefault);
+        }
+        // Existing installs upgrading with accounts already on the books
+        // (from the v12 payment-method migration, or created since) get the
+        // same "first account is default" rule a fresh create() applies —
+        // otherwise Quick Add's prefill would stay silent for everyone who
+        // upgraded, not just new installs. Earliest id = oldest account,
+        // the same tie-break a fresh install's first create() would produce.
+        await customStatement(
+          'UPDATE accounts SET is_default = 1 WHERE id = '
+          '(SELECT MIN(id) FROM accounts)',
+        );
       }
     },
   );

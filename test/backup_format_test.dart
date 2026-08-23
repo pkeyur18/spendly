@@ -281,6 +281,7 @@ void main() {
             openingBalanceMinor: 500000,
             isArchived: false,
             externalId: 'acc-1',
+            isDefault: true,
           ),
         ],
       ),
@@ -292,6 +293,31 @@ void main() {
     expect(decoded.openingBalanceMinor, 500000);
     expect(decoded.isArchived, isFalse);
     expect(decoded.externalId, 'acc-1');
+    expect(decoded.isDefault, isTrue);
+  });
+
+  test('a pre-v13 account (no isDefault key) decodes as not default',
+      () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['accounts'] = [
+          {
+            'id': 1,
+            'name': 'Cash',
+            'type': 'cash',
+            'openingBalanceMinor': 0,
+            'isArchived': false,
+            'externalId': null,
+            // No "isDefault" key at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v8Json)).accounts.single;
+    expect(decoded.isDefault, isFalse);
   });
 
   test('a pre-v8 file (no accounts key) decodes with no accounts at all',

@@ -640,5 +640,136 @@ void main() {
       expect(await db.select(db.expenses).get(), hasLength(1));
       expect(await db.select(db.accounts).get(), isEmpty);
     });
+
+    group('default account', () {
+      test('replace restores the backup default verbatim', () async {
+        final accountRepo = AccountRepository(db);
+        await accountRepo.create(name: 'Cash', type: AccountType.cash);
+        final payload = await repo.exportAll();
+        expect(payload.accounts.single.isDefault, isTrue);
+
+        final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(freshDb.close);
+        await BackupRepository(freshDb).replaceAll(payload);
+
+        expect(
+          (await freshDb.select(freshDb.accounts).get()).single.isDefault,
+          isTrue,
+        );
+      });
+
+      test(
+        'merge carries the default onto a newly-inserted account when the '
+        'local device has none yet',
+        () async {
+          final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+          await AccountRepository(
+            sourceDb,
+          ).create(name: 'Cash', type: AccountType.cash); // auto-default
+          final payload = await BackupRepository(sourceDb).exportAll();
+          await sourceDb.close();
+
+          await repo.mergeAll(payload); // into the fresh 8-default db, no accounts yet
+
+          expect(
+            (await db.select(db.accounts).get()).single.isDefault,
+            isTrue,
+          );
+        },
+      );
+
+      test(
+        'merge never creates a second default when the local device '
+        'already has one',
+        () async {
+          // Local device already has its own default.
+          final accountRepo = AccountRepository(db);
+          await accountRepo.create(name: 'Local Cash', type: AccountType.cash);
+
+          // Source device's account was ALSO default there.
+          final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+          await AccountRepository(
+            sourceDb,
+          ).create(name: 'Source Wallet', type: AccountType.wallet);
+          final payload = await BackupRepository(sourceDb).exportAll();
+          await sourceDb.close();
+
+          await repo.mergeAll(payload);
+
+          final accounts = await db.select(db.accounts).get();
+          expect(accounts, hasLength(2));
+          // The merge must not have promoted the newly-inserted account to
+          // default just because the backup said it was on its own device —
+          // exactly one default survives, and it's the one that was already
+          // here.
+          expect(accounts.where((a) => a.isDefault), hasLength(1));
+          expect(
+            accounts.singleWhere((a) => a.isDefault).name,
+            'Local Cash',
+          );
+        },
+      );
+
+      test(
+        'merging two new non-default-on-local accounts from a backup with '
+        'two defaults still yields exactly one default',
+        () async {
+          // Contrived but worth pinning: a hand-authored payload where two
+          // *different* accounts both claim isDefault — never producible by
+          // this app's own UI, but a hostile or corrupted file could claim
+          // it, and the merge must not honor both.
+          final a = const BackupAccount(
+            id: 1,
+            name: 'A',
+            type: AccountType.cash,
+            openingBalanceMinor: 0,
+            isArchived: false,
+            externalId: null,
+            isDefault: true,
+          );
+          final b = const BackupAccount(
+            id: 2,
+            name: 'B',
+            type: AccountType.bank,
+            openingBalanceMinor: 0,
+            isArchived: false,
+            externalId: null,
+            isDefault: true,
+          );
+          final payload = BackupPayload(
+            exportedAt: DateTime(2026, 1, 1),
+            categories: const [],
+            expenses: const [],
+            budgets: const [],
+            settings: const [],
+            tags: const [],
+            accounts: [a, b],
+          );
+
+          await repo.mergeAll(payload);
+
+          final accounts = await db.select(db.accounts).get();
+          expect(accounts, hasLength(2));
+          expect(accounts.where((acc) => acc.isDefault), hasLength(1));
+        },
+      );
+
+      test('merge never overwrites a matched account\'s default status',
+          () async {
+        // Local has a default; the backup's matching (same name) account
+        // claims isDefault: false. A match is never updated on any field —
+        // default status included — so the local default must survive.
+        final accountRepo = AccountRepository(db);
+        await accountRepo.create(name: 'Cash', type: AccountType.cash);
+        final payload = await repo.exportAll();
+
+        await repo.mergeAll(payload);
+
+        expect(
+          (await db.select(db.accounts).get()).single.isDefault,
+          isTrue,
+        );
+      });
+    });
   });
 }

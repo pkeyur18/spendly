@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
+import 'account_detail_screen.dart';
 import 'account_repository.dart';
 
 String _typeLabel(AccountType t) => switch (t) {
@@ -32,7 +33,7 @@ class AccountsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(allAccountsProvider);
     final (start, end) = monthBounds(DateTime.now());
-    final totals = ref.watch(_monthTotalsProvider((start, end)));
+    final totals = ref.watch(accountTotalsByRangeProvider((start, end)));
 
     return Scaffold(
       appBar: AppBar(
@@ -66,10 +67,7 @@ class AccountsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
               for (final a in active)
-                _AccountTile(
-                  account: a,
-                  spentThisMonth: totals.value?[a.id],
-                ),
+                _AccountTile(account: a, spentThisMonth: totals.value?[a.id]),
               if (archived.isNotEmpty) ...[
                 const SectionTitle('Archived'),
                 for (final a in archived)
@@ -84,15 +82,6 @@ class AccountsScreen extends ConsumerWidget {
   }
 }
 
-/// This month's spend per account — a screen-local provider (not shared
-/// elsewhere) since nowhere else in the app needs it yet.
-final _monthTotalsProvider =
-    StreamProvider.family<Map<int, Money>, (DateTime, DateTime)>(
-      (ref, range) => ref
-          .watch(accountRepositoryProvider)
-          .watchTotalsByAccount(range.$1, range.$2),
-    );
-
 class _AccountTile extends ConsumerWidget {
   const _AccountTile({required this.account, required this.spentThisMonth});
 
@@ -106,7 +95,11 @@ class _AccountTile extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: AppCard(
         padding: const EdgeInsets.all(AppSpacing.md),
-        onTap: () => showAccountEditSheet(context, existing: account),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AccountDetailScreen(account: account),
+          ),
+        ),
         child: Opacity(
           opacity: account.isArchived ? 0.5 : 1,
           child: Row(
@@ -137,7 +130,9 @@ class _AccountTile extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
-                      _typeLabel(account.type),
+                      account.isDefault
+                          ? '${_typeLabel(account.type)} · Default'
+                          : _typeLabel(account.type),
                       style: TextStyle(fontSize: 12, color: palette.textDim),
                     ),
                   ],
@@ -159,6 +154,27 @@ class _AccountTile extends ConsumerWidget {
                       style: TextStyle(fontSize: 11, color: palette.textDim),
                     ),
                   ],
+                ),
+              if (!account.isArchived)
+                IconButton(
+                  tooltip: account.isDefault
+                      ? 'Default account'
+                      : 'Set as default',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    account.isDefault
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: account.isDefault
+                        ? AppColors.accent
+                        : palette.textDim,
+                    size: 20,
+                  ),
+                  onPressed: account.isDefault
+                      ? null
+                      : () => ref
+                            .read(accountRepositoryProvider)
+                            .setDefault(account.id),
                 ),
             ],
           ),
@@ -201,8 +217,9 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
   late final _openingBalance = TextEditingController(
     text: widget.existing == null
         ? ''
-        : Money.fromMinor(widget.existing!.openingBalanceMinor).major
-              .toStringAsFixed(2),
+        : Money.fromMinor(
+            widget.existing!.openingBalanceMinor,
+          ).major.toStringAsFixed(2),
   );
   late AccountType _type = widget.existing?.type ?? AccountType.cash;
   bool _saving = false;

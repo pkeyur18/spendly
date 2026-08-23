@@ -215,7 +215,18 @@ class BackupRepository {
   /// Matches by [BackupAccount.externalId] first, falling back to normalized
   /// name — same rule as [_mergeCategories]/[_mergeTags]. Returns
   /// backup-account-id -> local-account-id.
-  Future<Map<int, int>> _mergeAccounts(List<BackupAccount> backupAccounts) async {
+  ///
+  /// A matched (already-present) account's `isDefault` is left untouched,
+  /// same as every other field on a match. For newly-inserted accounts: at
+  /// most one gets `isDefault: true`, and only if the local device has no
+  /// default at all yet — carrying over every backup row's own flag
+  /// verbatim could otherwise produce two default accounts (this device's
+  /// existing one, plus a merged-in one that was default on the source
+  /// device), which [AccountRepository.setDefault] never allows to happen
+  /// through the app's own UI.
+  Future<Map<int, int>> _mergeAccounts(
+    List<BackupAccount> backupAccounts,
+  ) async {
     final existing = await _db.select(_db.accounts).get();
     final byExternalId = <String, int>{
       for (final a in existing)
@@ -224,6 +235,7 @@ class BackupRepository {
     final byNormalizedName = <String, int>{
       for (final a in existing) _normalize(a.name): a.id,
     };
+    var canAssignDefault = existing.every((a) => !a.isDefault);
 
     final idMap = <int, int>{};
     for (final a in backupAccounts) {
@@ -234,9 +246,11 @@ class BackupRepository {
         idMap[a.id] = matchedId;
         continue;
       }
+      final asDefault = a.isDefault && canAssignDefault;
+      if (asDefault) canAssignDefault = false; // at most one, ever
       final newId = await _db
           .into(_db.accounts)
-          .insert(a.toInsertCompanion());
+          .insert(a.toInsertCompanion(asDefault: asDefault));
       idMap[a.id] = newId;
     }
     return idMap;

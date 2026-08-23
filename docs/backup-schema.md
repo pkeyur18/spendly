@@ -348,7 +348,8 @@ reads. The payload gets a new top-level array:
     "type": "bank",
     "openingBalanceMinor": 500000,
     "isArchived": false,
-    "externalId": "..."
+    "externalId": "...",
+    "isDefault": false
   }
 ],
 ```
@@ -376,6 +377,27 @@ A pre-v8 file has no `accounts` key and no `accountId` key on its expenses.
 `BackupPayload.fromJson` reads a missing `accounts` as `[]`; `BackupExpense.fromJson` reads
 a missing `accountId` as `null` — same additive, no-version-branch pattern as every field
 above.
+
+## Additive field — `isDefault` on accounts (schema v13)
+
+At most one account is the default Quick Add prefills onto a fresh expense — enforced by
+`AccountRepository.setDefault`, not a DB constraint. Carried in the payload as a plain new
+key on each `accounts` entry, no version bump, same additive pattern as
+`isIgnoredForBudget`: a pre-v13 file simply lacks the key, and `BackupAccount.fromJson`
+reads a missing key as `false`.
+
+- **Replace** restores it verbatim, same as every other account field — safe because the
+  whole table is wiped first, and the backup itself never had two defaults at once (this
+  app's own UI never allows that), so restoring every row's flag as-is can't recreate a
+  violation that didn't exist in the file.
+- **Merge** does **not** trust this field blindly, unlike most others. A matched
+  (already-present) account's `isDefault` is left untouched, same as any other field on a
+  match. But a *newly-inserted* account's flag can't simply carry over the backup's own
+  value: if the local device already has its own default, and a merged-in account also
+  claims `isDefault: true` from its source device, honoring both would produce two default
+  accounts at once — a state the app's own `setDefault` never permits. `_mergeAccounts`
+  computes this instead: at most one newly-inserted account ever gets `isDefault: true`,
+  and only when the local device had no default at all before the merge started.
 
 ## Merge algorithm (`externalId` first, natural-key fallback)
 

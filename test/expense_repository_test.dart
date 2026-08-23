@@ -180,6 +180,35 @@ void main() {
     expect(rows.map((e) => e.categoryId).toSet(), {1, 3});
   });
 
+  test('watchInRange with accountIds returns only matching rows', () async {
+    await repo.add(
+      amount: Money.parse('10'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 1),
+      accountId: 1,
+    );
+    await repo.add(
+      amount: Money.parse('20'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 2),
+      accountId: 2,
+    );
+    await repo.add(
+      // No account at all — must not match either filter.
+      amount: Money.parse('30'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 3),
+    );
+    final rows = await repo
+        .watchInRange(
+          DateTime(2026, 3, 1),
+          DateTime(2026, 4, 1),
+          accountIds: {1},
+        )
+        .first;
+    expect(rows.map((e) => e.amountMinor), [Money.parse('10').minor]);
+  });
+
   test(
     'distinctCategoryIdsInRange returns only categories actually used',
     () async {

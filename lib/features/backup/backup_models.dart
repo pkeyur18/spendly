@@ -115,6 +115,7 @@ class BackupAccount {
     required this.openingBalanceMinor,
     required this.isArchived,
     required this.externalId,
+    this.isDefault = false,
   });
 
   final int id;
@@ -124,6 +125,17 @@ class BackupAccount {
   final bool isArchived;
   final String? externalId;
 
+  /// Additive field (schema v13) — no backup version bump needed, same
+  /// pattern as `isIgnoredForBudget`. A pre-v13 file simply lacks the key,
+  /// which reads as `false` (no opinion on which account should be default).
+  ///
+  /// Restored verbatim only by Replace, where the whole table is wiped first
+  /// so "at most one default" can't be violated by what the backup already
+  /// satisfied when it was written. Merge does NOT trust this field blindly
+  /// — see `BackupRepository._mergeAccounts` for why a naive carry-over could
+  /// produce two default accounts at once.
+  final bool isDefault;
+
   factory BackupAccount.fromRow(AccountRow row) => BackupAccount(
     id: row.id,
     name: row.name,
@@ -131,6 +143,7 @@ class BackupAccount {
     openingBalanceMinor: row.openingBalanceMinor,
     isArchived: row.isArchived,
     externalId: row.externalId,
+    isDefault: row.isDefault,
   );
 
   factory BackupAccount.fromJson(Map<String, dynamic> j) => BackupAccount(
@@ -140,6 +153,8 @@ class BackupAccount {
     openingBalanceMinor: j['openingBalanceMinor'] as int,
     isArchived: j['isArchived'] as bool,
     externalId: j['externalId'] as String?,
+    // Pre-v13 files have no "isDefault" key; absent = false.
+    isDefault: j['isDefault'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
@@ -149,24 +164,36 @@ class BackupAccount {
     'openingBalanceMinor': openingBalanceMinor,
     'isArchived': isArchived,
     'externalId': externalId,
+    'isDefault': isDefault,
   };
 
-  /// Merge: new row, id auto-assigned.
-  AccountsCompanion toInsertCompanion() => AccountsCompanion.insert(
-    name: name,
-    type: type,
-    openingBalanceMinor: Value(openingBalanceMinor),
-    isArchived: Value(isArchived),
-    externalId: externalId == null ? const Value.absent() : Value(externalId),
-  );
+  /// Merge: new row, id auto-assigned. [asDefault] is computed by the caller
+  /// (see `_mergeAccounts`), never `this.isDefault` directly — merge must
+  /// guarantee at most one default across the whole merged result, which a
+  /// blind per-row carry-over of the backup's own flag cannot.
+  AccountsCompanion toInsertCompanion({bool asDefault = false}) =>
+      AccountsCompanion.insert(
+        name: name,
+        type: type,
+        openingBalanceMinor: Value(openingBalanceMinor),
+        isArchived: Value(isArchived),
+        isDefault: Value(asDefault),
+        externalId: externalId == null
+            ? const Value.absent()
+            : Value(externalId),
+      );
 
-  /// Replace: tables are wiped first, so the original id is reused verbatim.
+  /// Replace: tables are wiped first, so the original id — and, safely,
+  /// [isDefault] — are reused verbatim. The backup already satisfied "at
+  /// most one default" when it was written (this app never produces two),
+  /// so restoring every row's flag as-is can't recreate that violation.
   AccountsCompanion toReplaceCompanion() => AccountsCompanion(
     id: Value(id),
     name: Value(name),
     type: Value(type),
     openingBalanceMinor: Value(openingBalanceMinor),
     isArchived: Value(isArchived),
+    isDefault: Value(isDefault),
     externalId: externalId == null ? const Value.absent() : Value(externalId),
   );
 }

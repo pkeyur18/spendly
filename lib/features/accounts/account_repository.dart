@@ -26,15 +26,31 @@ class AccountRepository {
         .watch();
   }
 
-  Future<AccountRow?> byId(int id) =>
-      (_db.select(_db.accounts)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
+  Future<AccountRow?> byId(int id) => (_db.select(
+    _db.accounts,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
+  /// The one account Quick Add prefills a fresh expense with, or null if
+  /// none is set yet (only possible before the very first account is ever
+  /// created — [create] always leaves one designated after that).
+  Future<AccountRow?> defaultAccount() => (_db.select(
+    _db.accounts,
+  )..where((t) => t.isDefault.equals(true))).getSingleOrNull();
+
+  /// The first account ever created becomes the default automatically —
+  /// otherwise a single-account user would have to know to go flip a
+  /// setting before Quick Add's prefill ever does anything. Every account
+  /// after that defaults to not-default; use [setDefault] to reassign it.
   Future<int> create({
     required String name,
     required AccountType type,
     Money openingBalance = Money.zero,
-  }) {
+  }) async {
+    final countExpr = _db.accounts.id.count();
+    final count = await (_db.selectOnly(
+      _db.accounts,
+    )..addColumns([countExpr])).map((r) => r.read(countExpr)!).getSingle();
+    final isFirst = count == 0;
     return _db
         .into(_db.accounts)
         .insert(
@@ -42,8 +58,22 @@ class AccountRepository {
             name: name,
             type: type,
             openingBalanceMinor: Value(openingBalance.minor),
+            isDefault: Value(isFirst),
           ),
         );
+  }
+
+  /// Makes [id] the one default account, clearing it on every other one —
+  /// "at most one default" is enforced here, not by a DB constraint (Drift
+  /// has no partial-unique-index support in this version).
+  Future<void> setDefault(int id) {
+    return _db.transaction(() async {
+      await (_db.update(_db.accounts)..where((t) => t.isDefault.equals(true)))
+          .write(const AccountsCompanion(isDefault: Value(false)));
+      await (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+        const AccountsCompanion(isDefault: Value(true)),
+      );
+    });
   }
 
   Future<void> update(
@@ -63,9 +93,17 @@ class AccountRepository {
     );
   }
 
+  /// Archiving also clears [AccountRow.isDefault] — an archived account
+  /// (hidden from every picker) must never stay "the" default; there is
+  /// deliberately no rule for what becomes default in its place, since
+  /// picking one automatically could silently redirect future expenses onto
+  /// an account the user never chose.
   Future<void> setArchived(int id, bool archived) {
     return (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
-      AccountsCompanion(isArchived: Value(archived)),
+      AccountsCompanion(
+        isArchived: Value(archived),
+        isDefault: archived ? const Value(false) : const Value.absent(),
+      ),
     );
   }
 
@@ -103,3 +141,23 @@ final allAccountsProvider = StreamProvider<List<AccountRow>>(
 final activeAccountsProvider = StreamProvider<List<AccountRow>>(
   (ref) => ref.watch(accountRepositoryProvider).watchActive(),
 );
+
+/// One-shot, not watched: Quick Add reads this once on open (see
+/// [_loadReceipt]'s doc comment for why an async fetch, not a synchronous
+/// prefill, is the right shape for a field that isn't on [ExpenseRow]) —
+/// picking a fresh default mid-edit would silently overwrite what the user
+/// already chose.
+final defaultAccountProvider = FutureProvider<AccountRow?>(
+  (ref) => ref.watch(accountRepositoryProvider).defaultAccount(),
+);
+
+/// Spend per account across an arbitrary [(start, end)] range — the manage
+/// screen calls it with this month's bounds, the detail screen with an
+/// all-time range for the lifetime total. One family provider, not two
+/// near-duplicates, since the only thing that differs is the range.
+final accountTotalsByRangeProvider =
+    StreamProvider.family<Map<int, Money>, (DateTime, DateTime)>(
+      (ref, range) => ref
+          .watch(accountRepositoryProvider)
+          .watchTotalsByAccount(range.$1, range.$2),
+    );

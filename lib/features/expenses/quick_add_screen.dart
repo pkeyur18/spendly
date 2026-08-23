@@ -216,7 +216,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _selectedDate = prefill.date;
     _noteController.text = e?.note ?? '';
     _initialNote = _noteController.text;
-    if (e != null) _loadReceipt(e.id);
+    if (e != null) {
+      _loadReceipt(e.id);
+    } else {
+      // A fresh add only — editing/duplicating already inherited the
+      // source's account above, and must never have it silently swapped for
+      // whatever happens to be the default right now.
+      _loadDefaultAccount();
+    }
   }
 
   Future<void> _loadReceipt(int expenseId) async {
@@ -229,6 +236,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       _receiptBytes = bytes;
       _receiptLoading = false;
     });
+  }
+
+  Future<void> _loadDefaultAccount() async {
+    final account = await ref.read(accountRepositoryProvider).defaultAccount();
+    if (!mounted || _accountId != null) return;
+    setState(() => _accountId = account?.id);
   }
 
   @override

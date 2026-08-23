@@ -137,4 +137,68 @@ void main() {
       expect(totals[bank], isNull);
     });
   });
+
+  group('default account', () {
+    test('no default before any account exists', () async {
+      expect(await accounts.defaultAccount(), isNull);
+    });
+
+    test('the first account ever created becomes default automatically',
+        () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final row = await accounts.byId(id);
+      expect(row!.isDefault, isTrue);
+      expect((await accounts.defaultAccount())!.id, id);
+    });
+
+    test('a second account does not become default on its own', () async {
+      await accounts.create(name: 'Cash', type: AccountType.cash);
+      final second = await accounts.create(
+        name: 'Bank',
+        type: AccountType.bank,
+      );
+      expect((await accounts.byId(second))!.isDefault, isFalse);
+    });
+
+    test('setDefault reassigns it, clearing the previous one', () async {
+      final first = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final second = await accounts.create(
+        name: 'Bank',
+        type: AccountType.bank,
+      );
+
+      await accounts.setDefault(second);
+
+      expect((await accounts.byId(first))!.isDefault, isFalse);
+      expect((await accounts.byId(second))!.isDefault, isTrue);
+      expect((await accounts.defaultAccount())!.id, second);
+    });
+
+    test('archiving the default account clears the flag, no replacement '
+        'chosen automatically', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.setArchived(id, true);
+
+      expect((await accounts.byId(id))!.isDefault, isFalse);
+      expect(await accounts.defaultAccount(), isNull);
+    });
+
+    test('unarchiving does not restore default status on its own', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.setArchived(id, true);
+      await accounts.setArchived(id, false);
+      expect((await accounts.byId(id))!.isDefault, isFalse);
+    });
+
+    test('archiving a non-default account leaves the real default alone',
+        () async {
+      final first = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final second = await accounts.create(
+        name: 'Bank',
+        type: AccountType.bank,
+      );
+      await accounts.setArchived(second, true);
+      expect((await accounts.byId(first))!.isDefault, isTrue);
+    });
+  });
 }
