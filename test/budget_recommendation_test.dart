@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/budgets/budget_recommendation.dart';
+import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 import 'package:spendly/features/tags/tag_repository.dart';
 
@@ -139,5 +140,123 @@ void main() {
       final buckets = monthlyCategoryTotals(rows, {tripTagId}, now);
       expect(buckets.last[1], Money.parse('500')); // trip expense excluded
     });
+  });
+
+  group('buildBudgetRecommendations', () {
+    late AppDatabase db;
+    late ExpenseRepository expenses;
+    late CategoryRepository categories;
+
+    setUp(() {
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      expenses = ExpenseRepository(db);
+      categories = CategoryRepository(db);
+    });
+    tearDown(() => db.close());
+
+    test('no expenses at all -> empty recommendations, null overall', () async {
+      final cats = await categories.watchAll().first;
+      final buckets = monthlyCategoryTotals(const [], {}, DateTime.now());
+      final (perCategory, overall) = buildBudgetRecommendations(
+        categories: cats,
+        buckets: buckets,
+        monthsUsed: 0,
+      );
+      expect(perCategory, isEmpty);
+      expect(overall, isNull);
+    });
+
+    test('recommends per category and sums to the overall figure', () async {
+      final now = DateTime.now();
+      for (var i = 1; i <= 6; i++) {
+        await expenses.add(
+          amount: Money.fromMinor(300000), // ₹3000 flat every month
+          categoryId: 1,
+          date: DateTime(now.year, now.month - i, 10),
+        );
+      }
+      final rows = await expenses
+          .watchInRange(
+            DateTime(now.year, now.month - 6, 1),
+            DateTime(now.year, now.month, 1),
+          )
+          .first;
+      final cats = await categories.watchAll().first;
+      final buckets = monthlyCategoryTotals(rows, {}, now);
+
+      final (perCategory, overall) = buildBudgetRecommendations(
+        categories: cats,
+        buckets: buckets,
+        monthsUsed: 6,
+      );
+      expect(perCategory[1]?.amount, Money.fromMinor(300000));
+      expect(overall, Money.fromMinor(300000));
+    });
+
+    test('ignored-for-budget categories are excluded from both maps', () async {
+      await categories.setIgnoredForBudget(1, true);
+      final now = DateTime.now();
+      for (var i = 1; i <= 6; i++) {
+        await expenses.add(
+          amount: Money.fromMinor(300000),
+          categoryId: 1,
+          date: DateTime(now.year, now.month - i, 10),
+        );
+      }
+      final rows = await expenses
+          .watchInRange(
+            DateTime(now.year, now.month - 6, 1),
+            DateTime(now.year, now.month, 1),
+          )
+          .first;
+      final cats = await categories.watchAll().first;
+      final buckets = monthlyCategoryTotals(rows, {}, now);
+
+      final (perCategory, overall) = buildBudgetRecommendations(
+        categories: cats,
+        buckets: buckets,
+        monthsUsed: 6,
+      );
+      expect(perCategory.containsKey(1), isFalse);
+      expect(overall, isNull);
+    });
+
+    test(
+      'new user with 2 months of history recommends from those 2 months '
+      'only, not diluted by pre-history padding',
+      () async {
+        final now = DateTime.now();
+        // Only the most recent 2 of the 6 window months have any spend — the
+        // other 4 predate this user's first-ever expense.
+        await expenses.add(
+          amount: Money.fromMinor(200000), // ₹2000
+          categoryId: 1,
+          date: DateTime(now.year, now.month - 2, 10),
+        );
+        await expenses.add(
+          amount: Money.fromMinor(200000),
+          categoryId: 1,
+          date: DateTime(now.year, now.month - 1, 10),
+        );
+        final rows = await expenses
+            .watchInRange(
+              DateTime(now.year, now.month - 6, 1),
+              DateTime(now.year, now.month, 1),
+            )
+            .first;
+        final cats = await categories.watchAll().first;
+        final buckets = monthlyCategoryTotals(rows, {}, now);
+
+        final (perCategory, _) = buildBudgetRecommendations(
+          categories: cats,
+          buckets: buckets,
+          monthsUsed: 2,
+        );
+        // If the 4 pre-history months were wrongly averaged in as real
+        // zero-spend months, this would land well under ₹2000.
+        expect(perCategory[1]?.amount, Money.fromMinor(200000));
+        expect(perCategory[1]?.monthsUsed, 2);
+      },
+    );
   });
 }

@@ -12,6 +12,7 @@ import '../categories/category_repository.dart';
 import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../reports/report_providers.dart';
+import 'budget_recommendation.dart';
 import 'budget_repository.dart';
 
 /// Budget Setup (FR-23,24) — prototype phone 6. Overall + per-category budgets,
@@ -19,17 +20,29 @@ import 'budget_repository.dart';
 /// action; each card shows a read-only usage bar (spent / budget) coloured by
 /// state.
 class BudgetSetupScreen extends ConsumerStatefulWidget {
-  const BudgetSetupScreen({super.key});
+  const BudgetSetupScreen({super.key, this.initialMonth});
+
+  /// Month to open on. Null (the default, every existing call site) opens on
+  /// the current calendar month, same as before this param existed.
+  final DateTime? initialMonth;
 
   @override
   ConsumerState<BudgetSetupScreen> createState() => _BudgetSetupScreenState();
 }
 
 class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
-  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  late DateTime _month = widget.initialMonth != null
+      ? DateTime(widget.initialMonth!.year, widget.initialMonth!.month, 1)
+      : DateTime(DateTime.now().year, DateTime.now().month, 1);
 
   void _stepMonth(int delta) {
     setState(() => _month = DateTime(_month.year, _month.month + delta, 1));
+  }
+
+  bool _isNextRealMonth() {
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month + 1, 1);
+    return _month.year == next.year && _month.month == next.month;
   }
 
   @override
@@ -37,6 +50,10 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     final monthKey = monthKeyFor(_month);
     final overallAsync = ref.watch(overallBudgetForMonthProvider(monthKey));
     final activeAsync = ref.watch(activeCategoriesProvider);
+    final isNextRealMonth = _isNextRealMonth();
+    final (recommendedByCategory, recommendedOverall) = isNextRealMonth
+        ? ref.watch(budgetRecommendationsProvider)
+        : (const <int, BudgetRecommendation>{}, null);
 
     Widget body;
     if (overallAsync.isLoading || activeAsync.isLoading) {
@@ -107,6 +124,12 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             spent: monthTotal,
             budget: effectiveOverall,
             onTap: () => _editOverall(context, ref, overall),
+            suggestion: recommendedOverall,
+            onApplySuggestion: recommendedOverall == null
+                ? null
+                : () => ref
+                      .read(budgetRepositoryProvider)
+                      .setOverall(_month, recommendedOverall),
           ),
           if (perCategory.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
@@ -152,6 +175,23 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
               ),
             ),
           const SizedBox(height: AppSpacing.sm),
+          if (isNextRealMonth)
+            for (final c in budgetable)
+              if (recommendedByCategory[c.id] != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _SuggestedCategoryRow(
+                    category: c,
+                    recommendation: recommendedByCategory[c.id]!,
+                    onApply: () => ref
+                        .read(budgetRepositoryProvider)
+                        .setForCategory(
+                          _month,
+                          c.id,
+                          recommendedByCategory[c.id]!.amount,
+                        ),
+                  ),
+                ),
           _AddBudgetButton(
             enabled: budgetable.isNotEmpty,
             onTap: () => _addCategoryBudget(context, ref, budgetable),
@@ -378,6 +418,8 @@ class _BudgetCard extends StatelessWidget {
     this.onDelete,
     this.isIgnored,
     this.onToggleIgnored,
+    this.suggestion,
+    this.onApplySuggestion,
   });
 
   final String title;
@@ -390,6 +432,12 @@ class _BudgetCard extends StatelessWidget {
   /// the "Ignore in totals" switch for a per-category card.
   final bool? isIgnored;
   final ValueChanged<bool>? onToggleIgnored;
+
+  /// Null = no suggestion to show. Non-null shows a "Suggested ₹X" line that
+  /// applies the amount immediately on tap, without opening the amount-entry
+  /// sheet.
+  final Money? suggestion;
+  final VoidCallback? onApplySuggestion;
 
   @override
   Widget build(BuildContext context) {
@@ -464,6 +512,20 @@ class _BudgetCard extends StatelessWidget {
                     onChanged: onToggleIgnored,
                   ),
                 ],
+              ),
+            ],
+            if (!has && suggestion != null) ...[
+              const SizedBox(height: 6),
+              InkWell(
+                onTap: onApplySuggestion,
+                child: Text(
+                  'Suggested ${suggestion!.format(locale: 'en_IN')} · tap to use',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
             const SizedBox(height: 10),
@@ -652,6 +714,67 @@ class _AddBudgetButton extends StatelessWidget {
               fontSize: 13,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One not-yet-budgeted category's suggested next-month amount — tapping
+/// applies it immediately via [onApply]; the category then re-renders as a
+/// normal `_BudgetCard` (still editable) on the next build, since it now has
+/// a budget row.
+class _SuggestedCategoryRow extends StatelessWidget {
+  const _SuggestedCategoryRow({
+    required this.category,
+    required this.recommendation,
+    required this.onApply,
+  });
+
+  final CategoryRow category;
+  final BudgetRecommendation recommendation;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return InkWell(
+      onTap: onApply,
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                '${category.icon} ${category.name}',
+                style: const TextStyle(
+                  fontFamily: 'Sora',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              recommendation.monthsUsed < 6
+                  ? 'Suggested ${recommendation.amount.format(locale: 'en_IN')} (${recommendation.monthsUsed}mo)'
+                  : 'Suggested ${recommendation.amount.format(locale: 'en_IN')}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );

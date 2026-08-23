@@ -1,6 +1,11 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
+import '../categories/category_repository.dart';
+import '../expenses/expense_repository.dart';
+import '../tags/tag_repository.dart';
 
 /// One category's recommended next-month budget, and how many of the last 6
 /// calendar months actually fall within the user's usage history (the rest
@@ -98,3 +103,74 @@ Money? recommendCategoryBudget(List<Money> monthlyTotals) {
       ((average + roundToMinor ~/ 2) ~/ roundToMinor) * roundToMinor;
   return Money.fromMinor(rounded);
 }
+
+/// Composes the per-category + overall recommendations from already-fetched
+/// data: [categories] (active ones; ignored-for-budget ones are excluded
+/// here), [buckets] (6 months of per-category totals, oldest -> newest, from
+/// [monthlyCategoryTotals]), and [monthsUsed] (from [monthsUsedInWindow]).
+/// Pure — no DB, no Riverpod — unit-tested at the function level like
+/// `buildReport` in `report_model.dart`.
+(Map<int, BudgetRecommendation>, Money?) buildBudgetRecommendations({
+  required List<CategoryRow> categories,
+  required List<Map<int, Money>> buckets,
+  required int monthsUsed,
+}) {
+  // The leading slots before the user's first-ever expense are padding, not
+  // real zero-spend months, and must never be averaged in as if they were.
+  final realBuckets = buckets.sublist(6 - monthsUsed);
+
+  final perCategory = <int, BudgetRecommendation>{};
+  for (final cat in categories) {
+    if (cat.isIgnoredForBudget) continue;
+    final monthlyTotals = [
+      for (final b in realBuckets) b[cat.id] ?? Money.zero,
+    ];
+    final amount = recommendCategoryBudget(monthlyTotals);
+    if (amount != null) {
+      perCategory[cat.id] = BudgetRecommendation(
+        amount: amount,
+        monthsUsed: monthsUsed,
+      );
+    }
+  }
+  final overall = perCategory.isEmpty
+      ? null
+      : perCategory.values.fold(Money.zero, (a, r) => a + r.amount);
+  return (perCategory, overall);
+}
+
+final _last6CompletedMonthsExpensesProvider = StreamProvider<List<ExpenseRow>>(
+  (ref) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month - 6, 1);
+    final end = DateTime(now.year, now.month, 1);
+    return ref.watch(expenseRepositoryProvider).watchInRange(start, end);
+  },
+);
+
+final _earliestExpenseMonthProvider = FutureProvider<DateTime?>(
+  (ref) => ref.watch(expenseRepositoryProvider).earliestExpenseDate(),
+);
+
+/// Recommended next-month budgets — thin Riverpod wiring around
+/// [buildBudgetRecommendations]; see that function for the actual logic and
+/// its tests.
+final budgetRecommendationsProvider =
+    Provider<(Map<int, BudgetRecommendation>, Money?)>((ref) {
+      final expenses =
+          ref.watch(_last6CompletedMonthsExpensesProvider).value ?? const [];
+      final tags = ref.watch(allTagsProvider).value ?? const [];
+      final categories = ref.watch(activeCategoriesProvider).value ?? const [];
+      final earliest = ref.watch(_earliestExpenseMonthProvider).value;
+      final now = DateTime.now();
+
+      final tripTagIds = {
+        for (final t in tags)
+          if (t.tripStartDate != null) t.id,
+      };
+      return buildBudgetRecommendations(
+        categories: categories,
+        buckets: monthlyCategoryTotals(expenses, tripTagIds, now),
+        monthsUsed: monthsUsedInWindow(earliest, now),
+      );
+    });

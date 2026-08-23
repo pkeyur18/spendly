@@ -43,6 +43,10 @@ class SettingsRepository {
   // auto-showed a recap for, so it fires once per calendar month rollover.
   static const lastRecapMonthKey = 'last_recap_month';
 
+  // Budget recommendation nudge (auto-show-once gate) — the monthKey of the
+  // month we last showed the "set next month's budget" nudge for.
+  static const lastBudgetNudgeMonthKey = 'last_budget_nudge_month';
+
   Future<String?> get(String key) async {
     final row = await (_db.select(
       _db.settings,

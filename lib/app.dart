@@ -6,6 +6,7 @@ import 'core/notify/notifications.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/async_state_views.dart';
 import 'features/backup/backup_providers.dart';
+import 'features/budgets/budget_nudge_provider.dart';
 import 'features/expenses/quick_add_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/welcome_screen.dart';
@@ -66,6 +67,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(autoBackupCheckProvider);
       ref.invalidate(monthlyRecapCheckProvider);
+      ref.invalidate(budgetNudgeCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
     }
   }
@@ -85,6 +87,9 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     ref.watch(
       monthlyRecapCheckProvider,
     ); // fires the once-per-month recap check
+    ref.watch(
+      budgetNudgeCheckProvider,
+    ); // fires the once-per-month budget nudge check
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);
