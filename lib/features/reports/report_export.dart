@@ -18,22 +18,21 @@ import 'report_model.dart';
 //
 // The `excel` package has no native chart/image support (confirmed against
 // its roadmap), so "graphical" here means real, checkable cell content: a
-// category's/week's share rendered as a row of colored cells (a segmented
-// bar), not a picture. Layout mirrors the approved "stat-tile dashboard"
-// mockup — tiles can't vary a single row's height per column the way the
-// mockup's vertical sparkline did, so the weekly trend uses the same
-// horizontal segmented bar as the category breakdown.
+// category's share rendered as a row of colored cells (a segmented bar),
+// not a picture. Layout mirrors the approved "dashboard header" mockup —
+// a colored total banner, a totals row, then the category breakdown.
 
 const _accentHex = 'FF6366F1';
 const _accentSoftHex = 'FFEEEEFD';
 const _trackHex = 'FFE5E5EA';
 const _dimHex = 'FF6B6875';
-const _inkHex = 'FF1D1B22';
+const _goodHex = 'FF10B981';
 const _barSegments = 10;
 const _colCategory = 0;
 const _colAmount = 1;
 const _colBarStart = 2;
-const _sheetCols = _colBarStart + _barSegments; // A..L
+const _colShare = _colBarStart + _barSegments; // 12
+const _sheetCols = _colShare + 1; // A..M
 
 xl.ExcelColor _xlColor(String argbHex) => xl.ExcelColor.fromHexString(argbHex);
 
@@ -49,7 +48,7 @@ xl.CellStyle _moneyStyle() => xl.CellStyle(
 );
 
 /// One segmented "bar": [filled] of [_barSegments] cells tinted [color],
-/// the rest left as a neutral track. FR-32's graphical category/week read.
+/// the rest left as a neutral track. FR-32's graphical category read.
 void _writeBar(xl.Sheet sheet, int row, double fraction, xl.ExcelColor color) {
   final filled = (fraction * _barSegments).round().clamp(0, _barSegments);
   for (var i = 0; i < _barSegments; i++) {
@@ -99,46 +98,9 @@ void _mergeRow(
   );
 }
 
-/// One of the four top KPI tiles (label row + value row, [tileIndex] 0..3).
-void _writeTile(
-  xl.Sheet sheet,
-  int tileIndex,
-  int labelRow,
-  String label,
-  String value, {
-  bool accent = false,
-}) {
-  final col = tileIndex * 3;
-  _mergeRow(
-    sheet,
-    col,
-    labelRow,
-    3,
-    xl.TextCellValue(label.toUpperCase()),
-    xl.CellStyle(
-      fontSize: 9,
-      fontColorHex: _xlColor(_dimHex),
-      horizontalAlign: xl.HorizontalAlign.Center,
-    ),
-  );
-  _mergeRow(
-    sheet,
-    col,
-    labelRow + 1,
-    3,
-    xl.TextCellValue(value),
-    xl.CellStyle(
-      bold: true,
-      fontSize: 14,
-      fontColorHex: _xlColor(accent ? _accentHex : _inkHex),
-      horizontalAlign: xl.HorizontalAlign.Center,
-    ),
-  );
-}
-
-/// Full report as an .xlsx: a Summary sheet (totals, category and weekly
-/// breakdown as segmented bars) and a Transactions sheet (today's CSV
-/// columns, typed). FR-21/FR-32 export.
+/// Full report as an .xlsx: a Summary sheet (dashboard-header total, then
+/// category breakdown as segmented bars) and a Transactions sheet (today's
+/// CSV columns, typed). FR-21/FR-32 export.
 Uint8List buildXlsx(
   ReportData data,
   Map<int, CategoryRow> byId, {
@@ -154,13 +116,15 @@ Uint8List buildXlsx(
   excel.setDefaultSheet('Summary');
   String money(Money m) => '₹${m.minor ~/ 100}';
 
-  for (var c = _colBarStart; c < _sheetCols; c++) {
-    summary.setColumnWidth(c, 2.6);
+  summary.setColumnWidth(_colCategory, 22);
+  summary.setColumnWidth(_colAmount, 14);
+  for (var c = _colBarStart; c < _colShare; c++) {
+    summary.setColumnWidth(c, 2.8);
   }
-  summary.setColumnWidth(_colCategory, 18);
-  summary.setColumnWidth(_colAmount, 12);
+  summary.setColumnWidth(_colShare, 9);
 
   var row = 0;
+  summary.setRowHeight(row, 28);
   _mergeRow(
     summary,
     0,
@@ -169,35 +133,99 @@ Uint8List buildXlsx(
     xl.TextCellValue('Spend Summary — $title'),
     xl.CellStyle(
       bold: true,
-      fontSize: 15,
+      fontSize: 16,
       fontColorHex: _xlColor(_accentHex),
       backgroundColorHex: _xlColor(_accentSoftHex),
+      verticalAlign: xl.VerticalAlign.Center,
     ),
   );
-  row += 2;
+  row++;
+  summary.setRowHeight(row, 6);
+  row++;
 
   final compare = data.changePct == null
-      ? 'No prior-period spend'
-      : '${data.changeUp ? '↑' : '↓'} ${data.changePct!.abs().toStringAsFixed(0)}% vs previous';
-  _writeTile(summary, 0, row, 'Total spent', money(data.total), accent: true);
-  _writeTile(summary, 1, row, 'Transactions', '${data.txnCount}');
-  _writeTile(summary, 2, row, 'Daily average', money(data.dailyAverage));
-  _writeTile(
+      ? 'No prior-period spend to compare'
+      : '${data.changeUp ? '↑' : '↓'} ${data.changePct!.abs().toStringAsFixed(0)}% vs previous period (${money(data.previousTotal)})';
+  summary.setRowHeight(row, 24);
+  _setCell(
+    summary,
+    _colCategory,
+    row,
+    xl.TextCellValue('Total spent'),
+    style: xl.CellStyle(
+      fontColorHex: _xlColor(_dimHex),
+      verticalAlign: xl.VerticalAlign.Center,
+    ),
+  );
+  _mergeRow(
+    summary,
+    _colAmount,
+    row,
+    4,
+    xl.TextCellValue(money(data.total)),
+    xl.CellStyle(
+      bold: true,
+      fontSize: 16,
+      fontColorHex: _xlColor(_accentHex),
+      verticalAlign: xl.VerticalAlign.Center,
+    ),
+  );
+  _mergeRow(
+    summary,
+    5,
+    row,
+    _sheetCols - 5,
+    xl.TextCellValue(compare),
+    xl.CellStyle(
+      fontColorHex: _xlColor(data.changeUp ? _goodHex : _dimHex),
+      horizontalAlign: xl.HorizontalAlign.Right,
+      verticalAlign: xl.VerticalAlign.Center,
+    ),
+  );
+  row++;
+
+  summary.setRowHeight(row, 20);
+  _setCell(
+    summary,
+    _colCategory,
+    row,
+    xl.TextCellValue('Transactions'),
+    style: xl.CellStyle(
+      fontColorHex: _xlColor(_dimHex),
+      verticalAlign: xl.VerticalAlign.Center,
+    ),
+  );
+  _setCell(
+    summary,
+    _colAmount,
+    row,
+    xl.TextCellValue('${data.txnCount}'),
+    style: xl.CellStyle(
+      bold: true,
+      verticalAlign: xl.VerticalAlign.Center,
+    ),
+  );
+  _mergeRow(
     summary,
     3,
     row,
-    'Top category',
-    data.topCategory?.$1.name ?? '—',
+    2,
+    xl.TextCellValue('Daily average'),
+    xl.CellStyle(
+      fontColorHex: _xlColor(_dimHex),
+      verticalAlign: xl.VerticalAlign.Center,
+    ),
   );
-  row += 3;
-  _setCell(
+  _mergeRow(
     summary,
-    0,
+    5,
     row,
-    xl.TextCellValue(compare),
-    style: xl.CellStyle(fontColorHex: _xlColor(_dimHex), fontSize: 10),
+    2,
+    xl.TextCellValue(money(data.dailyAverage)),
+    xl.CellStyle(bold: true, verticalAlign: xl.VerticalAlign.Center),
   );
   row += 2;
+  summary.setRowHeight(row - 1, 10);
 
   _mergeRow(
     summary,
@@ -208,11 +236,39 @@ Uint8List buildXlsx(
     xl.CellStyle(bold: true, backgroundColorHex: _xlColor(_trackHex)),
   );
   row++;
-  _setCell(summary, _colCategory, row, xl.TextCellValue('Category'));
-  _setCell(summary, _colAmount, row, xl.TextCellValue('Amount'));
+  summary.setRowHeight(row, 18);
+  _setCell(
+    summary,
+    _colCategory,
+    row,
+    xl.TextCellValue('Category'),
+    style: xl.CellStyle(fontColorHex: _xlColor(_dimHex)),
+  );
+  _setCell(
+    summary,
+    _colAmount,
+    row,
+    xl.TextCellValue('Amount'),
+    style: xl.CellStyle(fontColorHex: _xlColor(_dimHex)),
+  );
+  _mergeRow(
+    summary,
+    _colBarStart,
+    row,
+    _sheetCols - _colBarStart,
+    xl.TextCellValue('Share'),
+    xl.CellStyle(fontColorHex: _xlColor(_dimHex)),
+  );
   row++;
   for (final slice in data.breakdown) {
-    _setCell(summary, _colCategory, row, xl.TextCellValue(slice.$1.name));
+    summary.setRowHeight(row, 18);
+    _setCell(
+      summary,
+      _colCategory,
+      row,
+      xl.TextCellValue(slice.$1.name),
+      style: xl.CellStyle(verticalAlign: xl.VerticalAlign.Center),
+    );
     _setCell(
       summary,
       _colAmount,
@@ -221,36 +277,16 @@ Uint8List buildXlsx(
       style: _moneyStyle(),
     );
     _writeBar(summary, row, slice.$3, _categoryColor(slice.$1.colorValue));
-    row++;
-  }
-  row++;
-
-  _mergeRow(
-    summary,
-    0,
-    row,
-    _sheetCols,
-    xl.TextCellValue('Weekly trend'),
-    xl.CellStyle(bold: true, backgroundColorHex: _xlColor(_trackHex)),
-  );
-  row++;
-  _setCell(summary, _colCategory, row, xl.TextCellValue('Week'));
-  _setCell(summary, _colAmount, row, xl.TextCellValue('Amount'));
-  row++;
-  final maxWeek = data.weekly.isEmpty
-      ? 0
-      : data.weekly.map((w) => w.$2.minor).reduce((a, b) => a > b ? a : b);
-  for (final week in data.weekly) {
-    _setCell(summary, _colCategory, row, xl.TextCellValue(week.$1));
     _setCell(
       summary,
-      _colAmount,
+      _colShare,
       row,
-      xl.DoubleCellValue(week.$2.minor / 100),
-      style: _moneyStyle(),
+      xl.TextCellValue('${(slice.$3 * 100).round()}%'),
+      style: xl.CellStyle(
+        fontColorHex: _xlColor(_dimHex),
+        horizontalAlign: xl.HorizontalAlign.Right,
+      ),
     );
-    final fraction = maxWeek == 0 ? 0.0 : week.$2.minor / maxWeek;
-    _writeBar(summary, row, fraction, _xlColor(_accentHex));
     row++;
   }
   row++;
@@ -264,12 +300,13 @@ Uint8List buildXlsx(
         profile.phone,
       ].where((s) => s.isNotEmpty).join(' · '),
   ].join(' · ');
-  _setCell(
+  _mergeRow(
     summary,
     0,
     row,
+    _sheetCols,
     xl.TextCellValue(footer),
-    style: xl.CellStyle(fontColorHex: _xlColor(_dimHex), fontSize: 9),
+    xl.CellStyle(fontColorHex: _xlColor(_dimHex), fontSize: 9),
   );
 
   // ---- Transactions sheet — today's CSV columns, typed ----
