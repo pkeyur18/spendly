@@ -373,4 +373,26 @@ void main() {
     expect(rows.length, 1);
     expect(rows.single.tagId, 1);
   });
+
+  test('earliestExpenseDate is null with no expenses, else the oldest date', () async {
+    expect(await repo.earliestExpenseDate(), isNull);
+
+    await repo.add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 10),
+    );
+    await repo.add(
+      amount: Money.parse('200'),
+      categoryId: 1,
+      date: DateTime(2026, 1, 5),
+    );
+    await repo.add(
+      amount: Money.parse('50'),
+      categoryId: 2,
+      date: DateTime(2026, 2, 1),
+    );
+
+    expect(await repo.earliestExpenseDate(), DateTime(2026, 1, 5));
+  });
 }

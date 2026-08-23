@@ -174,6 +174,17 @@ class ExpenseRepository {
     return Money.fromMinor(row.read(sum) ?? 0);
   }
 
+  /// Date of the single oldest expense across every category, or null when
+  /// there are no expenses at all (fresh install). Feeds the recommendation
+  /// engine's "how many of the last 6 months are real usage history" check.
+  Future<DateTime?> earliestExpenseDate() async {
+    final min = _db.expenses.date.min();
+    final row = await (_db.selectOnly(
+      _db.expenses,
+    )..addColumns([min])).getSingle();
+    return row.read(min);
+  }
+
   /// All expenses in [start, end), newest first — reports derive total, count,
   /// per-category, top-5 and weekly trend from this single list (FR-20).
   Future<List<ExpenseRow>> listInRange(DateTime start, DateTime end) {
