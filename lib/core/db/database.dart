@@ -167,6 +167,34 @@ class Budgets extends Table {
       text().nullable().clientDefault(generateExternalId)();
 }
 
+/// A photo of the receipt for one expense (schema v11) — a separate table
+/// rather than a column on [Expenses], deliberately.
+///
+/// [Expenses] rows are read in full by nearly every query in this app
+/// (`watchInRange`, `watchMonth`, `listInRange`, the reactive lists behind
+/// Home/All Transactions/Reports) — most of them never display a photo. A
+/// blob column there would ride along on every one of those reads, including
+/// the lazily-paginated 100-row list, even for expenses with no receipt.
+/// Keeping receipts in their own table means only the one screen that
+/// actually shows a photo ever loads its bytes.
+@DataClassName('ExpenseReceiptRow')
+@TableIndex(
+  name: 'idx_expense_receipts_expense',
+  columns: {#expenseId},
+  unique: true,
+)
+class ExpenseReceipts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// No `onDelete` cascade: like every other FK relationship in this schema
+  /// (categories, tags, budgets), cleanup is explicit application code, not a
+  /// DB-level trigger. Deleting the parent expense deliberately leaves this
+  /// row in place rather than deleting it — see [AppDatabase.pruneOrphanedReceipts].
+  IntColumn get expenseId => integer().references(Expenses, #id)();
+  BlobColumn get photoBytes => blob()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 /// Typed key/value app settings: theme mode, currency locale, auto-backup
 /// frequency, last-backup timestamp/size. One row per key.
 @DataClassName('SettingRow')
@@ -178,7 +206,9 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Categories, Expenses, Budgets, Settings, Tags])
+@DriftDatabase(
+  tables: [Categories, Expenses, Budgets, Settings, Tags, ExpenseReceipts],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
@@ -194,7 +224,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -309,6 +339,11 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(expenses, expenses.nextDueDate);
         await m.addColumn(expenses, expenses.recurrenceEndDate);
       }
+      if (from < 11) {
+        // Receipt photos — a whole new table, so no populated-table hazards
+        // like the ones documented on the blocks above.
+        await m.createTable(expenseReceipts);
+      }
     },
   );
 
@@ -330,6 +365,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> resetToDefaults() async {
     await transaction(() async {
       // Children before parents (FK order), same as BackupRepository.replaceAll.
+      await delete(expenseReceipts).go();
       await delete(expenses).go();
       await delete(tags).go();
       await delete(budgets).go();
@@ -337,6 +373,31 @@ class AppDatabase extends _$AppDatabase {
       await delete(settings).go();
       await batch((b) => b.insertAll(categories, _defaultCategories));
     });
+  }
+
+  /// Deletes any [ExpenseReceipts] row whose expense no longer exists.
+  ///
+  /// [ExpenseRepository.delete] deliberately leaves a deleted expense's
+  /// receipt row in place rather than deleting it there, so that the 5-second
+  /// undo snackbar (`ExpenseTile`) gets the photo back for free: undo
+  /// re-inserts the expense under its ORIGINAL id (never reused, since the
+  /// table is `PRIMARY KEY AUTOINCREMENT`), so an untouched receipt row
+  /// re-attaches itself with no extra bookkeeping. Handling this at delete
+  /// time instead would mean the undo path also has to fetch, hold, and
+  /// re-insert the photo bytes — the same class of complexity Phase 1's
+  /// `ExpenseRepository.restore` exists specifically to avoid.
+  ///
+  /// Called once from `main()`/`app.dart` on cold start, not on every resume:
+  /// an app resume can happen mid-undo-window, and sweeping then would delete
+  /// a photo the user is about to bring back. A full process restart cannot
+  /// land inside that window — the snackbar and its undo closure don't
+  /// survive the app being closed — so cold-start-only is the point past
+  /// which "orphaned" is actually permanent.
+  Future<void> pruneOrphanedReceipts() {
+    return customStatement(
+      'DELETE FROM expense_receipts WHERE expense_id NOT IN '
+      '(SELECT id FROM expenses)',
+    );
   }
 
   static LazyDatabase _open() {

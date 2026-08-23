@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import 'backup_models.dart';
@@ -29,6 +31,7 @@ class BackupRepository {
     final budgets = await _db.select(_db.budgets).get();
     final settings = await _db.select(_db.settings).get();
     final tags = await _db.select(_db.tags).get();
+    final receipts = await _db.select(_db.expenseReceipts).get();
 
     return BackupPayload(
       exportedAt: DateTime.now(),
@@ -40,6 +43,16 @@ class BackupRepository {
           .map(BackupSetting.fromRow)
           .toList(),
       tags: tags.map(BackupTag.fromRow).toList(),
+      // expenseId here is the LOCAL expense id (this device's own tables,
+      // not yet a backup file) — exactly the id BackupExpense.id carries for
+      // the same row, so the two line up with no translation needed.
+      receipts: [
+        for (final r in receipts)
+          BackupReceipt(
+            expenseId: r.expenseId,
+            photoBase64: base64Encode(r.photoBytes),
+          ),
+      ],
     );
   }
 
@@ -51,7 +64,9 @@ class BackupRepository {
   /// special handling.
   Future<void> replaceAll(BackupPayload payload) async {
     await _db.transaction(() async {
-      // Children before parents (FK order).
+      // Children before parents (FK order). expenseReceipts is a child of
+      // expenses, so it goes first, same reasoning as everything below it.
+      await _db.delete(_db.expenseReceipts).go();
       await _db.delete(_db.expenses).go();
       await _db.delete(_db.tags).go();
       await _db.delete(_db.budgets).go();
@@ -78,6 +93,21 @@ class BackupRepository {
             payload.settings.map((s) => s.toCompanion()),
           );
         }
+        // Safe to reuse [BackupReceipt.expenseId] verbatim as the local
+        // expenseId: expenses were just inserted above with THEIR original
+        // ids reused too (the table was empty), so the two line up exactly
+        // the way they did at export time.
+        if (payload.receipts.isNotEmpty) {
+          b.insertAll(
+            _db.expenseReceipts,
+            payload.receipts.map(
+              (r) => ExpenseReceiptsCompanion.insert(
+                expenseId: r.expenseId,
+                photoBytes: base64Decode(r.photoBase64),
+              ),
+            ),
+          );
+        }
       });
     });
   }
@@ -93,7 +123,12 @@ class BackupRepository {
       final categoryIdMap = await _mergeCategories(payload.categories);
       final tagIdMap = await _mergeTags(payload.tags);
       await _mergeBudgets(payload.budgets, categoryIdMap);
-      await _mergeExpenses(payload.expenses, categoryIdMap, tagIdMap);
+      await _mergeExpenses(
+        payload.expenses,
+        categoryIdMap,
+        tagIdMap,
+        payload.receipts,
+      );
     });
   }
 
@@ -202,10 +237,16 @@ class BackupRepository {
   /// Matches by [BackupExpense.externalId] first, falling back to content
   /// fingerprint (amount, date, mapped category, note, payment method) for
   /// rows written before schema v7 or backup files that predate the field.
+  ///
+  /// A matched (already-present) expense's receipt is never touched, same as
+  /// every other field on a match — merge only adds, never overwrites local
+  /// state. Only a newly-inserted expense can gain a receipt from the backup,
+  /// since there is no existing local one it could clash with.
   Future<void> _mergeExpenses(
     List<BackupExpense> backupExpenses,
     Map<int, int> categoryIdMap,
     Map<int, int> tagIdMap,
+    List<BackupReceipt> backupReceipts,
   ) async {
     final existing = await _db.select(_db.expenses).get();
     final knownExternalIds = <String>{
@@ -216,8 +257,17 @@ class BackupRepository {
       for (final e in existing)
         BackupExpense.fromRow(e).fingerprint(mappedCategoryId: e.categoryId),
     };
+    final receiptByExpenseId = <int, BackupReceipt>{
+      for (final r in backupReceipts) r.expenseId: r,
+    };
 
     final toInsert = <ExpensesCompanion>[];
+    // Expenses whose backup entry carries a receipt: inserted individually
+    // (not batched) so each one's assigned local id is known and the receipt
+    // can be attached to the RIGHT row — a batch insert never reports back
+    // the ids it assigned. Receipted expenses are expected to be the small
+    // minority, so the common batched path stays fast for everything else.
+    final toInsertWithReceipt = <(ExpensesCompanion, BackupReceipt)>[];
     for (final e in backupExpenses) {
       if (e.externalId != null && knownExternalIds.contains(e.externalId)) {
         continue; // already present locally, matched by stable id
@@ -227,15 +277,30 @@ class BackupRepository {
       final fp = e.fingerprint(mappedCategoryId: mappedCategoryId);
       if (!fingerprints.add(fp)) continue; // already present (or dup in file)
       final mappedTagId = e.tagId == null ? null : tagIdMap[e.tagId];
-      toInsert.add(
-        e.toInsertCompanion(
-          mappedCategoryId: mappedCategoryId,
-          mappedTagId: mappedTagId,
-        ),
+      final companion = e.toInsertCompanion(
+        mappedCategoryId: mappedCategoryId,
+        mappedTagId: mappedTagId,
       );
+      final receipt = receiptByExpenseId[e.id];
+      if (receipt != null) {
+        toInsertWithReceipt.add((companion, receipt));
+      } else {
+        toInsert.add(companion);
+      }
     }
     if (toInsert.isNotEmpty) {
       await _db.batch((batch) => batch.insertAll(_db.expenses, toInsert));
+    }
+    for (final (companion, receipt) in toInsertWithReceipt) {
+      final newId = await _db.into(_db.expenses).insert(companion);
+      await _db
+          .into(_db.expenseReceipts)
+          .insert(
+            ExpenseReceiptsCompanion.insert(
+              expenseId: newId,
+              photoBytes: base64Decode(receipt.photoBase64),
+            ),
+          );
     }
   }
 

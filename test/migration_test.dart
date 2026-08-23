@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
@@ -51,7 +53,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v10 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v11 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -160,5 +162,21 @@ void main() {
     // The non-recurring row is untouched by all of this.
     expect(expense.isRecurring, isFalse);
     expect(expense.nextDueDate, isNull);
+
+    // from<11: expense_receipts is a whole new table (no populated-table
+    // hazard to guard against), and a receipt attaches cleanly to a
+    // pre-existing, migrated expense row.
+    await db
+        .into(db.expenseReceipts)
+        .insert(
+          ExpenseReceiptsCompanion.insert(
+            expenseId: expense.id,
+            photoBytes: Uint8List.fromList([1, 2, 3]),
+          ),
+        );
+    final receipt = await (db.select(
+      db.expenseReceipts,
+    )..where((t) => t.expenseId.equals(expense.id))).getSingle();
+    expect(receipt.photoBytes, [1, 2, 3]);
   });
 }

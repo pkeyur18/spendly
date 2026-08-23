@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through the UX-enhancement phases 1–2 (daily-loop friction fixes,
 > then recurring expenses), on top of Sprint 12 and the Monthly Recap feature. Drift
-> schema v10, backup format v6, 348 passing tests (48 test files). Beta & hardening
+> schema v11, backup format v7, 367 passing tests (49 test files). Beta & hardening
 > (Sprint 8) and store submission (Sprint 9) are not started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
 
@@ -50,6 +50,11 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   skipped on its own, and a month-end series stays pinned to its day instead of drifting
   onto the 28th after February. A "payments to confirm" card appears on Home only when
   something is due; a permanent "Recurring expenses" row in Profile manages every series.
+- **Receipt photos** — attach a photo (camera or library) to any expense from Quick Add;
+  view, replace, or remove it any time. Stored in its own table, separate from the
+  expense row itself, so browsing transactions never has to load photo bytes it isn't
+  showing. Travels in full-fidelity backups; a device restoring a backup gets every
+  attached photo back, correctly matched to its own expense.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -72,7 +77,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v10 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v11 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |

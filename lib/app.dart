@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
+import 'core/db/providers.dart';
 import 'core/notify/notifications.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/async_state_views.dart';
@@ -45,6 +46,9 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(refreshWidgetsActionProvider)();
       _initNotifications();
+      // Cold-start only, not on resume — see AppDatabase.pruneOrphanedReceipts
+      // for why a resume during the undo-delete window must never run this.
+      ref.read(databaseProvider).pruneOrphanedReceipts();
     });
   }
 

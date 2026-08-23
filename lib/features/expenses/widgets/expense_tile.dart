@@ -10,6 +10,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../expense_repository.dart';
 import '../quick_add_screen.dart';
+import '../receipt_repository.dart';
 
 /// "Today"/"Yesterday"/calendar-date label for a day, used both for
 /// [ExpenseTile]'s per-row timestamp and day-group headers.
@@ -144,14 +145,36 @@ class ExpenseTile extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        // Existence only, never the bytes — this list can be
+                        // 100 rows deep, and loading every photo just to show
+                        // a dot would be the exact cost the receipt table was
+                        // split out from `expenses` to avoid.
+                        if (ref
+                            .watch(expenseIdsWithReceiptProvider)
+                            .value
+                            ?.contains(expense.id) ??
+                            false) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.receipt_long_rounded,
+                            size: 13,
+                            color: palette.textDim,
+                          ),
+                        ],
+                      ],
                     ),
                     Text(
                       '${relativeDayLabel(expense.date)} · ${DateFormat.jm().format(expense.date)}',

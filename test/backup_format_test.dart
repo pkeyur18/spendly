@@ -262,6 +262,43 @@ void main() {
     },
   );
 
+  test('a v7 receipt round-trips as base64', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        receipts: [
+          BackupReceipt(
+            expenseId: payload.expenses.single.id,
+            photoBase64: base64Encode([9, 8, 7]),
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).receipts.single;
+    expect(decoded.expenseId, payload.expenses.single.id);
+    expect(base64Decode(decoded.photoBase64), [9, 8, 7]);
+  });
+
+  test('a pre-v7 file (no receipts key) decodes with no receipts at all',
+      () async {
+    final v6Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 6,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('receipts'),
+    });
+
+    final decoded = await decodePayload(v6Json);
+    expect(decoded.receipts, isEmpty);
+  });
+
   test('a v6 recurring schedule round-trips', () async {
     final payload = _samplePayload();
     final scheduled = BackupExpense(

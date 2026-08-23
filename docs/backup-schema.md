@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 6,
+  "version": 7,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 6,
+  "version": 7,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -295,6 +295,43 @@ user never asked for.
   pre-existing expense is left untouched, same as every other field. The schedule takes
   no part in the fingerprint, so re-importing a backup after confirming an occurrence
   locally does not duplicate the expense.
+
+## v7 — receipt photos (schema v11)
+
+A receipt photo lives in its own `expense_receipts` table, not a column on `expenses` —
+see the doc comment on `ExpenseReceipts` in `lib/core/db/database.dart` for why (every
+expense query in the app reads full rows; a blob column there would ride along on every
+one of them, including the lazily-paginated transaction list, even for expenses with no
+photo). The payload gets a new top-level array to match:
+
+```json
+"receipts": [
+  { "expenseId": 42, "photoBase64": "<base64 JPEG bytes>" }
+]
+```
+
+`expenseId` is the **backup file's** expense id — the same id `BackupExpense.id` carries
+for the row it belongs to within this same payload — never a local device id. Replace and
+Merge resolve it to a local expense id differently, so the meaning has to be fixed at the
+file level for both to agree on it:
+
+- **Replace** wipes `expense_receipts` before wiping `expenses`, then restores the backup's
+  expenses reusing their original ids verbatim (the table is empty by then — same
+  reasoning as every other Replace field). Because ids line up exactly, `expenseId` in a
+  receipt entry is reused as-is for the local `expense_receipts` row it produces.
+- **Merge** never touches a matched (already-present) expense's receipt, same as it never
+  touches any other field on a match — merge only adds, it doesn't overwrite local state.
+  Only a newly-inserted expense can gain a receipt from the backup, and only under the
+  **local id Merge just assigned it**, not the backup file's id — those two numbers are
+  unrelated once a new autoincrement id is handed out. `BackupRepository._mergeExpenses`
+  inserts a receipted expense individually (not batched) specifically to learn that new id
+  before attaching its photo; expenses with no receipt still insert batched, since that
+  path covers the common case and receipted expenses are expected to be the minority.
+
+A pre-v7 file has no `receipts` key at all, and `BackupPayload.fromJson` reads that as an
+empty list — same additive, no-version-branch pattern as every field above. Nothing is
+lost by this: a pre-v7 backup was written before receipts existed, so there was never a
+photo to carry.
 
 ## Merge algorithm (`externalId` first, natural-key fallback)
 

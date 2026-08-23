@@ -5,13 +5,13 @@
 
 ## Current status
 
-- **Phase:** UX-enhancement plan, phases 1-2 complete (see
+- **Phase:** UX-enhancement plan, phases 1-3 complete (see
   `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the full phased plan
   and the ledger architecture decision). Branch `feat/ux-enhancements`.
   Sprints 0-7 + 10-12 and Monthly Recap shipped before this.
-  **Drift schema is now v10; backup format v6.** `flutter analyze` clean,
-  `flutter test` **348 passing** (48 test files).
-- **Next:** Phase 3 (receipt photos, schema v11), then phases 4-6 (accounts, income,
+  **Drift schema is now v11; backup format v7.** `flutter analyze` clean,
+  `flutter test` **367 passing** (49 test files).
+- **Next:** Phase 4 (accounts, schema v12, backup v8), then phases 5-6 (income,
   transfers) and phase 7 (insights, goals, app lock, autocomplete). Sprint 8/9 (Beta &
   Hardening, Store Submission) still not started.
 - **Doc drift found and fixed:** README claimed schema v7 / backup v3 / 190 tests while
@@ -663,3 +663,84 @@ recovered by walking from the pointer to today.
   through `recurringReminderCheckProvider`'s data, the `zonedSchedule` call is not.
 - Resolution is strictly oldest-first by design (single-pointer model). Out-of-order
   resolution would need per-occurrence records — a child-row link plus a skip marker.
+
+## UX Phase 3 — done (receipt photos)
+
+**Deviated from the design spec's "one nullable column" plan** — the spec said "one
+nullable column; backup payload carries it the way the avatar already does." Building it
+surfaced why the profile-photo pattern doesn't transfer: `expenses` rows are read in full
+by nearly every query in the app (`watchInRange`, `watchMonth`, `listInRange`, every
+reactive list behind Home/All Transactions/Reports), including the lazily-paginated
+100-row transaction list. A blob column there would ride along on every one of those
+reads, for every expense, whether or not it has a photo — one profile photo in a k/v
+Settings table costs nothing extra to always load; a photo blob on the most heavily-read
+table in the app is a different order of problem entirely.
+
+- [x] **Schema v11** → new `expense_receipts` table (`AppDatabase.database.dart`), not a
+      column on `expenses`. `expenseId` unique-indexed (one receipt per expense).
+      `onDelete` deliberately NOT cascaded — see the next point.
+- [x] **`ReceiptRepository`** → `forExpense` (bytes, for the one screen that shows them),
+      `watchExpenseIdsWithReceipt` (existence only, for a lightweight indicator on
+      `ExpenseTile` without ever loading bytes for a list), `set` (upsert via
+      `INSERT OR REPLACE`, honoring the unique index).
+- [x] **Undo-on-delete gets the photo back for free, by design, not by extra code.**
+      `ExpenseRepository.delete` deliberately leaves a deleted expense's receipt row in
+      place. Because undo (`restore`, from Phase 1) reuses the expense's ORIGINAL id
+      (never recycled — `PRIMARY KEY AUTOINCREMENT`), an untouched receipt row
+      re-attaches itself with zero extra bookkeeping the moment the expense comes back.
+      Handling this at delete time instead would mean re-teaching the undo path to fetch,
+      hold, and re-insert photo bytes too — exactly the complexity this design avoids.
+- [x] **`AppDatabase.pruneOrphanedReceipts()`** — sweeps receipts whose expense is
+      permanently gone. Runs on cold start only (`app.dart`), never on resume: a resume
+      can land mid-undo-window, and sweeping then would delete a photo the user is about
+      to bring back. A full process restart cannot land inside that window (the undo
+      snackbar and its closure don't survive the app closing), so cold-start-only is the
+      point past which "orphaned" is actually permanent.
+- [x] **`resetToDefaults` fixed** — it deleted every expense but, before this phase,
+      never touched receipts; "Delete all data" would have left every photo behind as a
+      permanent orphan. Now wipes `expense_receipts` first, same FK-order convention as
+      the rest of the method.
+- [x] **Backup v7** — new top-level `receipts` array. `expenseId` inside it is the
+      **backup file's** expense id, matching `BackupExpense.id` in the same payload, not
+      a local device id (same convention as `BackupExpense.tagId`) — Replace and Merge
+      resolve it to a local id differently:
+      - **Replace** reuses backup ids verbatim for expenses (table is empty by then), so
+        a receipt's `expenseId` is reused as-is too. Wipes `expense_receipts` before
+        `expenses` (children-before-parents, extending the existing convention).
+      - **Merge** never touches a matched expense's receipt — matched rows are never
+        updated by merge on any field, and a receipt is no exception. Only a
+        newly-inserted expense can gain a receipt, under the LOCAL id Merge just
+        assigned it. `_mergeExpenses` inserts a receipted expense individually (not
+        batched) specifically to learn that new id before attaching the photo; expenses
+        with no receipt stay on the batched fast path, since receipted expenses are
+        expected to be the minority.
+      - A pre-v7 file has no `receipts` key; `BackupPayload.fromJson` reads that as an
+        empty list — nothing is lost, since a pre-v7 backup predates the feature.
+- [x] **Quick Add UI** → a receipt chip alongside date/trip/repeat. Tap when empty opens
+      camera/library (`image_picker`, 1600×1600/80% — well above the avatar's 800×800
+      since a receipt has to stay legible zoomed in, but still bounded so a modern
+      camera's full-resolution photo doesn't land in backup JSON at full size). Tap when
+      present opens a preview sheet with Replace/Remove. Existing photo loads
+      asynchronously (it isn't on `ExpenseRow`, unlike every other prefilled field) — a
+      brief spinner on the chip, not a blocking load for the rest of the form. A
+      duplicated ("Add again") expense inherits the source's photo, matching how it
+      already inherits note/category/trip.
+- [x] **`ExpenseTile` indicator** — a small receipt icon next to the title, driven by
+      `watchExpenseIdsWithReceipt` (an id set, never bytes) so the 100-row paginated list
+      isn't loading photos it never displays.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **367 passed** (was 348 at the start of phase 3). New coverage
+  includes the full backup round-trip for all four combinations (Replace with/without a
+  receipt, Merge onto a matched vs. newly-inserted expense) plus the undo-survives-prune
+  interaction.
+- Not run on a device/simulator — camera/gallery picker behavior specifically needs
+  manual verification (permissions prompts, actual photo capture), same standing gap as
+  every prior sprint's manual-check item.
+
+### Deferred / notes
+- One photo per expense (unique index on `expenseId`), not a gallery of several. Matches
+  what was asked for; multiple receipts per expense would be a new ask.
+- No compression beyond `image_picker`'s own resize/quality params — no new dependency
+  added for this.

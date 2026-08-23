@@ -1,5 +1,9 @@
+import 'dart:io' show File;
+import 'dart:typed_data';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -20,6 +24,7 @@ import '../home/dashboard_providers.dart';
 import '../tags/tag_edit_sheet.dart';
 import '../tags/tag_repository.dart';
 import 'expense_repository.dart';
+import 'receipt_repository.dart';
 import 'recurring_schedule.dart';
 import 'widgets/expense_tile.dart' show relativeDayLabel;
 
@@ -68,6 +73,9 @@ class QuickAddScreen extends ConsumerStatefulWidget {
     date: editing?.date ?? now,
   );
 }
+
+/// Choice made in the receipt preview sheet.
+enum _ReceiptAction { replace, remove }
 
 /// Categories shown in the quick-add grid before it switches to a
 /// truncated view with a "More" tile.
@@ -168,6 +176,14 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late Recurrence? _recurrence = widget.editing?.recurrence;
   late DateTime? _recurrenceEndDate = widget.editing?.recurrenceEndDate;
 
+  /// Receipt photo. Unlike every other prefilled field, this one isn't on
+  /// [ExpenseRow] — receipts live in a separate table (see the doc comment on
+  /// `ExpenseReceipts`) specifically so loading them isn't part of every
+  /// expense read, which means it has to be fetched asynchronously here
+  /// rather than seeded synchronously in [initState] like the rest.
+  Uint8List? _receiptBytes;
+  bool _receiptLoading = false;
+
   bool get _isEdit => widget.editing != null;
 
   bool get _isDirty => _touched || _noteController.text.trim() != _initialNote;
@@ -196,6 +212,19 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _selectedDate = prefill.date;
     _noteController.text = e?.note ?? '';
     _initialNote = _noteController.text;
+    if (e != null) _loadReceipt(e.id);
+  }
+
+  Future<void> _loadReceipt(int expenseId) async {
+    setState(() => _receiptLoading = true);
+    final bytes = await ref
+        .read(receiptRepositoryProvider)
+        .forExpense(expenseId);
+    if (!mounted) return;
+    setState(() {
+      _receiptBytes = bytes;
+      _receiptLoading = false;
+    });
   }
 
   @override
@@ -259,6 +288,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                                 _dateChip(context, palette),
                                 _tripChip(context, palette),
                                 _repeatChip(context, palette),
+                                _receiptChip(context, palette),
                               ],
                             ),
                           ),
@@ -718,6 +748,137 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
+  /// Receipt chip: "Add receipt" when nothing is attached, "Receipt added"
+  /// once something is — a spinner briefly in between while an edit/copy's
+  /// existing photo loads from its own table (see [_receiptBytes]'s doc
+  /// comment for why that fetch isn't synchronous like every other field).
+  Widget _receiptChip(BuildContext context, AppPalette palette) {
+    if (_receiptLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return _metaChip(
+      icon: Icons.receipt_long_outlined,
+      label: _receiptBytes == null ? 'Add receipt' : 'Receipt added',
+      semanticsLabel: _receiptBytes == null
+          ? 'Add a receipt photo'
+          : 'Receipt photo attached, tap to view or remove',
+      onTap: _receiptBytes == null ? _pickReceiptPhoto : _showReceiptPreview,
+      palette: palette,
+      emphasized: _receiptBytes != null,
+      emphasisColor: _receiptBytes == null ? null : AppColors.primary,
+    );
+  }
+
+  Future<void> _pickReceiptPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Camera'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Photo library'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      // Well above the avatar's 800x800 — a receipt has to stay legible when
+      // zoomed in on a phone screen — but still bounded, so a photo taken
+      // straight off a modern camera doesn't land in the backup JSON at full
+      // resolution.
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 80,
+    );
+    if (picked == null || !mounted) return;
+
+    final bytes = await File(picked.path).readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _receiptBytes = bytes;
+      _touched = true;
+    });
+  }
+
+  Future<void> _showReceiptPreview() async {
+    final action = await showModalBottomSheet<_ReceiptAction>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                child: Image.memory(
+                  _receiptBytes!,
+                  fit: BoxFit.contain,
+                  height: 280,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Replace'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ReceiptAction.replace),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.red),
+              title: const Text(
+                'Remove',
+                style: TextStyle(color: AppColors.red),
+              ),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ReceiptAction.remove),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case _ReceiptAction.replace:
+        await _pickReceiptPhoto();
+      case _ReceiptAction.remove:
+        setState(() {
+          _receiptBytes = null;
+          _touched = true;
+        });
+      case null:
+        break;
+    }
+  }
+
   Future<void> _openTagPicker(List<TagRow> tags) async {
     final chosen = await showModalBottomSheet<int?>(
       context: context,
@@ -1108,9 +1269,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             endDate: _recurrenceEndDate,
           )
         : previous!.nextDueDate;
+    final int expenseId;
     if (_isEdit) {
+      expenseId = widget.editing!.id;
       await repo.update(
-        widget.editing!.id,
+        expenseId,
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
@@ -1126,7 +1289,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         fxAmount: Value(resolved.fxAmount),
       );
     } else {
-      await repo.add(
+      expenseId = await repo.add(
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
@@ -1142,6 +1305,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         fxAmount: resolved.fxAmount,
       );
     }
+    // set(id, null) when nothing was ever attached is a harmless no-op
+    // delete, so this runs unconditionally rather than tracking a second
+    // dirty flag just for the photo.
+    await ref
+        .read(receiptRepositoryProvider)
+        .set(expenseId, _receiptBytes);
     // Fire budget-threshold alerts for the affected category + overall (FR-25).
     // Only the delta counts toward the "before → after" crossing so an edit
     // that keeps the same category alerts on its net change.

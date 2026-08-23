@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,7 @@ import 'package:spendly/features/backup/backup_repository.dart';
 import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
+import 'package:spendly/features/expenses/receipt_repository.dart';
 import 'package:spendly/features/tags/tag_repository.dart';
 
 void main() {
@@ -374,4 +376,156 @@ void main() {
       expect((await db.select(db.budgets).get()).length, budgetsBefore);
     },
   );
+
+  group('receipt photos', () {
+    test('export then replace reattaches the receipt to the same expense',
+        () async {
+      final expRepo = ExpenseRepository(db);
+      final receiptRepo = ReceiptRepository(db);
+      final expenseId = await expRepo.add(
+        amount: Money.parse('240'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 1),
+      );
+      await receiptRepo.set(expenseId, Uint8List.fromList([9, 8, 7]));
+
+      final payload = await repo.exportAll();
+      expect(payload.receipts, hasLength(1));
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restoredExpense = (await freshDb.select(freshDb.expenses).get())
+          .single;
+      final restoredPhoto = await ReceiptRepository(
+        freshDb,
+      ).forExpense(restoredExpense.id);
+      // Not just "a receipt exists somewhere" — it must be attached to THIS
+      // expense, and Replace's whole safety argument is that reused ids line
+      // up exactly, so this is the assertion that actually tests that.
+      expect(restoredPhoto, [9, 8, 7]);
+    });
+
+    test('an expense with no receipt restores with no receipt', () async {
+      await ExpenseRepository(
+        db,
+      ).add(amount: Money.parse('50'), categoryId: 1);
+      final payload = await repo.exportAll();
+      expect(payload.receipts, isEmpty);
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      expect(await freshDb.select(freshDb.expenseReceipts).get(), isEmpty);
+    });
+
+    test('replace clears a receipt that existed only on the restoring device',
+        () async {
+      // The receiving device has its own photo attached to expense #1; the
+      // backup has none for its own expense #1. Replace wipes first, so the
+      // stale local photo must not survive.
+      final localId = await ExpenseRepository(
+        db,
+      ).add(amount: Money.parse('10'), categoryId: 1);
+      await ReceiptRepository(db).set(localId, Uint8List.fromList([1]));
+
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await ExpenseRepository(
+        sourceDb,
+      ).add(amount: Money.parse('10'), categoryId: 1);
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.replaceAll(payload);
+
+      expect(await db.select(db.expenseReceipts).get(), isEmpty);
+    });
+
+    test('merge attaches a receipt to a newly-inserted expense', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceExpenseId = await ExpenseRepository(sourceDb).add(
+        amount: Money.parse('75'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 10),
+      );
+      await ReceiptRepository(
+        sourceDb,
+      ).set(sourceExpenseId, Uint8List.fromList([4, 4, 4]));
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload); // into the fresh 8-default db
+
+      final expenses = await db.select(db.expenses).get();
+      expect(expenses, hasLength(1));
+      // The merged expense's LOCAL id was assigned fresh — it is not the
+      // source device's id — so this is the assertion that the receipt
+      // followed the right row through that remapping, not just that a
+      // receipt exists somewhere in the table.
+      final photo = await ReceiptRepository(
+        db,
+      ).forExpense(expenses.single.id);
+      expect(photo, [4, 4, 4]);
+    });
+
+    test('merge never overwrites a receipt already on a matched expense',
+        () async {
+      // Same expense on both sides (matched by content fingerprint, no
+      // externalId yet); the backup carries a DIFFERENT photo for it. Merge
+      // must not touch the local one — matched rows are never updated by
+      // merge, on any field, and a receipt is no exception.
+      final localId = await ExpenseRepository(db).add(
+        amount: Money.parse('30'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 2),
+        note: 'Taxi',
+      );
+      await ReceiptRepository(db).set(localId, Uint8List.fromList([1]));
+
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceExpenseId = await ExpenseRepository(sourceDb).add(
+        amount: Money.parse('30'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 2),
+        note: 'Taxi',
+      );
+      await ReceiptRepository(
+        sourceDb,
+      ).set(sourceExpenseId, Uint8List.fromList([2, 2]));
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      expect(await db.select(db.expenses).get(), hasLength(1));
+      expect(await ReceiptRepository(db).forExpense(localId), [1]);
+    });
+
+    test('a pre-v7 backup (no receipts key) merges with no receipts at all',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await ExpenseRepository(
+        sourceDb,
+      ).add(amount: Money.parse('20'), categoryId: 1, date: DateTime(2026, 7, 3));
+      final exported = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+      final preV7 = BackupPayload(
+        exportedAt: exported.exportedAt,
+        categories: exported.categories,
+        expenses: exported.expenses,
+        budgets: exported.budgets,
+        settings: exported.settings,
+        tags: exported.tags,
+        // No `receipts:` — defaults to const [], matching a decoded pre-v7
+        // JSON file that never had the key at all.
+      );
+
+      await repo.mergeAll(preV7);
+
+      expect(await db.select(db.expenses).get(), hasLength(1));
+      expect(await db.select(db.expenseReceipts).get(), isEmpty);
+    });
+  });
 }

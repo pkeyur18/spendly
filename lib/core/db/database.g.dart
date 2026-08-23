@@ -2837,6 +2837,320 @@ class SettingsCompanion extends UpdateCompanion<SettingRow> {
   }
 }
 
+class $ExpenseReceiptsTable extends ExpenseReceipts
+    with TableInfo<$ExpenseReceiptsTable, ExpenseReceiptRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExpenseReceiptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _expenseIdMeta = const VerificationMeta(
+    'expenseId',
+  );
+  @override
+  late final GeneratedColumn<int> expenseId = GeneratedColumn<int>(
+    'expense_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES expenses (id)',
+    ),
+  );
+  static const VerificationMeta _photoBytesMeta = const VerificationMeta(
+    'photoBytes',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> photoBytes = GeneratedColumn<Uint8List>(
+    'photo_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, expenseId, photoBytes, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'expense_receipts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExpenseReceiptRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('expense_id')) {
+      context.handle(
+        _expenseIdMeta,
+        expenseId.isAcceptableOrUnknown(data['expense_id']!, _expenseIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_expenseIdMeta);
+    }
+    if (data.containsKey('photo_bytes')) {
+      context.handle(
+        _photoBytesMeta,
+        photoBytes.isAcceptableOrUnknown(data['photo_bytes']!, _photoBytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_photoBytesMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ExpenseReceiptRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExpenseReceiptRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      expenseId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}expense_id'],
+      )!,
+      photoBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}photo_bytes'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ExpenseReceiptsTable createAlias(String alias) {
+    return $ExpenseReceiptsTable(attachedDatabase, alias);
+  }
+}
+
+class ExpenseReceiptRow extends DataClass
+    implements Insertable<ExpenseReceiptRow> {
+  final int id;
+
+  /// No `onDelete` cascade: like every other FK relationship in this schema
+  /// (categories, tags, budgets), cleanup is explicit application code, not a
+  /// DB-level trigger. Deleting the parent expense deliberately leaves this
+  /// row in place rather than deleting it — see [AppDatabase.pruneOrphanedReceipts].
+  final int expenseId;
+  final Uint8List photoBytes;
+  final DateTime createdAt;
+  const ExpenseReceiptRow({
+    required this.id,
+    required this.expenseId,
+    required this.photoBytes,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['expense_id'] = Variable<int>(expenseId);
+    map['photo_bytes'] = Variable<Uint8List>(photoBytes);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ExpenseReceiptsCompanion toCompanion(bool nullToAbsent) {
+    return ExpenseReceiptsCompanion(
+      id: Value(id),
+      expenseId: Value(expenseId),
+      photoBytes: Value(photoBytes),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ExpenseReceiptRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExpenseReceiptRow(
+      id: serializer.fromJson<int>(json['id']),
+      expenseId: serializer.fromJson<int>(json['expenseId']),
+      photoBytes: serializer.fromJson<Uint8List>(json['photoBytes']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'expenseId': serializer.toJson<int>(expenseId),
+      'photoBytes': serializer.toJson<Uint8List>(photoBytes),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ExpenseReceiptRow copyWith({
+    int? id,
+    int? expenseId,
+    Uint8List? photoBytes,
+    DateTime? createdAt,
+  }) => ExpenseReceiptRow(
+    id: id ?? this.id,
+    expenseId: expenseId ?? this.expenseId,
+    photoBytes: photoBytes ?? this.photoBytes,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  ExpenseReceiptRow copyWithCompanion(ExpenseReceiptsCompanion data) {
+    return ExpenseReceiptRow(
+      id: data.id.present ? data.id.value : this.id,
+      expenseId: data.expenseId.present ? data.expenseId.value : this.expenseId,
+      photoBytes: data.photoBytes.present
+          ? data.photoBytes.value
+          : this.photoBytes,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExpenseReceiptRow(')
+          ..write('id: $id, ')
+          ..write('expenseId: $expenseId, ')
+          ..write('photoBytes: $photoBytes, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    expenseId,
+    $driftBlobEquality.hash(photoBytes),
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExpenseReceiptRow &&
+          other.id == this.id &&
+          other.expenseId == this.expenseId &&
+          $driftBlobEquality.equals(other.photoBytes, this.photoBytes) &&
+          other.createdAt == this.createdAt);
+}
+
+class ExpenseReceiptsCompanion extends UpdateCompanion<ExpenseReceiptRow> {
+  final Value<int> id;
+  final Value<int> expenseId;
+  final Value<Uint8List> photoBytes;
+  final Value<DateTime> createdAt;
+  const ExpenseReceiptsCompanion({
+    this.id = const Value.absent(),
+    this.expenseId = const Value.absent(),
+    this.photoBytes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ExpenseReceiptsCompanion.insert({
+    this.id = const Value.absent(),
+    required int expenseId,
+    required Uint8List photoBytes,
+    this.createdAt = const Value.absent(),
+  }) : expenseId = Value(expenseId),
+       photoBytes = Value(photoBytes);
+  static Insertable<ExpenseReceiptRow> custom({
+    Expression<int>? id,
+    Expression<int>? expenseId,
+    Expression<Uint8List>? photoBytes,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (expenseId != null) 'expense_id': expenseId,
+      if (photoBytes != null) 'photo_bytes': photoBytes,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ExpenseReceiptsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? expenseId,
+    Value<Uint8List>? photoBytes,
+    Value<DateTime>? createdAt,
+  }) {
+    return ExpenseReceiptsCompanion(
+      id: id ?? this.id,
+      expenseId: expenseId ?? this.expenseId,
+      photoBytes: photoBytes ?? this.photoBytes,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (expenseId.present) {
+      map['expense_id'] = Variable<int>(expenseId.value);
+    }
+    if (photoBytes.present) {
+      map['photo_bytes'] = Variable<Uint8List>(photoBytes.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExpenseReceiptsCompanion(')
+          ..write('id: $id, ')
+          ..write('expenseId: $expenseId, ')
+          ..write('photoBytes: $photoBytes, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2845,6 +3159,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ExpensesTable expenses = $ExpensesTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
   late final $SettingsTable settings = $SettingsTable(this);
+  late final $ExpenseReceiptsTable expenseReceipts = $ExpenseReceiptsTable(
+    this,
+  );
   late final Index idxExpensesDate = Index(
     'idx_expenses_date',
     'CREATE INDEX idx_expenses_date ON expenses (date)',
@@ -2857,6 +3174,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_expenses_tag',
     'CREATE INDEX idx_expenses_tag ON expenses (tag_id)',
   );
+  late final Index idxExpenseReceiptsExpense = Index(
+    'idx_expense_receipts_expense',
+    'CREATE UNIQUE INDEX idx_expense_receipts_expense ON expense_receipts (expense_id)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2867,9 +3188,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     expenses,
     budgets,
     settings,
+    expenseReceipts,
     idxExpensesDate,
     idxExpensesCategory,
     idxExpensesTag,
+    idxExpenseReceiptsExpense,
   ];
 }
 
@@ -3812,6 +4135,26 @@ final class $$ExpensesTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static MultiTypedResultKey<$ExpenseReceiptsTable, List<ExpenseReceiptRow>>
+  _expenseReceiptsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.expenseReceipts,
+    aliasName: 'expenses__id__expense_receipts__expense_id',
+  );
+
+  $$ExpenseReceiptsTableProcessedTableManager get expenseReceiptsRefs {
+    final manager = $$ExpenseReceiptsTableTableManager(
+      $_db,
+      $_db.expenseReceipts,
+    ).filter((f) => f.expenseId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _expenseReceiptsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$ExpensesTableFilterComposer
@@ -3938,6 +4281,31 @@ class $$ExpensesTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> expenseReceiptsRefs(
+    Expression<bool> Function($$ExpenseReceiptsTableFilterComposer f) f,
+  ) {
+    final $$ExpenseReceiptsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.expenseReceipts,
+      getReferencedColumn: (t) => t.expenseId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpenseReceiptsTableFilterComposer(
+            $db: $db,
+            $table: $db.expenseReceipts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 }
 
@@ -4182,6 +4550,31 @@ class $$ExpensesTableAnnotationComposer
     );
     return composer;
   }
+
+  Expression<T> expenseReceiptsRefs<T extends Object>(
+    Expression<T> Function($$ExpenseReceiptsTableAnnotationComposer a) f,
+  ) {
+    final $$ExpenseReceiptsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.expenseReceipts,
+      getReferencedColumn: (t) => t.expenseId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpenseReceiptsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.expenseReceipts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ExpensesTableTableManager
@@ -4197,7 +4590,11 @@ class $$ExpensesTableTableManager
           $$ExpensesTableUpdateCompanionBuilder,
           (ExpenseRow, $$ExpensesTableReferences),
           ExpenseRow,
-          PrefetchHooks Function({bool categoryId, bool tagId})
+          PrefetchHooks Function({
+            bool categoryId,
+            bool tagId,
+            bool expenseReceiptsRefs,
+          })
         > {
   $$ExpensesTableTableManager(_$AppDatabase db, $ExpensesTable table)
     : super(
@@ -4290,60 +4687,89 @@ class $$ExpensesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({categoryId = false, tagId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (categoryId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.categoryId,
-                                referencedTable: $$ExpensesTableReferences
-                                    ._categoryIdTable(db),
-                                referencedColumn: $$ExpensesTableReferences
-                                    ._categoryIdTable(db)
-                                    .id,
-                              )
-                              as T;
-                    }
-                    if (tagId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.tagId,
-                                referencedTable: $$ExpensesTableReferences
-                                    ._tagIdTable(db),
-                                referencedColumn: $$ExpensesTableReferences
-                                    ._tagIdTable(db)
-                                    .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({
+                categoryId = false,
+                tagId = false,
+                expenseReceiptsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (expenseReceiptsRefs) db.expenseReceipts,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (categoryId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.categoryId,
+                                    referencedTable: $$ExpensesTableReferences
+                                        ._categoryIdTable(db),
+                                    referencedColumn: $$ExpensesTableReferences
+                                        ._categoryIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+                        if (tagId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.tagId,
+                                    referencedTable: $$ExpensesTableReferences
+                                        ._tagIdTable(db),
+                                    referencedColumn: $$ExpensesTableReferences
+                                        ._tagIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (expenseReceiptsRefs)
+                        await $_getPrefetchedData<
+                          ExpenseRow,
+                          $ExpensesTable,
+                          ExpenseReceiptRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ExpensesTableReferences
+                              ._expenseReceiptsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ExpensesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).expenseReceiptsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.expenseId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -4360,7 +4786,11 @@ typedef $$ExpensesTableProcessedTableManager =
       $$ExpensesTableUpdateCompanionBuilder,
       (ExpenseRow, $$ExpensesTableReferences),
       ExpenseRow,
-      PrefetchHooks Function({bool categoryId, bool tagId})
+      PrefetchHooks Function({
+        bool categoryId,
+        bool tagId,
+        bool expenseReceiptsRefs,
+      })
     >;
 typedef $$BudgetsTableCreateCompanionBuilder =
     BudgetsCompanion Function({
@@ -4833,6 +5263,313 @@ typedef $$SettingsTableProcessedTableManager =
       SettingRow,
       PrefetchHooks Function()
     >;
+typedef $$ExpenseReceiptsTableCreateCompanionBuilder =
+    ExpenseReceiptsCompanion Function({
+      Value<int> id,
+      required int expenseId,
+      required Uint8List photoBytes,
+      Value<DateTime> createdAt,
+    });
+typedef $$ExpenseReceiptsTableUpdateCompanionBuilder =
+    ExpenseReceiptsCompanion Function({
+      Value<int> id,
+      Value<int> expenseId,
+      Value<Uint8List> photoBytes,
+      Value<DateTime> createdAt,
+    });
+
+final class $$ExpenseReceiptsTableReferences
+    extends
+        BaseReferences<
+          _$AppDatabase,
+          $ExpenseReceiptsTable,
+          ExpenseReceiptRow
+        > {
+  $$ExpenseReceiptsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ExpensesTable _expenseIdTable(_$AppDatabase db) =>
+      db.expenses.createAlias('expense_receipts__expense_id__expenses__id');
+
+  $$ExpensesTableProcessedTableManager get expenseId {
+    final $_column = $_itemColumn<int>('expense_id')!;
+
+    final manager = $$ExpensesTableTableManager(
+      $_db,
+      $_db.expenses,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_expenseIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ExpenseReceiptsTableFilterComposer
+    extends Composer<_$AppDatabase, $ExpenseReceiptsTable> {
+  $$ExpenseReceiptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get photoBytes => $composableBuilder(
+    column: $table.photoBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ExpensesTableFilterComposer get expenseId {
+    final $$ExpensesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.expenseId,
+      referencedTable: $db.expenses,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpensesTableFilterComposer(
+            $db: $db,
+            $table: $db.expenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExpenseReceiptsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExpenseReceiptsTable> {
+  $$ExpenseReceiptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get photoBytes => $composableBuilder(
+    column: $table.photoBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ExpensesTableOrderingComposer get expenseId {
+    final $$ExpensesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.expenseId,
+      referencedTable: $db.expenses,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpensesTableOrderingComposer(
+            $db: $db,
+            $table: $db.expenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExpenseReceiptsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExpenseReceiptsTable> {
+  $$ExpenseReceiptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get photoBytes => $composableBuilder(
+    column: $table.photoBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$ExpensesTableAnnotationComposer get expenseId {
+    final $$ExpensesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.expenseId,
+      referencedTable: $db.expenses,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpensesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.expenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ExpenseReceiptsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExpenseReceiptsTable,
+          ExpenseReceiptRow,
+          $$ExpenseReceiptsTableFilterComposer,
+          $$ExpenseReceiptsTableOrderingComposer,
+          $$ExpenseReceiptsTableAnnotationComposer,
+          $$ExpenseReceiptsTableCreateCompanionBuilder,
+          $$ExpenseReceiptsTableUpdateCompanionBuilder,
+          (ExpenseReceiptRow, $$ExpenseReceiptsTableReferences),
+          ExpenseReceiptRow,
+          PrefetchHooks Function({bool expenseId})
+        > {
+  $$ExpenseReceiptsTableTableManager(
+    _$AppDatabase db,
+    $ExpenseReceiptsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExpenseReceiptsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ExpenseReceiptsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ExpenseReceiptsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> expenseId = const Value.absent(),
+                Value<Uint8List> photoBytes = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ExpenseReceiptsCompanion(
+                id: id,
+                expenseId: expenseId,
+                photoBytes: photoBytes,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int expenseId,
+                required Uint8List photoBytes,
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ExpenseReceiptsCompanion.insert(
+                id: id,
+                expenseId: expenseId,
+                photoBytes: photoBytes,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ExpenseReceiptsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({expenseId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (expenseId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.expenseId,
+                                referencedTable:
+                                    $$ExpenseReceiptsTableReferences
+                                        ._expenseIdTable(db),
+                                referencedColumn:
+                                    $$ExpenseReceiptsTableReferences
+                                        ._expenseIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ExpenseReceiptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExpenseReceiptsTable,
+      ExpenseReceiptRow,
+      $$ExpenseReceiptsTableFilterComposer,
+      $$ExpenseReceiptsTableOrderingComposer,
+      $$ExpenseReceiptsTableAnnotationComposer,
+      $$ExpenseReceiptsTableCreateCompanionBuilder,
+      $$ExpenseReceiptsTableUpdateCompanionBuilder,
+      (ExpenseReceiptRow, $$ExpenseReceiptsTableReferences),
+      ExpenseReceiptRow,
+      PrefetchHooks Function({bool expenseId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4846,4 +5583,6 @@ class $AppDatabaseManager {
       $$BudgetsTableTableManager(_db, _db.budgets);
   $$SettingsTableTableManager get settings =>
       $$SettingsTableTableManager(_db, _db.settings);
+  $$ExpenseReceiptsTableTableManager get expenseReceipts =>
+      $$ExpenseReceiptsTableTableManager(_db, _db.expenseReceipts);
 }

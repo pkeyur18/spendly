@@ -451,6 +451,29 @@ class BackupBudget {
   );
 }
 
+/// A receipt photo (backup v7). [expenseId] is the BACKUP FILE's expense id
+/// (matching [BackupExpense.id] within the same payload), never a local one —
+/// same convention as [BackupExpense.tagId] — because Replace and Merge
+/// resolve it to a local expense id differently: Replace reuses backup ids
+/// verbatim so no remapping is needed, Merge maps it through the id assigned
+/// to whichever expense it matched or inserted. See [BackupRepository].
+class BackupReceipt {
+  const BackupReceipt({required this.expenseId, required this.photoBase64});
+
+  final int expenseId;
+  final String photoBase64;
+
+  factory BackupReceipt.fromJson(Map<String, dynamic> j) => BackupReceipt(
+    expenseId: j['expenseId'] as int,
+    photoBase64: j['photoBase64'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'expenseId': expenseId,
+    'photoBase64': photoBase64,
+  };
+}
+
 class BackupSetting {
   const BackupSetting({required this.key, required this.value});
 
@@ -479,6 +502,7 @@ class BackupPayload {
     required this.budgets,
     required this.settings,
     required this.tags,
+    this.receipts = const [],
   });
 
   final DateTime exportedAt;
@@ -487,6 +511,7 @@ class BackupPayload {
   final List<BackupBudget> budgets;
   final List<BackupSetting> settings;
   final List<BackupTag> tags;
+  final List<BackupReceipt> receipts;
 
   (DateTime, DateTime)? get expenseDateRange {
     if (expenses.isEmpty) return null;
@@ -536,6 +561,12 @@ class BackupPayload {
           : (j['tags'] as List)
                 .map((e) => BackupTag.fromJson(e as Map<String, dynamic>))
                 .toList(),
+      // Pre-v7 backups have no "receipts" key at all.
+      receipts: j['receipts'] == null
+          ? const []
+          : (j['receipts'] as List)
+                .map((e) => BackupReceipt.fromJson(e as Map<String, dynamic>))
+                .toList(),
     );
   }
 
@@ -552,5 +583,6 @@ class BackupPayload {
     'budgets': budgets.map((b) => b.toJson()).toList(),
     'settings': settings.map((s) => s.toJson()).toList(),
     'tags': tags.map((t) => t.toJson()).toList(),
+    'receipts': receipts.map((r) => r.toJson()).toList(),
   };
 }
