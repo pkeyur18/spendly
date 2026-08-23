@@ -51,12 +51,16 @@ class CategoryManagerScreen extends ConsumerWidget {
             ),
             icon: const Icon(Icons.account_balance_wallet_outlined),
           ),
+          // In the app bar rather than a FloatingActionButton: the shell owns
+          // the one centre-docked FAB (Add expense) on every tab, and a second
+          // floating button on this tab would sit beside it competing for the
+          // same "the primary action" reading.
+          IconButton(
+            tooltip: 'Add category',
+            onPressed: () => showCategoryEditSheet(context),
+            icon: const Icon(Icons.add),
+          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => showCategoryEditSheet(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Add category'),
       ),
       body: categoriesAsync.when(
         loading: () => const LoadingView(),

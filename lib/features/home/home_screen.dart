@@ -2,23 +2,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/db/database.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../budgets/budget_pace.dart';
 import '../budgets/budget_repository.dart';
-import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
 import '../budgets/budget_setup_screen.dart';
 import '../expenses/all_transactions_screen.dart';
 import '../expenses/expense_repository.dart';
-import '../expenses/quick_add_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
-import '../profile/avatar.dart';
 import '../profile/profile_provider.dart';
-import '../profile/profile_screen.dart';
-import '../reports/monthly_report_screen.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
 import 'widgets/trend_bars.dart';
@@ -97,25 +91,6 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 80),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          gradient: AppColors.brandGradient,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            width: 4,
-          ),
-        ),
-        child: FloatingActionButton(
-          onPressed: () => _openQuickAdd(context),
-          tooltip: 'Add expense',
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
-        ),
-      ),
-      bottomNavigationBar: _BottomNav(palette: palette, profile: profile),
     );
   }
 
@@ -159,10 +134,6 @@ class HomeScreen extends ConsumerWidget {
         style: TextStyle(color: palette.textDim, fontSize: 13),
       ),
     );
-  }
-
-  void _openQuickAdd(BuildContext context, {ExpenseRow? editing}) {
-    openQuickAddScreen(context, editing: editing);
   }
 }
 
@@ -329,108 +300,6 @@ class _PaceLine extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.palette, required this.profile});
-
-  final AppPalette palette;
-  final Profile? profile;
-
-  @override
-  Widget build(BuildContext context) {
-    void soon(String label) => ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
-
-    Widget item(
-      IconData icon,
-      String label, {
-      bool active = false,
-      VoidCallback? onTap,
-      Widget? leading,
-    }) {
-      return IconButton(
-        onPressed: onTap ?? () => soon(label),
-        tooltip: label,
-        visualDensity: VisualDensity.compact,
-        style: IconButton.styleFrom(
-          fixedSize: const Size(48, 48),
-          backgroundColor: active
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.icon),
-          ),
-        ),
-        icon:
-            leading ??
-            Icon(icon, color: active ? Colors.white : palette.navIconInactive),
-      );
-    }
-
-    return Container(
-      foregroundDecoration: BoxDecoration(
-        border: Border(top: BorderSide(color: palette.navBorder, width: 1)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: BottomAppBar(
-          color: palette.navBackground,
-          height: 56,
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
-              item(
-                Icons.bar_chart_rounded,
-                'Reports',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          MonthlyReportScreen(month: DateTime.now()),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 40),
-              item(
-                Icons.sell_rounded,
-                'Categories',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CategoryManagerScreen(),
-                    ),
-                  );
-                },
-              ),
-              item(
-                Icons.account_circle_rounded,
-                'Profile',
-                leading: ProfileAvatar(
-                  name: profile?.name ?? '',
-                  photoBytes: profile?.photoBytes,
-                  avatarColorIndex: profile?.avatarColorIndex,
-                  size: 26,
-                  fontSize: 11,
-                ),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

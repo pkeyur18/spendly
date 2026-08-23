@@ -8,7 +8,7 @@ import 'core/widgets/async_state_views.dart';
 import 'features/backup/backup_providers.dart';
 import 'features/budgets/budget_nudge_provider.dart';
 import 'features/expenses/quick_add_screen.dart';
-import 'features/home/home_screen.dart';
+import 'features/home/app_shell.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/profile/profile_provider.dart';
 import 'features/recap/recap_providers.dart';
@@ -120,7 +120,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
           ),
         ),
         data: (profile) =>
-            profile.name.isEmpty ? const WelcomeScreen() : const HomeScreen(),
+            profile.name.isEmpty ? const WelcomeScreen() : const AppShell(),
       ),
     );
   }
