@@ -5,6 +5,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../features/expenses/recurring_screen.dart';
 import '../../features/reports/monthly_report_screen.dart';
 
 /// Lets a tapped notification navigate without a BuildContext. Wired to
@@ -24,6 +25,13 @@ class NotificationService {
   static const _reportChannelId = 'monthly_report';
   static const _reportChannelName = 'Monthly report';
   static const _reportNotificationId = 424242; // stable id for the repeat
+  static const _recurringChannelId = 'recurring_due';
+  static const _recurringChannelName = 'Recurring expenses';
+
+  /// Recurring reminders are keyed by `_recurringIdBase + expense id`, so
+  /// re-scheduling one replaces its own slot instead of stacking duplicates,
+  /// and no id can collide with the monthly report's.
+  static const _recurringIdBase = 500000;
 
   /// Call once in `main()` before `runApp`. Sets up channels, the timezone db
   /// (needed by `zonedSchedule`) and permissions, and the tap handler.
@@ -53,6 +61,12 @@ class NotificationService {
   /// A monthly report notification opens the previous month's report (computed
   /// at tap time so a repeating notification always points at the right month).
   void _onTap(NotificationResponse response) {
+    if (response.payload == _recurringChannelId) {
+      appNavigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const RecurringScreen()),
+      );
+      return;
+    }
     if (response.payload != _reportChannelId) return;
     final now = DateTime.now();
     final prevMonth = DateTime(now.year, now.month - 1, 1);
@@ -106,6 +120,55 @@ class NotificationService {
         iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
       ),
     );
+  }
+
+  /// Re-arms the due-date reminder for every scheduled recurring expense.
+  ///
+  /// Called on cold start and on resume rather than from a background job:
+  /// this project has no background execution by design (see
+  /// `local_auto_backup.dart`), so the schedule is rebuilt whenever the app is
+  /// in the user's hands. Every reminder is cancelled first, so a cancelled or
+  /// rescheduled series can't leave a stale alarm behind.
+  ///
+  /// Occurrences already overdue are deliberately NOT scheduled — a past
+  /// timestamp would either fire instantly or be dropped, and the Home "to
+  /// confirm" card already surfaces them permanently, which a swiped-away
+  /// notification does not.
+  Future<void> scheduleRecurringReminders(
+    List<({int id, String title, DateTime dueAt})> reminders,
+  ) async {
+    for (final pending in await _plugin.pendingNotificationRequests()) {
+      if (pending.id >= _recurringIdBase) await _plugin.cancel(id: pending.id);
+    }
+    final now = tz.TZDateTime.now(tz.local);
+    for (final reminder in reminders) {
+      final at = tz.TZDateTime(
+        tz.local,
+        reminder.dueAt.year,
+        reminder.dueAt.month,
+        reminder.dueAt.day,
+        9,
+      );
+      if (!at.isAfter(now)) continue;
+      await _plugin.zonedSchedule(
+        id: _recurringIdBase + reminder.id,
+        title: '${reminder.title} is due',
+        body: 'Tap to confirm it, or skip this one.',
+        payload: _recurringChannelId,
+        scheduledDate: at,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _recurringChannelId,
+            _recurringChannelName,
+            channelDescription: 'Reminders for expenses you told us repeat',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+          ),
+          iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+        ),
+      );
+    }
   }
 
   tz.TZDateTime _firstOfNextMonthAt9() {

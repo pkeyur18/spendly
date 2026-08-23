@@ -30,6 +30,8 @@ BackupPayload _samplePayload() => BackupPayload(
       paymentMethod: 'UPI',
       isRecurring: false,
       recurrence: null,
+      nextDueDate: null,
+      recurrenceEndDate: null,
       tagId: 1,
       createdAt: DateTime(2026, 7, 1, 9, 3),
       updatedAt: DateTime(2026, 7, 1, 9, 3),
@@ -259,6 +261,66 @@ void main() {
       expect(tag.fxCurrency, 'JPY');
     },
   );
+
+  test('a v6 recurring schedule round-trips', () async {
+    final payload = _samplePayload();
+    final scheduled = BackupExpense(
+      id: payload.expenses.single.id,
+      amountMinor: payload.expenses.single.amountMinor,
+      categoryId: payload.expenses.single.categoryId,
+      date: payload.expenses.single.date,
+      note: payload.expenses.single.note,
+      paymentMethod: payload.expenses.single.paymentMethod,
+      isRecurring: true,
+      recurrence: Recurrence.monthly,
+      nextDueDate: DateTime(2026, 8, 1),
+      recurrenceEndDate: DateTime(2027, 1, 1),
+      tagId: payload.expenses.single.tagId,
+      createdAt: payload.expenses.single.createdAt,
+      updatedAt: payload.expenses.single.updatedAt,
+      externalId: payload.expenses.single.externalId,
+      fxCurrency: payload.expenses.single.fxCurrency,
+      fxAmountMinor: payload.expenses.single.fxAmountMinor,
+    );
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: [scheduled],
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).expenses.single;
+    // Without these two, a restore would keep the recurring flag but lose the
+    // schedule — the reminder would never fire again.
+    expect(decoded.isRecurring, isTrue);
+    expect(decoded.recurrence, Recurrence.monthly);
+    expect(decoded.nextDueDate, DateTime(2026, 8, 1));
+    expect(decoded.recurrenceEndDate, DateTime(2027, 1, 1));
+  });
+
+  test('a pre-v6 file (no schedule keys) decodes as nothing scheduled', () async {
+    final v5Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 5,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['expenses'] = [
+          _samplePayload().expenses.single.toJson()
+            ..remove('nextDueDate')
+            ..remove('recurrenceEndDate'),
+        ],
+    });
+
+    final decoded = (await decodePayload(v5Json)).expenses.single;
+    expect(decoded.nextDueDate, isNull);
+    expect(decoded.recurrenceEndDate, isNull);
+    // The v4 fx pair is untouched by the missing v6 keys.
+    expect(decoded.fxCurrency, 'JPY');
+  });
 
   test('a v5 trip date range round-trips', () async {
     final envelope = await encodeEnvelope(_samplePayload());

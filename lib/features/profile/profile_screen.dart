@@ -13,6 +13,7 @@ import 'delete_all_data_flow.dart';
 import 'edit_profile_screen.dart';
 import 'lifetime_stats.dart';
 import 'profile_provider.dart';
+import '../expenses/recurring_screen.dart';
 import '../recap/monthly_recap_screen.dart';
 
 /// Profile (FR-51, FR-57) — prototype phone 10. The account/settings hub:
@@ -157,6 +158,14 @@ class ProfileScreen extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (_) => const BackupRestoreScreen(),
                     ),
+                  ),
+                ),
+                _MenuRow(
+                  icon: Icons.repeat_rounded,
+                  title: 'Recurring expenses',
+                  subtitle: 'Rent, EMIs and subscriptions you track',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RecurringScreen()),
                   ),
                 ),
                 _MenuRow(

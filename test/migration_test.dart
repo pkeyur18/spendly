@@ -51,7 +51,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v9 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v10 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -74,6 +74,15 @@ void main() {
               (amount_minor, category_id, date, created_at, updated_at)
             VALUES (24500, 1, 1750000000, 1750000000, 1750000000)
           ''');
+          // A row already flagged recurring before any scheduling existed —
+          // from<10 must add its columns without inventing a due date for it.
+          rawDb.execute('''
+            INSERT INTO expenses
+              (amount_minor, category_id, date, is_recurring, recurrence,
+               created_at, updated_at)
+            VALUES (2000000, 1, 1750000000, 1, 'monthly', 1750000000,
+                    1750000000)
+          ''');
           rawDb.execute('PRAGMA user_version = 1');
         },
       ),
@@ -81,7 +90,7 @@ void main() {
     addTearDown(db.close);
 
     // Migration runs lazily on first use — this drives it through every
-    // `if (from < N)` block (2 through 9) in one pass, since the seeded
+    // `if (from < N)` block (2 through 10) in one pass, since the seeded
     // database starts at v1.
     final categories = await db.select(db.categories).get();
     final budgets = await db.select(db.budgets).get();
@@ -92,7 +101,7 @@ void main() {
     // the pre-existing "Rent" row plus those 10.
     expect(categories, hasLength(11));
     expect(budgets, hasLength(1));
-    expect(expenses, hasLength(1));
+    expect(expenses, hasLength(2));
     expect(tags, isEmpty);
 
     final category = categories.firstWhere((c) => c.name == 'Rent');
@@ -112,8 +121,7 @@ void main() {
 
     // from<8: the fx columns land on the populated expenses table and read
     // back null — a pre-v8 expense was, and stays, home currency.
-    final expense = expenses.single;
-    expect(expense.amountMinor, 24500);
+    final expense = expenses.firstWhere((e) => e.amountMinor == 24500);
     expect(expense.fxCurrency, isNull);
     expect(expense.fxAmountMinor, isNull);
     expect(expense.isForeign, isFalse);
@@ -140,5 +148,17 @@ void main() {
     )..where((t) => t.id.equals(tagId))).getSingle();
     expect(tag.tripStartDate, isNull);
     expect(tag.tripEndDate, isNull);
+
+    // from<10: the scheduling columns land on the populated expenses table.
+    // The pre-existing recurring row keeps its flag but gets NO invented due
+    // date — there is nothing to reconstruct one from, and a guessed date
+    // would fire a reminder the user never asked for.
+    final recurring = expenses.firstWhere((e) => e.isRecurring);
+    expect(recurring.recurrence, Recurrence.monthly);
+    expect(recurring.nextDueDate, isNull);
+    expect(recurring.recurrenceEndDate, isNull);
+    // The non-recurring row is untouched by all of this.
+    expect(expense.isRecurring, isFalse);
+    expect(expense.nextDueDate, isNull);
   });
 }

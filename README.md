@@ -8,10 +8,10 @@ own a full versioned backup so your data is never truly lost.
 Single codebase (Flutter), no account, no server. Money is stored as integer minor units
 (paise) — never float. Currency is INR (₹) with device-locale formatting.
 
-> **Status:** built through the ad-hoc Sprint 12 (ignore-category-for-budget toggle), plus
-> a post-Sprint-12 Monthly Recap feature. Drift schema v7, backup format v3, 190 passing
-> tests (37 test files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are
-> not started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
+> **Status:** built through the UX-enhancement phases 1–2 (daily-loop friction fixes,
+> then recurring expenses), on top of Sprint 12 and the Monthly Recap feature. Drift
+> schema v10, backup format v6, 348 passing tests (48 test files). Beta & hardening
+> (Sprint 8) and store submission (Sprint 9) are not started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
 
 ---
@@ -44,6 +44,12 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   falling-emoji confetti overlay, "you went over budget" in amber, or a plain total if no
   budget is set) plus a top-3 spending categories card. Also reachable any time via a
   permanent "Monthly recap" row in Profile.
+- **Recurring expenses** — mark any expense daily/weekly/monthly with an optional end
+  date; the app reminds on the due date and the user confirms, never auto-logs (FR-7).
+  Occurrences missed while the app was closed are all recovered, each confirmed or
+  skipped on its own, and a month-end series stays pinned to its day instead of drifting
+  onto the 28th after February. A "payments to confirm" card appears on Home only when
+  something is due; a permanent "Recurring expenses" row in Profile manages every series.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -66,7 +72,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v7 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v10 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |
@@ -161,5 +167,5 @@ seeded with 18 default categories. No configuration or account is required.
 - **Recurring expenses remind, never auto-log** — the user confirms on the due date.
 - **Backups are optionally password-protected** (AES-256-GCM + PBKDF2), per the user's choice.
 - **Auto-backup runs on app launch/resume** (no background service), default weekly.
-- **Categories and expenses carry a stable `externalId`** (schema v7), independent of the
+- **Categories and expenses carry a stable `externalId`** (since schema v7), independent of the
   local row ID, used to match records across devices during a backup Merge.

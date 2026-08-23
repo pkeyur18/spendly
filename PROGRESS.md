@@ -5,10 +5,21 @@
 
 ## Current status
 
-- **Sprint:** post-**Sprint 12 (Ad-Hoc) — Ignore category for budget** (see Sprint 12 section at the bottom). Sprints 0–7 + 10 shipped (Scaffold → Polish/Accessibility + Profile), Sprint 11 added Trips/All-Transactions/per-month budgets/picker UX, and Sprint 12 added a per-category **"ignore for budget"** toggle (fixed costs like rent/EMI excluded from daily totals, budget math, top categories, and top expenses, while staying visible in All Transactions and exports). Drift schema is now **v6**; backup format is still **v3** (no new persisted field needed backup changes — the flag lives on `categories`, already in the backup payload). Everything is **built + `flutter analyze`/`flutter test` green (162 tests)**, awaiting the same real-device manual verification called out in Sprints 6/7/10/11. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
-- **Next:** Sprint 8 (Beta & Hardening) — TestFlight/Internal Testing builds, crash reporting + opt-in analytics, a week-long bug bash, edge cases (currency-locale mid-month, date/time changes, cross-version restore, 1000+ transactions).
-- **Docs:** `requirement_docs/spendly-requirements.md` (now **v2.1**) and `requirement_docs/spendly-prototype.html` updated for the ignore-for-budget toggle (new FR-77). `README.md` reflects schema v6 / 161 tests. `docs/backup-schema.md` already covers backup v1→v3 (unchanged by Sprint 12).
-- **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the app) rather than writing natively in-widget — see Sprint 6 section below for the full tradeoff.
+- **Phase:** UX-enhancement plan, phases 1-2 complete (see
+  `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the full phased plan
+  and the ledger architecture decision). Branch `feat/ux-enhancements`.
+  Sprints 0-7 + 10-12 and Monthly Recap shipped before this.
+  **Drift schema is now v10; backup format v6.** `flutter analyze` clean,
+  `flutter test` **348 passing** (48 test files).
+- **Next:** Phase 3 (receipt photos, schema v11), then phases 4-6 (accounts, income,
+  transfers) and phase 7 (insights, goals, app lock, autocomplete). Sprint 8/9 (Beta &
+  Hardening, Store Submission) still not started.
+- **Doc drift found and fixed:** README claimed schema v7 / backup v3 / 190 tests while
+  the code was already at schema v9 / backup v5 — FX spending and trip date-range
+  auto-tagging had shipped with no README or PROGRESS entry. Both files now match the
+  code. Check this before trusting a version number in any doc.
+- **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the
+  app) rather than writing natively in-widget — see Sprint 6 section below.
 
 ## Locked decisions (from PRD open questions)
 
@@ -565,3 +576,90 @@ dart run build_runner build      # after any Drift schema change
 flutter run                      # pick iOS simulator or Android emulator
 flutter analyze && flutter test
 ```
+
+## UX Phase 1 — done (daily-loop friction)
+
+Commits `a724b0c` (spec), `dbd72bb` (items 1-4), `63bb347` (item 5).
+
+- [x] **Pace-aware hero card** → `lib/features/budgets/budget_pace.dart` (pure) +
+      `_PaceLine` in `home_screen.dart`. A month total and "61% of budget" cannot be
+      acted on without knowing how much month is left. Three states, not two —
+      "spending too fast but still inside budget" needs a different reaction than
+      "budget gone". Per-day figure truncates so `daysLeft x perDayLeft` can never
+      exceed what remains.
+- [x] **Undo on delete** → `ExpenseRepository.restore`. Replaced the "can't be undone"
+      dialog. Restores the ORIGINAL id and `externalId` — a fresh `externalId` would
+      read as a different record to a backup Merge and fork the row across devices.
+      Safe to reuse the id because the table is `PRIMARY KEY AUTOINCREMENT`.
+- [x] **Duplicate a transaction** → `QuickAddScreen.duplicateOf` (a separate field from
+      `editing`, never a flag on it, so every edit-only path stays edit-only and a copy
+      structurally cannot overwrite its source) + a long-press actions sheet on
+      `ExpenseTile`. The sheet also gave Delete its first non-swipe path.
+- [x] **Transaction search** → `parseExpenseQuery` + a `search` clause on
+      `watchInRange`. Runs in SQL, not over the loaded page (the list pages at 100 rows,
+      so Dart-side filtering would silently miss unloaded rows). An active search
+      escapes the visible date range and searches all history.
+- [x] **Real tabs** → `lib/features/home/app_shell.dart`. Replaced push-per-tab, which
+      grew the back stack and lost scroll/filter state, and removed two "coming soon"
+      snackbars. Tabs build lazily — `IndexedStack` builds every child eagerly, which
+      would drag three more screens' Drift subscriptions onto the cold-start path.
+      Category Manager's FAB moved to an app-bar action so the shell owns the one FAB.
+
+## UX Phase 2 — done (recurring expenses, FR-7 finally shipped)
+
+FR-7 had a data model and tested date math since Sprint 1, but nothing wrote the
+columns and no reminder was ever scheduled.
+
+**Model:** a recurring expense is an ordinary expense row that also carries the
+schedule. Future occurrences are NOT materialised; the series is a single
+`nextDueDate` pointer, so occurrences that fell due while the app was closed are
+recovered by walking from the pointer to today.
+
+- [x] **Schema v10** → `expenses.nextDueDate`, `expenses.recurrenceEndDate`. Both
+      nullable, no backfill: pre-v10 rows flagged `is_recurring` have no due date to
+      reconstruct, and a guessed one would fire a reminder nobody asked for. They show
+      as "not scheduled" and get a real date when edited. `migration_test.dart` seeds
+      such a row.
+- [x] **Backup v6** → both fields on each expense. Without them a restore would keep
+      the recurring flag but lose the schedule, so the reminder would never fire again.
+      Pre-v6 files read the missing keys as null. `docs/backup-schema.md` updated.
+- [x] **Pure scheduling** → `recurring_schedule.dart`: `pendingOccurrences`,
+      `nextDueAfter`, `firstDueDate`, capped at 24 surfaced occurrences.
+- [x] **Month-end drift bug found and fixed here.** Chaining the pre-existing
+      `nextOccurrence` gives Jan 31 -> Feb 28 -> Mar 28 -> the 28th forever: rent on the
+      31st silently becomes rent on the 28th after one February. `_step` re-applies the
+      anchor day each step, clamping only where the month is genuinely short.
+      `nextOccurrence` itself is unchanged — the fix is in the caller that walks it.
+- [x] **`RecurringRepository`** → `confirm` (logs a real expense dated the occurrence,
+      inside a transaction, and advances the pointer), `skip` (advances without
+      logging), `cancel` (stops the schedule, keeps the expense — the money really was
+      spent). A confirmed copy is deliberately NOT itself recurring, or every
+      confirmation would fork the series into two advancing templates.
+- [x] **Quick Add repeat chip** → frequency picker + optional end date. An in-flight
+      schedule is preserved on save; only a changed frequency/end date, or a template
+      that never had a due date, earns a recomputed one. A duplicate never inherits the
+      recurrence.
+- [x] **`RecurringScreen`** (Profile row + Home card both route here). Missed
+      occurrences are listed in full but only the OLDEST is actionable: the series is a
+      single pointer, so resolving out of order would silently swallow the ones skipped
+      over. Each still gets its own confirm-or-skip decision.
+- [x] **Home "payments to confirm" card** — renders nothing when nothing is due.
+- [x] **Reminders** → `NotificationService.scheduleRecurringReminders`, re-armed by
+      `recurringReminderCheckProvider` on cold start and resume (no background
+      execution exists in this project by design). Ids are `500000 + expense id` so a
+      re-schedule replaces its own slot. Already-overdue occurrences are deliberately
+      not scheduled — a past timestamp fires instantly or is dropped, and the Home card
+      already surfaces them permanently.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **348 passed** (was 272 at the start of phase 1).
+- Not run on a device/simulator — manual verification still outstanding, same as
+  Sprints 6/7/10/11.
+
+### Deferred / notes
+- **No test covers `scheduleRecurringReminders` itself.** There is no notification test
+  harness anywhere in this repo and no fake plugin; the scheduling *inputs* are covered
+  through `recurringReminderCheckProvider`'s data, the `zonedSchedule` call is not.
+- Resolution is strictly oldest-first by design (single-pointer model). Out-of-order
+  resolution would need per-occurrence records — a child-row link plus a skip marker.

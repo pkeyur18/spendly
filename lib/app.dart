@@ -8,6 +8,7 @@ import 'core/widgets/async_state_views.dart';
 import 'features/backup/backup_providers.dart';
 import 'features/budgets/budget_nudge_provider.dart';
 import 'features/expenses/quick_add_screen.dart';
+import 'features/expenses/recurring_repository.dart';
 import 'features/home/app_shell.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/profile/profile_provider.dart';
@@ -68,6 +69,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       ref.invalidate(autoBackupCheckProvider);
       ref.invalidate(monthlyRecapCheckProvider);
       ref.invalidate(budgetNudgeCheckProvider);
+      ref.invalidate(recurringReminderCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
     }
   }
@@ -90,6 +92,9 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     ref.watch(
       budgetNudgeCheckProvider,
     ); // fires the once-per-month budget nudge check
+    // Re-arms recurring due-date reminders; no background job exists, so the
+    // schedule is rebuilt while the app is open.
+    ref.watch(recurringReminderCheckProvider);
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);

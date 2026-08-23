@@ -11,6 +11,8 @@ import '../dev/debug_data_screen.dart';
 import '../budgets/budget_setup_screen.dart';
 import '../expenses/all_transactions_screen.dart';
 import '../expenses/expense_repository.dart';
+import '../expenses/recurring_repository.dart';
+import '../expenses/recurring_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../profile/profile_provider.dart';
 import 'dashboard_providers.dart';
@@ -67,6 +69,7 @@ class HomeScreen extends ConsumerWidget {
         children: [
           _greeting(context, palette, profile?.name ?? ''),
           const _HeroCard(),
+          const _DueRecurringCard(),
           const SectionTitle('Where it went'),
           const SpendDonut(),
           const SectionTitle('Last 6 months'),
@@ -132,6 +135,85 @@ class HomeScreen extends ConsumerWidget {
       child: Text(
         'No expenses yet — tap + to log one.',
         style: TextStyle(color: palette.textDim, fontSize: 13),
+      ),
+    );
+  }
+}
+
+/// "Waiting for you" nudge — shown only when a recurring expense has come due
+/// (FR-7). Rent and EMIs are the largest expenses a person has and the easiest
+/// to forget, so the reminder belongs above the fold rather than only in a
+/// notification that may have been swiped away.
+///
+/// Renders nothing at all when nothing is due, so the dashboard is unchanged
+/// for anyone not using recurring expenses.
+class _DueRecurringCard extends ConsumerWidget {
+  const _DueRecurringCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final due = ref.watch(dueRecurringProvider);
+    if (due.isEmpty) return const SizedBox.shrink();
+
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final occurrences = due.fold<int>(0, (n, s) => n + s.pending.length);
+    final first = due.first;
+    final byId = ref.watch(categoriesByIdProvider);
+    final title = first.template.note?.isNotEmpty == true
+        ? first.template.note!
+        : (byId[first.template.categoryId]?.name ?? 'An expense');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const RecurringScreen()),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppRadius.icon),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.repeat_rounded,
+                size: 20,
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    occurrences == 1
+                        ? '1 payment to confirm'
+                        : '$occurrences payments to confirm',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    due.length == 1
+                        ? title
+                        : '$title and ${due.length - 1} more',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: palette.textDim),
+          ],
+        ),
       ),
     );
   }

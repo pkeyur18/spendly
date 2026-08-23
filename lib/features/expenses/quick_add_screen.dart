@@ -20,6 +20,7 @@ import '../home/dashboard_providers.dart';
 import '../tags/tag_edit_sheet.dart';
 import '../tags/tag_repository.dart';
 import 'expense_repository.dart';
+import 'recurring_schedule.dart';
 import 'widgets/expense_tile.dart' show relativeDayLabel;
 
 /// Fast expense entry (FR-2, FR-5): keypad + category grid, ≤3-tap save.
@@ -161,6 +162,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   /// closing an untouched form never prompts.
   bool _touched = false;
 
+  /// Repeat schedule, null = does not repeat. Only ever inherited from an
+  /// edit: a copy ("add again") must not silently become a second template
+  /// for the same series.
+  late Recurrence? _recurrence = widget.editing?.recurrence;
+  late DateTime? _recurrenceEndDate = widget.editing?.recurrenceEndDate;
+
   bool get _isEdit => widget.editing != null;
 
   bool get _isDirty => _touched || _noteController.text.trim() != _initialNote;
@@ -251,6 +258,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                               children: [
                                 _dateChip(context, palette),
                                 _tripChip(context, palette),
+                                _repeatChip(context, palette),
                               ],
                             ),
                           ),
@@ -586,6 +594,127 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       palette: palette,
       emphasized: selected != null,
       emphasisColor: selected == null ? null : Color(selected.colorValue),
+    );
+  }
+
+  /// Repeat chip: shows the schedule or "Repeat", tap opens the picker.
+  Widget _repeatChip(BuildContext context, AppPalette palette) {
+    final label = _recurrence == null
+        ? 'Repeat'
+        : recurrenceLabel(_recurrence!);
+    return _metaChip(
+      icon: Icons.repeat_rounded,
+      label: label,
+      semanticsLabel: _recurrence == null
+          ? 'Repeat, off'
+          : 'Repeats $label${_recurrenceEndDate == null ? '' : ', until '
+              '\${relativeDayLabel(_recurrenceEndDate!)}'}',
+      onTap: _openRepeatSheet,
+      palette: palette,
+      emphasized: _recurrence != null,
+      emphasisColor: _recurrence == null ? null : AppColors.primary,
+    );
+  }
+
+  Future<void> _openRepeatSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          void choose(Recurrence? r) {
+            setState(() {
+              _recurrence = r;
+              _touched = true;
+              // An end date without a schedule is meaningless, and leaving a
+              // stale one behind would silently truncate the series if repeat
+              // were switched back on later.
+              if (r == null) _recurrenceEndDate = null;
+            });
+            setSheetState(() {});
+          }
+
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                  ),
+                  child: Text(
+                    'Repeat',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                RadioGroup<Recurrence?>(
+                  groupValue: _recurrence,
+                  onChanged: choose,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<Recurrence?>(
+                        value: null,
+                        title: const Text('Does not repeat'),
+                      ),
+                      for (final r in Recurrence.values)
+                        RadioListTile<Recurrence?>(
+                          value: r,
+                          title: Text(recurrenceLabel(r)),
+                        ),
+                    ],
+                  ),
+                ),
+                if (_recurrence != null)
+                  ListTile(
+                    leading: const Icon(Icons.event_busy_outlined),
+                    title: const Text('Ends'),
+                    subtitle: Text(
+                      _recurrenceEndDate == null
+                          ? 'Never — until you switch it off'
+                          : relativeDayLabel(_recurrenceEndDate!),
+                    ),
+                    trailing: _recurrenceEndDate == null
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear end date',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              setState(() => _recurrenceEndDate = null);
+                              setSheetState(() {});
+                            },
+                          ),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: sheetContext,
+                        initialDate: _recurrenceEndDate ??
+                            DateTime.now().add(const Duration(days: 365)),
+                        firstDate: _selectedDate,
+                        lastDate: DateTime(DateTime.now().year + 20),
+                      );
+                      if (picked == null) return;
+                      setState(() {
+                        _recurrenceEndDate = picked;
+                        _touched = true;
+                      });
+                      setSheetState(() {});
+                    },
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -961,6 +1090,24 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final oldAmount = widget.editing?.amount ?? Money.zero;
     final note = _noteController.text.trim();
     final repo = ref.read(expenseRepositoryProvider);
+    // Preserve an in-flight schedule: re-deriving the due date on every save
+    // would rewind a series the user has already been confirming. Only a
+    // changed frequency or end date — or a template that never had a date, as
+    // the v10 migration leaves pre-existing recurring rows — earns a new one.
+    final previous = widget.editing;
+    final scheduleChanged =
+        _recurrence != previous?.recurrence ||
+        _recurrenceEndDate != previous?.recurrenceEndDate ||
+        previous?.nextDueDate == null;
+    final nextDue = _recurrence == null
+        ? null
+        : scheduleChanged
+        ? firstDueDate(
+            _selectedDate,
+            _recurrence,
+            endDate: _recurrenceEndDate,
+          )
+        : previous!.nextDueDate;
     if (_isEdit) {
       await repo.update(
         widget.editing!.id,
@@ -968,6 +1115,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         categoryId: categoryId,
         date: _selectedDate,
         note: Value(note.isEmpty ? null : note),
+        isRecurring: _recurrence != null && nextDue != null,
+        recurrence: Value(_recurrence),
+        nextDueDate: Value(nextDue),
+        recurrenceEndDate: Value(_recurrenceEndDate),
         tagId: Value(_tagId),
         // Always passed, never absent: moving an expense off a trip has to
         // clear the foreign receipt, not leave a stale one behind.
@@ -980,6 +1131,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         categoryId: categoryId,
         date: _selectedDate,
         note: note.isEmpty ? null : note,
+        // A schedule with no future occurrence left (end date already passed)
+        // is not a template — it is a plain expense.
+        isRecurring: _recurrence != null && nextDue != null,
+        recurrence: _recurrence,
+        nextDueDate: nextDue,
+        recurrenceEndDate: _recurrenceEndDate,
         tagId: _tagId,
         fxCurrency: resolved.fxCurrency,
         fxAmount: resolved.fxAmount,

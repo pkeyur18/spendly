@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 5,
+  "version": 6,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 5,
+  "version": 6,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -265,6 +265,36 @@ pattern as every field above.
   in `tag_edit_sheet.dart`, via `TagRepository.hasOverlappingDateRange`), but a restored
   backup is trusted as-is — Merge/Replace never re-validates this, the same way it never
   re-validates any other field.
+
+## v6 — recurring schedule (schema v10)
+
+A recurring expense is an ordinary expense row that also carries the schedule for its
+series — see `lib/features/expenses/recurring_schedule.dart`. Future occurrences are
+never materialised as rows; the series is tracked by a single pointer, so a backup only
+needs to carry that pointer and the optional end date.
+
+On each `expenses` entry:
+
+- `nextDueDate` (string, nullable, ISO 8601) — when the next occurrence falls due.
+  Null once the series has finished, or on any non-recurring expense.
+- `recurrenceEndDate` (string, nullable, ISO 8601) — last date the series may produce an
+  occurrence on. Null = repeats until switched off.
+
+`isRecurring` and `recurrence` already existed in every prior version; without these two
+new keys a restored file would keep the recurring *flag* but have nothing scheduled, so
+the reminder would never fire again. A pre-v6 file has neither key, and
+`BackupExpense.fromJson` reads a missing key as `null` — same additive, no-version-branch
+pattern as every field above. That leaves a restored pre-v6 recurring expense in exactly
+the state the schema-v10 migration leaves an existing one: flagged, unscheduled, and
+listed as "not scheduled" until the user opens it. No due date is invented, because
+there is nothing to reconstruct one from and a guessed date would fire a reminder the
+user never asked for.
+
+- **Replace** restores both verbatim, same as every other expense field.
+- **Merge** — a brand-new expense inserted by Merge carries over its schedule; a matched
+  pre-existing expense is left untouched, same as every other field. The schedule takes
+  no part in the fingerprint, so re-importing a backup after confirming an occurrence
+  locally does not duplicate the expense.
 
 ## Merge algorithm (`externalId` first, natural-key fallback)
 

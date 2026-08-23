@@ -77,6 +77,21 @@ class Expenses extends Table {
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
   TextColumn get recurrence => textEnum<Recurrence>().nullable()();
 
+  /// When the next occurrence of this recurring expense falls due, or null if
+  /// it doesn't recur or the series has finished.
+  ///
+  /// The series is tracked by this single pointer rather than by
+  /// materialising future rows: occurrences that fell due while the app was
+  /// closed are recovered by walking from here to today (see
+  /// `recurring_schedule.dart`), so nothing is missed and nothing is logged
+  /// without the user confirming it (the locked FR-7 decision — remind, never
+  /// auto-log).
+  DateTimeColumn get nextDueDate => dateTime().nullable()();
+
+  /// Optional last date the series may produce an occurrence on — for a lease
+  /// or a fixed-term EMI. Null = repeats until switched off.
+  DateTimeColumn get recurrenceEndDate => dateTime().nullable()();
+
   /// Optional grouping across categories (e.g. a vacation trip) — orthogonal
   /// to [categoryId], which an expense keeps regardless of its tag.
   IntColumn get tagId => integer().nullable().references(Tags, #id)();
@@ -179,7 +194,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -281,6 +296,18 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(tags, tags.tripStartDate);
           await m.addColumn(tags, tags.tripEndDate);
         }
+      }
+      if (from < 10) {
+        // Recurring-expense scheduling (FR-7). Both nullable with no default,
+        // so ADD COLUMN is safe on a populated table.
+        //
+        // No backfill for rows that already have is_recurring = 1: those were
+        // written when nothing could set a recurrence or schedule a reminder,
+        // so there is no due date to reconstruct. They surface in the manage
+        // list as "not scheduled" and get a due date the moment the user
+        // edits them, rather than having one invented here.
+        await m.addColumn(expenses, expenses.nextDueDate);
+        await m.addColumn(expenses, expenses.recurrenceEndDate);
       }
     },
   );

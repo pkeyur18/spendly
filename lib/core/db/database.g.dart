@@ -1315,6 +1315,29 @@ class $ExpensesTable extends Expenses
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       ).withConverter<Recurrence?>($ExpensesTable.$converterrecurrencen);
+  static const VerificationMeta _nextDueDateMeta = const VerificationMeta(
+    'nextDueDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextDueDate = GeneratedColumn<DateTime>(
+    'next_due_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _recurrenceEndDateMeta = const VerificationMeta(
+    'recurrenceEndDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> recurrenceEndDate =
+      GeneratedColumn<DateTime>(
+        'recurrence_end_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _tagIdMeta = const VerificationMeta('tagId');
   @override
   late final GeneratedColumn<int> tagId = GeneratedColumn<int>(
@@ -1395,6 +1418,8 @@ class $ExpensesTable extends Expenses
     paymentMethod,
     isRecurring,
     recurrence,
+    nextDueDate,
+    recurrenceEndDate,
     tagId,
     fxCurrency,
     fxAmountMinor,
@@ -1465,6 +1490,24 @@ class $ExpensesTable extends Expenses
         isRecurring.isAcceptableOrUnknown(
           data['is_recurring']!,
           _isRecurringMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_due_date')) {
+      context.handle(
+        _nextDueDateMeta,
+        nextDueDate.isAcceptableOrUnknown(
+          data['next_due_date']!,
+          _nextDueDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recurrence_end_date')) {
+      context.handle(
+        _recurrenceEndDateMeta,
+        recurrenceEndDate.isAcceptableOrUnknown(
+          data['recurrence_end_date']!,
+          _recurrenceEndDateMeta,
         ),
       );
     }
@@ -1550,6 +1593,14 @@ class $ExpensesTable extends Expenses
           data['${effectivePrefix}recurrence'],
         ),
       ),
+      nextDueDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_due_date'],
+      ),
+      recurrenceEndDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}recurrence_end_date'],
+      ),
       tagId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}tag_id'],
@@ -1600,6 +1651,21 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
   final bool isRecurring;
   final Recurrence? recurrence;
 
+  /// When the next occurrence of this recurring expense falls due, or null if
+  /// it doesn't recur or the series has finished.
+  ///
+  /// The series is tracked by this single pointer rather than by
+  /// materialising future rows: occurrences that fell due while the app was
+  /// closed are recovered by walking from here to today (see
+  /// `recurring_schedule.dart`), so nothing is missed and nothing is logged
+  /// without the user confirming it (the locked FR-7 decision — remind, never
+  /// auto-log).
+  final DateTime? nextDueDate;
+
+  /// Optional last date the series may produce an occurrence on — for a lease
+  /// or a fixed-term EMI. Null = repeats until switched off.
+  final DateTime? recurrenceEndDate;
+
   /// Optional grouping across categories (e.g. a vacation trip) — orthogonal
   /// to [categoryId], which an expense keeps regardless of its tag.
   final int? tagId;
@@ -1631,6 +1697,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     this.paymentMethod,
     required this.isRecurring,
     this.recurrence,
+    this.nextDueDate,
+    this.recurrenceEndDate,
     this.tagId,
     this.fxCurrency,
     this.fxAmountMinor,
@@ -1656,6 +1724,12 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       map['recurrence'] = Variable<String>(
         $ExpensesTable.$converterrecurrencen.toSql(recurrence),
       );
+    }
+    if (!nullToAbsent || nextDueDate != null) {
+      map['next_due_date'] = Variable<DateTime>(nextDueDate);
+    }
+    if (!nullToAbsent || recurrenceEndDate != null) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate);
     }
     if (!nullToAbsent || tagId != null) {
       map['tag_id'] = Variable<int>(tagId);
@@ -1688,6 +1762,12 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       recurrence: recurrence == null && nullToAbsent
           ? const Value.absent()
           : Value(recurrence),
+      nextDueDate: nextDueDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextDueDate),
+      recurrenceEndDate: recurrenceEndDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceEndDate),
       tagId: tagId == null && nullToAbsent
           ? const Value.absent()
           : Value(tagId),
@@ -1721,6 +1801,10 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       recurrence: $ExpensesTable.$converterrecurrencen.fromJson(
         serializer.fromJson<String?>(json['recurrence']),
       ),
+      nextDueDate: serializer.fromJson<DateTime?>(json['nextDueDate']),
+      recurrenceEndDate: serializer.fromJson<DateTime?>(
+        json['recurrenceEndDate'],
+      ),
       tagId: serializer.fromJson<int?>(json['tagId']),
       fxCurrency: serializer.fromJson<String?>(json['fxCurrency']),
       fxAmountMinor: serializer.fromJson<int?>(json['fxAmountMinor']),
@@ -1743,6 +1827,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       'recurrence': serializer.toJson<String?>(
         $ExpensesTable.$converterrecurrencen.toJson(recurrence),
       ),
+      'nextDueDate': serializer.toJson<DateTime?>(nextDueDate),
+      'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
       'tagId': serializer.toJson<int?>(tagId),
       'fxCurrency': serializer.toJson<String?>(fxCurrency),
       'fxAmountMinor': serializer.toJson<int?>(fxAmountMinor),
@@ -1761,6 +1847,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     Value<String?> paymentMethod = const Value.absent(),
     bool? isRecurring,
     Value<Recurrence?> recurrence = const Value.absent(),
+    Value<DateTime?> nextDueDate = const Value.absent(),
+    Value<DateTime?> recurrenceEndDate = const Value.absent(),
     Value<int?> tagId = const Value.absent(),
     Value<String?> fxCurrency = const Value.absent(),
     Value<int?> fxAmountMinor = const Value.absent(),
@@ -1778,6 +1866,10 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
         : this.paymentMethod,
     isRecurring: isRecurring ?? this.isRecurring,
     recurrence: recurrence.present ? recurrence.value : this.recurrence,
+    nextDueDate: nextDueDate.present ? nextDueDate.value : this.nextDueDate,
+    recurrenceEndDate: recurrenceEndDate.present
+        ? recurrenceEndDate.value
+        : this.recurrenceEndDate,
     tagId: tagId.present ? tagId.value : this.tagId,
     fxCurrency: fxCurrency.present ? fxCurrency.value : this.fxCurrency,
     fxAmountMinor: fxAmountMinor.present
@@ -1807,6 +1899,12 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       recurrence: data.recurrence.present
           ? data.recurrence.value
           : this.recurrence,
+      nextDueDate: data.nextDueDate.present
+          ? data.nextDueDate.value
+          : this.nextDueDate,
+      recurrenceEndDate: data.recurrenceEndDate.present
+          ? data.recurrenceEndDate.value
+          : this.recurrenceEndDate,
       tagId: data.tagId.present ? data.tagId.value : this.tagId,
       fxCurrency: data.fxCurrency.present
           ? data.fxCurrency.value
@@ -1833,6 +1931,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           ..write('paymentMethod: $paymentMethod, ')
           ..write('isRecurring: $isRecurring, ')
           ..write('recurrence: $recurrence, ')
+          ..write('nextDueDate: $nextDueDate, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('tagId: $tagId, ')
           ..write('fxCurrency: $fxCurrency, ')
           ..write('fxAmountMinor: $fxAmountMinor, ')
@@ -1853,6 +1953,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     paymentMethod,
     isRecurring,
     recurrence,
+    nextDueDate,
+    recurrenceEndDate,
     tagId,
     fxCurrency,
     fxAmountMinor,
@@ -1872,6 +1974,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           other.paymentMethod == this.paymentMethod &&
           other.isRecurring == this.isRecurring &&
           other.recurrence == this.recurrence &&
+          other.nextDueDate == this.nextDueDate &&
+          other.recurrenceEndDate == this.recurrenceEndDate &&
           other.tagId == this.tagId &&
           other.fxCurrency == this.fxCurrency &&
           other.fxAmountMinor == this.fxAmountMinor &&
@@ -1889,6 +1993,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
   final Value<String?> paymentMethod;
   final Value<bool> isRecurring;
   final Value<Recurrence?> recurrence;
+  final Value<DateTime?> nextDueDate;
+  final Value<DateTime?> recurrenceEndDate;
   final Value<int?> tagId;
   final Value<String?> fxCurrency;
   final Value<int?> fxAmountMinor;
@@ -1904,6 +2010,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.paymentMethod = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.recurrence = const Value.absent(),
+    this.nextDueDate = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
     this.tagId = const Value.absent(),
     this.fxCurrency = const Value.absent(),
     this.fxAmountMinor = const Value.absent(),
@@ -1920,6 +2028,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.paymentMethod = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.recurrence = const Value.absent(),
+    this.nextDueDate = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
     this.tagId = const Value.absent(),
     this.fxCurrency = const Value.absent(),
     this.fxAmountMinor = const Value.absent(),
@@ -1938,6 +2048,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Expression<String>? paymentMethod,
     Expression<bool>? isRecurring,
     Expression<String>? recurrence,
+    Expression<DateTime>? nextDueDate,
+    Expression<DateTime>? recurrenceEndDate,
     Expression<int>? tagId,
     Expression<String>? fxCurrency,
     Expression<int>? fxAmountMinor,
@@ -1954,6 +2066,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       if (paymentMethod != null) 'payment_method': paymentMethod,
       if (isRecurring != null) 'is_recurring': isRecurring,
       if (recurrence != null) 'recurrence': recurrence,
+      if (nextDueDate != null) 'next_due_date': nextDueDate,
+      if (recurrenceEndDate != null) 'recurrence_end_date': recurrenceEndDate,
       if (tagId != null) 'tag_id': tagId,
       if (fxCurrency != null) 'fx_currency': fxCurrency,
       if (fxAmountMinor != null) 'fx_amount_minor': fxAmountMinor,
@@ -1972,6 +2086,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Value<String?>? paymentMethod,
     Value<bool>? isRecurring,
     Value<Recurrence?>? recurrence,
+    Value<DateTime?>? nextDueDate,
+    Value<DateTime?>? recurrenceEndDate,
     Value<int?>? tagId,
     Value<String?>? fxCurrency,
     Value<int?>? fxAmountMinor,
@@ -1988,6 +2104,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       isRecurring: isRecurring ?? this.isRecurring,
       recurrence: recurrence ?? this.recurrence,
+      nextDueDate: nextDueDate ?? this.nextDueDate,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       tagId: tagId ?? this.tagId,
       fxCurrency: fxCurrency ?? this.fxCurrency,
       fxAmountMinor: fxAmountMinor ?? this.fxAmountMinor,
@@ -2026,6 +2144,12 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
         $ExpensesTable.$converterrecurrencen.toSql(recurrence.value),
       );
     }
+    if (nextDueDate.present) {
+      map['next_due_date'] = Variable<DateTime>(nextDueDate.value);
+    }
+    if (recurrenceEndDate.present) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate.value);
+    }
     if (tagId.present) {
       map['tag_id'] = Variable<int>(tagId.value);
     }
@@ -2058,6 +2182,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
           ..write('paymentMethod: $paymentMethod, ')
           ..write('isRecurring: $isRecurring, ')
           ..write('recurrence: $recurrence, ')
+          ..write('nextDueDate: $nextDueDate, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('tagId: $tagId, ')
           ..write('fxCurrency: $fxCurrency, ')
           ..write('fxAmountMinor: $fxAmountMinor, ')
@@ -3620,6 +3746,8 @@ typedef $$ExpensesTableCreateCompanionBuilder =
       Value<String?> paymentMethod,
       Value<bool> isRecurring,
       Value<Recurrence?> recurrence,
+      Value<DateTime?> nextDueDate,
+      Value<DateTime?> recurrenceEndDate,
       Value<int?> tagId,
       Value<String?> fxCurrency,
       Value<int?> fxAmountMinor,
@@ -3637,6 +3765,8 @@ typedef $$ExpensesTableUpdateCompanionBuilder =
       Value<String?> paymentMethod,
       Value<bool> isRecurring,
       Value<Recurrence?> recurrence,
+      Value<DateTime?> nextDueDate,
+      Value<DateTime?> recurrenceEndDate,
       Value<int?> tagId,
       Value<String?> fxCurrency,
       Value<int?> fxAmountMinor,
@@ -3727,6 +3857,16 @@ class $$ExpensesTableFilterComposer
   get recurrence => $composableBuilder(
     column: $table.recurrence,
     builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextDueDate => $composableBuilder(
+    column: $table.nextDueDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<String> get fxCurrency => $composableBuilder(
@@ -3845,6 +3985,16 @@ class $$ExpensesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get nextDueDate => $composableBuilder(
+    column: $table.nextDueDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get fxCurrency => $composableBuilder(
     column: $table.fxCurrency,
     builder: (column) => ColumnOrderings(column),
@@ -3956,6 +4106,16 @@ class $$ExpensesTableAnnotationComposer
         builder: (column) => column,
       );
 
+  GeneratedColumn<DateTime> get nextDueDate => $composableBuilder(
+    column: $table.nextDueDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get fxCurrency => $composableBuilder(
     column: $table.fxCurrency,
     builder: (column) => column,
@@ -4060,6 +4220,8 @@ class $$ExpensesTableTableManager
                 Value<String?> paymentMethod = const Value.absent(),
                 Value<bool> isRecurring = const Value.absent(),
                 Value<Recurrence?> recurrence = const Value.absent(),
+                Value<DateTime?> nextDueDate = const Value.absent(),
+                Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<int?> tagId = const Value.absent(),
                 Value<String?> fxCurrency = const Value.absent(),
                 Value<int?> fxAmountMinor = const Value.absent(),
@@ -4075,6 +4237,8 @@ class $$ExpensesTableTableManager
                 paymentMethod: paymentMethod,
                 isRecurring: isRecurring,
                 recurrence: recurrence,
+                nextDueDate: nextDueDate,
+                recurrenceEndDate: recurrenceEndDate,
                 tagId: tagId,
                 fxCurrency: fxCurrency,
                 fxAmountMinor: fxAmountMinor,
@@ -4092,6 +4256,8 @@ class $$ExpensesTableTableManager
                 Value<String?> paymentMethod = const Value.absent(),
                 Value<bool> isRecurring = const Value.absent(),
                 Value<Recurrence?> recurrence = const Value.absent(),
+                Value<DateTime?> nextDueDate = const Value.absent(),
+                Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<int?> tagId = const Value.absent(),
                 Value<String?> fxCurrency = const Value.absent(),
                 Value<int?> fxAmountMinor = const Value.absent(),
@@ -4107,6 +4273,8 @@ class $$ExpensesTableTableManager
                 paymentMethod: paymentMethod,
                 isRecurring: isRecurring,
                 recurrence: recurrence,
+                nextDueDate: nextDueDate,
+                recurrenceEndDate: recurrenceEndDate,
                 tagId: tagId,
                 fxCurrency: fxCurrency,
                 fxAmountMinor: fxAmountMinor,

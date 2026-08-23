@@ -225,6 +225,8 @@ class BackupExpense {
     required this.externalId,
     required this.fxCurrency,
     required this.fxAmountMinor,
+    required this.nextDueDate,
+    required this.recurrenceEndDate,
   });
 
   final int id;
@@ -250,6 +252,12 @@ class BackupExpense {
   final String? fxCurrency;
   final int? fxAmountMinor;
 
+  /// Recurring schedule (backup v6). A pre-v6 file restores as an expense
+  /// that is flagged recurring but has nothing scheduled — the same state the
+  /// v10 migration leaves such rows in, rather than a guessed due date.
+  final DateTime? nextDueDate;
+  final DateTime? recurrenceEndDate;
+
   factory BackupExpense.fromRow(ExpenseRow row) => BackupExpense(
     id: row.id,
     amountMinor: row.amountMinor,
@@ -265,6 +273,8 @@ class BackupExpense {
     externalId: row.externalId,
     fxCurrency: row.fxCurrency,
     fxAmountMinor: row.fxAmountMinor,
+    nextDueDate: row.nextDueDate,
+    recurrenceEndDate: row.recurrenceEndDate,
   );
 
   factory BackupExpense.fromJson(Map<String, dynamic> j) => BackupExpense(
@@ -286,6 +296,13 @@ class BackupExpense {
     // Pre-v4 files have no fx keys; absent = a home-currency expense.
     fxCurrency: j['fxCurrency'] as String?,
     fxAmountMinor: j['fxAmountMinor'] as int?,
+    // Pre-v6 files have no schedule keys; absent = nothing scheduled.
+    nextDueDate: j['nextDueDate'] == null
+        ? null
+        : DateTime.parse(j['nextDueDate'] as String),
+    recurrenceEndDate: j['recurrenceEndDate'] == null
+        ? null
+        : DateTime.parse(j['recurrenceEndDate'] as String),
   );
 
   Map<String, dynamic> toJson() => {
@@ -303,6 +320,8 @@ class BackupExpense {
     'externalId': externalId,
     'fxCurrency': fxCurrency,
     'fxAmountMinor': fxAmountMinor,
+    'nextDueDate': nextDueDate?.toIso8601String(),
+    'recurrenceEndDate': recurrenceEndDate?.toIso8601String(),
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
@@ -327,6 +346,8 @@ class BackupExpense {
         : Value(externalId),
     fxCurrency: Value(fxCurrency),
     fxAmountMinor: Value(fxAmountMinor),
+    nextDueDate: Value(nextDueDate),
+    recurrenceEndDate: Value(recurrenceEndDate),
   );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -347,6 +368,8 @@ class BackupExpense {
         : Value(externalId),
     fxCurrency: Value(fxCurrency),
     fxAmountMinor: Value(fxAmountMinor),
+    nextDueDate: Value(nextDueDate),
+    recurrenceEndDate: Value(recurrenceEndDate),
   );
 
   /// Content fingerprint used to dedupe on Merge — deliberately not the id,
