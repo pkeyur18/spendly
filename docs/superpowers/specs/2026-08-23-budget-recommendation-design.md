@@ -82,12 +82,19 @@ No new Drift table, no schema migration.
   after" — user then edits via the existing edit flow if they want to
   change it). Decision, flagged for review: apply-instantly, not a prefilled
   review sheet.
-- **Nudge**: reuse the existing local-notification pattern
-  (`scheduleMonthlyReport` in `notifications.dart`). Fire once, 3 days before
-  month-end, only if next month's overall budget is still unset. Decision,
-  flagged for review: 3-day lead time is a starting guess, easy to tune.
-  Guarded by a "last nudged month" setting key, same shape as
-  `monthlyRecapCheckProvider`.
+- **Nudge**: NOT a real OS notification — `scheduleMonthlyReport`'s
+  `zonedSchedule` pattern fires unconditionally (no Dart runs at fire time to
+  check state, since this app has no background execution by design); a
+  conditional system notification would require the background-job infra
+  already rejected for backup. Instead: an in-app banner, shown via the same
+  app-open/resume check pattern as `monthlyRecapCheckProvider` — on app
+  open/resume, if today is within the last 3 days of the month AND next
+  month's overall budget is still unset, show a dismissible banner prompting
+  to set it. Guarded by a "last nudged month" setting key so it shows at most
+  once per month-transition. Miss: if the app isn't opened in that 3-day
+  window, no nudge fires — accepted, same limitation the existing recap check
+  already has. Decision, flagged for review: 3-day lead time is a starting
+  guess, easy to tune.
 
 ## Edge cases
 
