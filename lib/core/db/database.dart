@@ -16,6 +16,10 @@ enum Recurrence { daily, weekly, monthly }
 /// Budget window. v1 is monthly-only but stored so v2 can add others.
 enum BudgetPeriod { monthly }
 
+/// How an account is held. Purely descriptive (an icon/grouping hint) — none
+/// of the money math treats one type differently from another.
+enum AccountType { cash, bank, card, wallet }
+
 /// 'YYYY-MM' key a budget row is scoped to (also the family key for budget
 /// providers — a String avoids DateTime equality footguns across rebuilds).
 String monthKeyFor(DateTime month) =>
@@ -61,6 +65,30 @@ class Categories extends Table {
       text().nullable().clientDefault(generateExternalId)();
 }
 
+/// Where money is held or spent from — cash, a bank account, a card, a
+/// wallet (schema v12). Balance is never stored: it is always derived as
+/// opening balance plus whatever ledger activity references this account,
+/// matching the app's existing preference for computed over persisted state
+/// (e.g. budget totals, lifetime stats).
+@DataClassName('AccountRow')
+class Accounts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 40)();
+  TextColumn get type => textEnum<AccountType>()();
+
+  /// In minor units, like every other amount in this schema. Never zero-ed
+  /// out or hidden — an account is never hard-deleted (see [isArchived]), so
+  /// this stays the one fixed point every later balance calculation starts
+  /// from.
+  IntColumn get openingBalanceMinor =>
+      integer().withDefault(const Constant(0))();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
+}
+
 @DataClassName('ExpenseRow')
 @TableIndex(name: 'idx_expenses_date', columns: {#date})
 @TableIndex(name: 'idx_expenses_category', columns: {#categoryId})
@@ -74,6 +102,11 @@ class Expenses extends Table {
   DateTimeColumn get date => dateTime()();
   TextColumn get note => text().nullable()();
   TextColumn get paymentMethod => text().nullable()();
+
+  /// Which account this was paid from, or null (not every expense has one
+  /// assigned — this is additive, not a replacement for [paymentMethod]).
+  IntColumn get accountId =>
+      integer().nullable().references(Accounts, #id)();
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
   TextColumn get recurrence => textEnum<Recurrence>().nullable()();
 
@@ -207,7 +240,15 @@ class Settings extends Table {
 }
 
 @DriftDatabase(
-  tables: [Categories, Expenses, Budgets, Settings, Tags, ExpenseReceipts],
+  tables: [
+    Categories,
+    Expenses,
+    Budgets,
+    Settings,
+    Tags,
+    ExpenseReceipts,
+    Accounts,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
@@ -224,7 +265,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -344,8 +385,53 @@ class AppDatabase extends _$AppDatabase {
         // like the ones documented on the blocks above.
         await m.createTable(expenseReceipts);
       }
+      if (from < 12) {
+        // Accounts — a whole new table, then one additive nullable column on
+        // the populated expenses table (safe, no default/backfill needed).
+        await m.createTable(accounts);
+        await m.addColumn(expenses, expenses.accountId);
+        await _migratePaymentMethodsToAccounts(this);
+      }
     },
   );
+
+  /// One-time: turns every distinct `payment_method` string already on
+  /// [Expenses] into a real [Accounts] row, and points each matching expense
+  /// at it. `payment_method` itself is left untouched — nothing here deletes
+  /// or overwrites it, so a pre-v12 export/report that reads that column
+  /// keeps working unchanged; `account_id` is purely additive.
+  ///
+  /// In practice this is a no-op on every real install: `payment_method` has
+  /// never been settable from any screen in this app (verified — it exists
+  /// on the schema and travels through backup/export, but nothing has ever
+  /// written a non-null value). Written correctly anyway, on the chance a
+  /// debug/import path set one historically.
+  static Future<void> _migratePaymentMethodsToAccounts(
+    GeneratedDatabase db,
+  ) async {
+    final rows = await db
+        .customSelect(
+          'SELECT DISTINCT payment_method FROM expenses '
+          'WHERE payment_method IS NOT NULL',
+        )
+        .get();
+    for (final row in rows) {
+      final name = row.read<String>('payment_method');
+      // ponytail: every migrated account defaults to AccountType.cash — a
+      // free-text field with no controlled vocabulary can't be reliably
+      // classified into cash/bank/card/wallet. Reclassify by hand once the
+      // account picker (which this migration exists to seed) can edit it.
+      final accountId = await db.customInsert(
+        'INSERT INTO accounts (name, type, opening_balance_minor, '
+        'is_archived) VALUES (?, ?, 0, 0)',
+        variables: [Variable(name), Variable(AccountType.cash.name)],
+      );
+      await db.customStatement(
+        'UPDATE expenses SET account_id = ? WHERE payment_method = ?',
+        [accountId, name],
+      );
+    }
+  }
 
   /// Whether [table] already has [column], by its snake_case SQL name.
   ///
@@ -367,6 +453,7 @@ class AppDatabase extends _$AppDatabase {
       // Children before parents (FK order), same as BackupRepository.replaceAll.
       await delete(expenseReceipts).go();
       await delete(expenses).go();
+      await delete(accounts).go();
       await delete(tags).go();
       await delete(budgets).go();
       await delete(categories).go();

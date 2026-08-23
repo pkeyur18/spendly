@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/core/money/money.dart';
+import 'package:spendly/features/accounts/account_repository.dart';
 import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
@@ -23,15 +24,21 @@ void main() {
     final expRepo = ExpenseRepository(db);
     final budgetRepo = BudgetRepository(db);
 
+    final accountRepo = AccountRepository(db);
     final extraCatId = await catRepo.create(
       name: 'Extra',
       icon: '⭐',
       colorValue: 0xFF6366F1,
     );
+    final accountId = await accountRepo.create(
+      name: 'Cash',
+      type: AccountType.cash,
+    );
     final expenseId = await expRepo.add(
       amount: Money.parse('24.50'),
       categoryId: extraCatId,
       date: DateTime(2026, 7, 1),
+      accountId: accountId,
     );
     await budgetRepo.setOverall(DateTime(2026, 7, 1), Money.parse('40000'));
     await SettingsRepository(db).set(SettingsRepository.profileNameKey, 'Ada');
@@ -46,6 +53,7 @@ void main() {
     final settings = await db.select(db.settings).get();
     final categories = await db.select(db.categories).get();
     final receipts = await db.select(db.expenseReceipts).get();
+    final accounts = await db.select(db.accounts).get();
 
     expect(expenses, isEmpty);
     expect(budgets, isEmpty);
@@ -56,5 +64,6 @@ void main() {
     // as a permanent orphan — the one case pruneOrphanedReceipts can't catch
     // on its own, since a fresh install never runs it against pre-reset data.
     expect(receipts, isEmpty);
+    expect(accounts, isEmpty);
   });
 }

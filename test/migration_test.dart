@@ -53,7 +53,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v11 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v12 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -85,6 +85,22 @@ void main() {
             VALUES (2000000, 1, 1750000000, 1, 'monthly', 1750000000,
                     1750000000)
           ''');
+          // Two pre-existing rows sharing a payment_method value, plus one
+          // with none — from<12 must turn 'UPI' into exactly one Accounts
+          // row, point both matching expenses at it, and leave the null one
+          // untouched.
+          rawDb.execute('''
+            INSERT INTO expenses
+              (amount_minor, category_id, date, payment_method,
+               created_at, updated_at)
+            VALUES (5000, 1, 1750000000, 'UPI', 1750000000, 1750000000)
+          ''');
+          rawDb.execute('''
+            INSERT INTO expenses
+              (amount_minor, category_id, date, payment_method,
+               created_at, updated_at)
+            VALUES (7500, 1, 1750000000, 'UPI', 1750000000, 1750000000)
+          ''');
           rawDb.execute('PRAGMA user_version = 1');
         },
       ),
@@ -92,7 +108,7 @@ void main() {
     addTearDown(db.close);
 
     // Migration runs lazily on first use — this drives it through every
-    // `if (from < N)` block (2 through 10) in one pass, since the seeded
+    // `if (from < N)` block (2 through 12) in one pass, since the seeded
     // database starts at v1.
     final categories = await db.select(db.categories).get();
     final budgets = await db.select(db.budgets).get();
@@ -103,7 +119,7 @@ void main() {
     // the pre-existing "Rent" row plus those 10.
     expect(categories, hasLength(11));
     expect(budgets, hasLength(1));
-    expect(expenses, hasLength(2));
+    expect(expenses, hasLength(4));
     expect(tags, isEmpty);
 
     final category = categories.firstWhere((c) => c.name == 'Rent');
@@ -178,5 +194,32 @@ void main() {
       db.expenseReceipts,
     )..where((t) => t.expenseId.equals(expense.id))).getSingle();
     expect(receipt.photoBytes, [1, 2, 3]);
+
+    // from<12: exactly one 'UPI' account, both matching expenses pointed at
+    // it, and payment_method itself left untouched (still readable, not
+    // cleared) — account_id is additive, not a replacement.
+    final accounts = await db.select(db.accounts).get();
+    expect(accounts, hasLength(1));
+    final upi = accounts.single;
+    expect(upi.name, 'UPI');
+    expect(upi.type, AccountType.cash);
+    expect(upi.openingBalanceMinor, 0);
+
+    final upiExpenses =
+        expenses.where((e) => e.paymentMethod == 'UPI').toList();
+    expect(upiExpenses, hasLength(2));
+    // `expenses` was captured before the migration ran further writes in
+    // this same test, so re-read fresh rather than trust the stale list.
+    final reloaded = await db.select(db.expenses).get();
+    for (final e in reloaded.where((e) => e.paymentMethod == 'UPI')) {
+      expect(e.accountId, upi.id);
+    }
+    // The pre-existing rows with no payment_method are untouched.
+    expect(
+      reloaded.where((e) => e.paymentMethod == null).every(
+        (e) => e.accountId == null,
+      ),
+      isTrue,
+    );
   });
 }

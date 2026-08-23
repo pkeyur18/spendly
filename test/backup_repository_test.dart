@@ -8,6 +8,7 @@ import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/backup/backup_format.dart';
 import 'package:spendly/features/backup/backup_models.dart';
+import 'package:spendly/features/accounts/account_repository.dart';
 import 'package:spendly/features/backup/backup_repository.dart';
 import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
@@ -526,6 +527,118 @@ void main() {
 
       expect(await db.select(db.expenses).get(), hasLength(1));
       expect(await db.select(db.expenseReceipts).get(), isEmpty);
+    });
+  });
+
+  group('accounts', () {
+    test('export then replace reattaches the account to the same expense',
+        () async {
+      final accountRepo = AccountRepository(db);
+      final accountId = await accountRepo.create(
+        name: 'HDFC Bank',
+        type: AccountType.bank,
+        openingBalance: Money.parse('1000'),
+      );
+      final expenseId = await ExpenseRepository(db).add(
+        amount: Money.parse('240'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 1),
+        accountId: accountId,
+      );
+
+      final payload = await repo.exportAll();
+      expect(payload.accounts, hasLength(1));
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restoredExpense = (await freshDb.select(freshDb.expenses).get())
+          .firstWhere((e) => e.id == expenseId);
+      final restoredAccount = await (freshDb.select(
+        freshDb.accounts,
+      )..where((t) => t.id.equals(restoredExpense.accountId!))).getSingle();
+      expect(restoredAccount.name, 'HDFC Bank');
+      expect(restoredAccount.openingBalanceMinor, Money.parse('1000').minor);
+    });
+
+    test('merge attaches an account to a newly-inserted expense under its '
+        'new local id', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceAccountId = await AccountRepository(sourceDb).create(
+        name: 'Wallet',
+        type: AccountType.wallet,
+      );
+      await ExpenseRepository(sourceDb).add(
+        amount: Money.parse('75'),
+        categoryId: 1,
+        date: DateTime(2026, 7, 10),
+        accountId: sourceAccountId,
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload); // into the fresh 8-default db
+
+      final accounts = await db.select(db.accounts).get();
+      final expenses = await db.select(db.expenses).get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.name, 'Wallet');
+      // The merged expense's account id was assigned fresh by THIS device —
+      // it must not equal the source device's id, and it must point at the
+      // account that actually landed here.
+      expect(expenses.single.accountId, accounts.single.id);
+    });
+
+    test('merging the same backup twice does not duplicate the account',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await AccountRepository(sourceDb).create(name: 'Cash', type: AccountType.cash);
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+      await repo.mergeAll(payload); // run twice
+
+      expect(await db.select(db.accounts).get(), hasLength(1));
+    });
+
+    test('renaming an account then merging the original backup matches by '
+        'externalId, keeps the rename, does not duplicate', () async {
+      final accountRepo = AccountRepository(db);
+      final id = await accountRepo.create(name: 'Old Name', type: AccountType.cash);
+      final payload = await repo.exportAll(); // carries externalId + 'Old Name'
+      await accountRepo.update(id, name: 'New Name');
+
+      await repo.mergeAll(payload);
+
+      final accounts = await db.select(db.accounts).get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.name, 'New Name'); // untouched by the merge
+    });
+
+    test('a pre-v8 backup (no accounts key) merges with no accounts at all',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await ExpenseRepository(
+        sourceDb,
+      ).add(amount: Money.parse('20'), categoryId: 1, date: DateTime(2026, 7, 3));
+      final exported = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+      final preV8 = BackupPayload(
+        exportedAt: exported.exportedAt,
+        categories: exported.categories,
+        expenses: exported.expenses,
+        budgets: exported.budgets,
+        settings: exported.settings,
+        tags: exported.tags,
+        // No `accounts:` — defaults to const [].
+      );
+
+      await repo.mergeAll(preV8);
+
+      expect(await db.select(db.expenses).get(), hasLength(1));
+      expect(await db.select(db.accounts).get(), isEmpty);
     });
   });
 }

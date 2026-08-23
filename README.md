@@ -8,10 +8,11 @@ own a full versioned backup so your data is never truly lost.
 Single codebase (Flutter), no account, no server. Money is stored as integer minor units
 (paise) — never float. Currency is INR (₹) with device-locale formatting.
 
-> **Status:** built through the UX-enhancement phases 1–2 (daily-loop friction fixes,
-> then recurring expenses), on top of Sprint 12 and the Monthly Recap feature. Drift
-> schema v11, backup format v7, 367 passing tests (49 test files). Beta & hardening
-> (Sprint 8) and store submission (Sprint 9) are not started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
+> **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
+> recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
+> Recap feature. Drift schema v12, backup format v8, 389 passing tests (51 test
+> files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
+> started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
 
 ---
@@ -55,11 +56,17 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   expense row itself, so browsing transactions never has to load photo bytes it isn't
   showing. Travels in full-fidelity backups; a device restoring a backup gets every
   attached photo back, correctly matched to its own expense.
+- **Accounts** — track cash, bank, card and wallet balances; pick which account an expense
+  was paid from in Quick Add, with a per-account current-month spend view under Profile.
+  Never hard-deleted — archived like categories/tags, so history and exports stay intact.
+  An account has no icon/color of its own; the free-text `paymentMethod` field expenses
+  already carried is migrated into real accounts automatically on upgrade, preserved either
+  way.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
 - **Backup & Restore** — full versioned JSON backup (expenses, categories, budgets, tags,
-  settings, profile), optional AES-256-GCM password protection, save-to-cloud via the OS
+  accounts, settings, profile), optional AES-256-GCM password protection, save-to-cloud via the OS
   share sheet, auto-backup (daily/weekly/monthly), and restore with a preview + Merge/Replace
   choice. See [docs/backup-schema.md](docs/backup-schema.md).
 - **Profile** — name/email/phone, avatar (uploaded photo or colored initials — never a blank
@@ -77,7 +84,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v11 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v12 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |
@@ -110,6 +117,7 @@ lib/
     ├── onboarding/                 # welcome screen
     ├── home/                       # dashboard + charts + providers
     ├── expenses/                   # quick add, all-transactions, repository, recurrence
+    ├── accounts/                   # cash/bank/card/wallet accounts, manage screen
     ├── categories/                 # manager, edit sheet (strip+popup), archived
     ├── budgets/                    # per-month budget setup + repository
     ├── reports/                    # monthly/custom reports, export (PDF/CSV)

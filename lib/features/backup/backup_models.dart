@@ -107,6 +107,70 @@ class BackupCategory {
   );
 }
 
+class BackupAccount {
+  const BackupAccount({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.openingBalanceMinor,
+    required this.isArchived,
+    required this.externalId,
+  });
+
+  final int id;
+  final String name;
+  final AccountType type;
+  final int openingBalanceMinor;
+  final bool isArchived;
+  final String? externalId;
+
+  factory BackupAccount.fromRow(AccountRow row) => BackupAccount(
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    openingBalanceMinor: row.openingBalanceMinor,
+    isArchived: row.isArchived,
+    externalId: row.externalId,
+  );
+
+  factory BackupAccount.fromJson(Map<String, dynamic> j) => BackupAccount(
+    id: j['id'] as int,
+    name: j['name'] as String,
+    type: AccountType.values.byName(j['type'] as String),
+    openingBalanceMinor: j['openingBalanceMinor'] as int,
+    isArchived: j['isArchived'] as bool,
+    externalId: j['externalId'] as String?,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type.name,
+    'openingBalanceMinor': openingBalanceMinor,
+    'isArchived': isArchived,
+    'externalId': externalId,
+  };
+
+  /// Merge: new row, id auto-assigned.
+  AccountsCompanion toInsertCompanion() => AccountsCompanion.insert(
+    name: name,
+    type: type,
+    openingBalanceMinor: Value(openingBalanceMinor),
+    isArchived: Value(isArchived),
+    externalId: externalId == null ? const Value.absent() : Value(externalId),
+  );
+
+  /// Replace: tables are wiped first, so the original id is reused verbatim.
+  AccountsCompanion toReplaceCompanion() => AccountsCompanion(
+    id: Value(id),
+    name: Value(name),
+    type: Value(type),
+    openingBalanceMinor: Value(openingBalanceMinor),
+    isArchived: Value(isArchived),
+    externalId: externalId == null ? const Value.absent() : Value(externalId),
+  );
+}
+
 class BackupTag {
   const BackupTag({
     required this.id,
@@ -220,6 +284,7 @@ class BackupExpense {
     required this.isRecurring,
     required this.recurrence,
     required this.tagId,
+    required this.accountId,
     required this.createdAt,
     required this.updatedAt,
     required this.externalId,
@@ -242,6 +307,10 @@ class BackupExpense {
   /// to a local tag id via the tag-id map on merge/replace — see
   /// [BackupRepository].
   final int? tagId;
+
+  /// Backup-file id of the account this was paid from (schema v12), or null.
+  /// Same resolve-on-merge/verbatim-on-replace treatment as [tagId].
+  final int? accountId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? externalId;
@@ -268,6 +337,7 @@ class BackupExpense {
     isRecurring: row.isRecurring,
     recurrence: row.recurrence,
     tagId: row.tagId,
+    accountId: row.accountId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     externalId: row.externalId,
@@ -290,6 +360,8 @@ class BackupExpense {
         : Recurrence.values.byName(j['recurrence'] as String),
     // Pre-trip-feature backups have no "tagId" key; absent = untagged.
     tagId: j['tagId'] as int?,
+    // Pre-v8 backups have no "accountId" key; absent = no account.
+    accountId: j['accountId'] as int?,
     createdAt: DateTime.parse(j['createdAt'] as String),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
     externalId: j['externalId'] as String?,
@@ -315,6 +387,7 @@ class BackupExpense {
     'isRecurring': isRecurring,
     'recurrence': recurrence?.name,
     'tagId': tagId,
+    'accountId': accountId,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
     'externalId': externalId,
@@ -325,11 +398,13 @@ class BackupExpense {
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
-  /// category id the backup's categoryId was resolved to; [mappedTagId] is
-  /// the local tag id the backup's tagId was resolved to (null if untagged).
+  /// category id the backup's categoryId was resolved to; [mappedTagId] and
+  /// [mappedAccountId] are the local tag/account ids the backup's tagId and
+  /// accountId were resolved to (null if untagged / no account).
   ExpensesCompanion toInsertCompanion({
     required int mappedCategoryId,
     required int? mappedTagId,
+    int? mappedAccountId,
   }) => ExpensesCompanion.insert(
     amountMinor: amountMinor,
     categoryId: mappedCategoryId,
@@ -339,6 +414,7 @@ class BackupExpense {
     isRecurring: Value(isRecurring),
     recurrence: Value(recurrence),
     tagId: Value(mappedTagId),
+    accountId: Value(mappedAccountId),
     createdAt: Value(createdAt),
     updatedAt: Value(updatedAt),
     externalId: externalId == null
@@ -361,6 +437,7 @@ class BackupExpense {
     isRecurring: Value(isRecurring),
     recurrence: Value(recurrence),
     tagId: Value(tagId),
+    accountId: Value(accountId),
     createdAt: Value(createdAt),
     updatedAt: Value(updatedAt),
     externalId: externalId == null
@@ -503,6 +580,7 @@ class BackupPayload {
     required this.settings,
     required this.tags,
     this.receipts = const [],
+    this.accounts = const [],
   });
 
   final DateTime exportedAt;
@@ -512,6 +590,7 @@ class BackupPayload {
   final List<BackupSetting> settings;
   final List<BackupTag> tags;
   final List<BackupReceipt> receipts;
+  final List<BackupAccount> accounts;
 
   (DateTime, DateTime)? get expenseDateRange {
     if (expenses.isEmpty) return null;
@@ -567,6 +646,12 @@ class BackupPayload {
           : (j['receipts'] as List)
                 .map((e) => BackupReceipt.fromJson(e as Map<String, dynamic>))
                 .toList(),
+      // Pre-v8 backups have no "accounts" key at all.
+      accounts: j['accounts'] == null
+          ? const []
+          : (j['accounts'] as List)
+                .map((e) => BackupAccount.fromJson(e as Map<String, dynamic>))
+                .toList(),
     );
   }
 
@@ -584,5 +669,6 @@ class BackupPayload {
     'settings': settings.map((s) => s.toJson()).toList(),
     'tags': tags.map((t) => t.toJson()).toList(),
     'receipts': receipts.map((r) => r.toJson()).toList(),
+    'accounts': accounts.map((a) => a.toJson()).toList(),
   };
 }

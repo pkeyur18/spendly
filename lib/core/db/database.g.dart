@@ -574,6 +574,430 @@ class CategoriesCompanion extends UpdateCompanion<CategoryRow> {
   }
 }
 
+class $AccountsTable extends Accounts
+    with TableInfo<$AccountsTable, AccountRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AccountsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 1,
+      maxTextLength: 40,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<AccountType, String> type =
+      GeneratedColumn<String>(
+        'type',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<AccountType>($AccountsTable.$convertertype);
+  static const VerificationMeta _openingBalanceMinorMeta =
+      const VerificationMeta('openingBalanceMinor');
+  @override
+  late final GeneratedColumn<int> openingBalanceMinor = GeneratedColumn<int>(
+    'opening_balance_minor',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isArchivedMeta = const VerificationMeta(
+    'isArchived',
+  );
+  @override
+  late final GeneratedColumn<bool> isArchived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _externalIdMeta = const VerificationMeta(
+    'externalId',
+  );
+  @override
+  late final GeneratedColumn<String> externalId = GeneratedColumn<String>(
+    'external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    clientDefault: generateExternalId,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    type,
+    openingBalanceMinor,
+    isArchived,
+    externalId,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'accounts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AccountRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('opening_balance_minor')) {
+      context.handle(
+        _openingBalanceMinorMeta,
+        openingBalanceMinor.isAcceptableOrUnknown(
+          data['opening_balance_minor']!,
+          _openingBalanceMinorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _isArchivedMeta,
+        isArchived.isAcceptableOrUnknown(data['is_archived']!, _isArchivedMeta),
+      );
+    }
+    if (data.containsKey('external_id')) {
+      context.handle(
+        _externalIdMeta,
+        externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AccountRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AccountRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      type: $AccountsTable.$convertertype.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}type'],
+        )!,
+      ),
+      openingBalanceMinor: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}opening_balance_minor'],
+      )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      externalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}external_id'],
+      ),
+    );
+  }
+
+  @override
+  $AccountsTable createAlias(String alias) {
+    return $AccountsTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<AccountType, String, String> $convertertype =
+      const EnumNameConverter<AccountType>(AccountType.values);
+}
+
+class AccountRow extends DataClass implements Insertable<AccountRow> {
+  final int id;
+  final String name;
+  final AccountType type;
+
+  /// In minor units, like every other amount in this schema. Never zero-ed
+  /// out or hidden — an account is never hard-deleted (see [isArchived]), so
+  /// this stays the one fixed point every later balance calculation starts
+  /// from.
+  final int openingBalanceMinor;
+  final bool isArchived;
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  final String? externalId;
+  const AccountRow({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.openingBalanceMinor,
+    required this.isArchived,
+    this.externalId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    {
+      map['type'] = Variable<String>($AccountsTable.$convertertype.toSql(type));
+    }
+    map['opening_balance_minor'] = Variable<int>(openingBalanceMinor);
+    map['is_archived'] = Variable<bool>(isArchived);
+    if (!nullToAbsent || externalId != null) {
+      map['external_id'] = Variable<String>(externalId);
+    }
+    return map;
+  }
+
+  AccountsCompanion toCompanion(bool nullToAbsent) {
+    return AccountsCompanion(
+      id: Value(id),
+      name: Value(name),
+      type: Value(type),
+      openingBalanceMinor: Value(openingBalanceMinor),
+      isArchived: Value(isArchived),
+      externalId: externalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(externalId),
+    );
+  }
+
+  factory AccountRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AccountRow(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      type: $AccountsTable.$convertertype.fromJson(
+        serializer.fromJson<String>(json['type']),
+      ),
+      openingBalanceMinor: serializer.fromJson<int>(
+        json['openingBalanceMinor'],
+      ),
+      isArchived: serializer.fromJson<bool>(json['isArchived']),
+      externalId: serializer.fromJson<String?>(json['externalId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'type': serializer.toJson<String>(
+        $AccountsTable.$convertertype.toJson(type),
+      ),
+      'openingBalanceMinor': serializer.toJson<int>(openingBalanceMinor),
+      'isArchived': serializer.toJson<bool>(isArchived),
+      'externalId': serializer.toJson<String?>(externalId),
+    };
+  }
+
+  AccountRow copyWith({
+    int? id,
+    String? name,
+    AccountType? type,
+    int? openingBalanceMinor,
+    bool? isArchived,
+    Value<String?> externalId = const Value.absent(),
+  }) => AccountRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    type: type ?? this.type,
+    openingBalanceMinor: openingBalanceMinor ?? this.openingBalanceMinor,
+    isArchived: isArchived ?? this.isArchived,
+    externalId: externalId.present ? externalId.value : this.externalId,
+  );
+  AccountRow copyWithCompanion(AccountsCompanion data) {
+    return AccountRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      type: data.type.present ? data.type.value : this.type,
+      openingBalanceMinor: data.openingBalanceMinor.present
+          ? data.openingBalanceMinor.value
+          : this.openingBalanceMinor,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      externalId: data.externalId.present
+          ? data.externalId.value
+          : this.externalId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('openingBalanceMinor: $openingBalanceMinor, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('externalId: $externalId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, type, openingBalanceMinor, isArchived, externalId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AccountRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.type == this.type &&
+          other.openingBalanceMinor == this.openingBalanceMinor &&
+          other.isArchived == this.isArchived &&
+          other.externalId == this.externalId);
+}
+
+class AccountsCompanion extends UpdateCompanion<AccountRow> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<AccountType> type;
+  final Value<int> openingBalanceMinor;
+  final Value<bool> isArchived;
+  final Value<String?> externalId;
+  const AccountsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.type = const Value.absent(),
+    this.openingBalanceMinor = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.externalId = const Value.absent(),
+  });
+  AccountsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required AccountType type,
+    this.openingBalanceMinor = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.externalId = const Value.absent(),
+  }) : name = Value(name),
+       type = Value(type);
+  static Insertable<AccountRow> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<String>? type,
+    Expression<int>? openingBalanceMinor,
+    Expression<bool>? isArchived,
+    Expression<String>? externalId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (type != null) 'type': type,
+      if (openingBalanceMinor != null)
+        'opening_balance_minor': openingBalanceMinor,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (externalId != null) 'external_id': externalId,
+    });
+  }
+
+  AccountsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<AccountType>? type,
+    Value<int>? openingBalanceMinor,
+    Value<bool>? isArchived,
+    Value<String?>? externalId,
+  }) {
+    return AccountsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      openingBalanceMinor: openingBalanceMinor ?? this.openingBalanceMinor,
+      isArchived: isArchived ?? this.isArchived,
+      externalId: externalId ?? this.externalId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(
+        $AccountsTable.$convertertype.toSql(type.value),
+      );
+    }
+    if (openingBalanceMinor.present) {
+      map['opening_balance_minor'] = Variable<int>(openingBalanceMinor.value);
+    }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<bool>(isArchived.value);
+    }
+    if (externalId.present) {
+      map['external_id'] = Variable<String>(externalId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('openingBalanceMinor: $openingBalanceMinor, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('externalId: $externalId')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TagsTable extends Tags with TableInfo<$TagsTable, TagRow> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -1291,6 +1715,20 @@ class $ExpensesTable extends Expenses
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<int> accountId = GeneratedColumn<int>(
+    'account_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id)',
+    ),
+  );
   static const VerificationMeta _isRecurringMeta = const VerificationMeta(
     'isRecurring',
   );
@@ -1416,6 +1854,7 @@ class $ExpensesTable extends Expenses
     date,
     note,
     paymentMethod,
+    accountId,
     isRecurring,
     recurrence,
     nextDueDate,
@@ -1482,6 +1921,12 @@ class $ExpensesTable extends Expenses
           data['payment_method']!,
           _paymentMethodMeta,
         ),
+      );
+    }
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
       );
     }
     if (data.containsKey('is_recurring')) {
@@ -1583,6 +2028,10 @@ class $ExpensesTable extends Expenses
         DriftSqlType.string,
         data['${effectivePrefix}payment_method'],
       ),
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}account_id'],
+      ),
       isRecurring: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_recurring'],
@@ -1648,6 +2097,10 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
   final DateTime date;
   final String? note;
   final String? paymentMethod;
+
+  /// Which account this was paid from, or null (not every expense has one
+  /// assigned — this is additive, not a replacement for [paymentMethod]).
+  final int? accountId;
   final bool isRecurring;
   final Recurrence? recurrence;
 
@@ -1695,6 +2148,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     required this.date,
     this.note,
     this.paymentMethod,
+    this.accountId,
     required this.isRecurring,
     this.recurrence,
     this.nextDueDate,
@@ -1718,6 +2172,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     }
     if (!nullToAbsent || paymentMethod != null) {
       map['payment_method'] = Variable<String>(paymentMethod);
+    }
+    if (!nullToAbsent || accountId != null) {
+      map['account_id'] = Variable<int>(accountId);
     }
     map['is_recurring'] = Variable<bool>(isRecurring);
     if (!nullToAbsent || recurrence != null) {
@@ -1758,6 +2215,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       paymentMethod: paymentMethod == null && nullToAbsent
           ? const Value.absent()
           : Value(paymentMethod),
+      accountId: accountId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(accountId),
       isRecurring: Value(isRecurring),
       recurrence: recurrence == null && nullToAbsent
           ? const Value.absent()
@@ -1797,6 +2257,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       date: serializer.fromJson<DateTime>(json['date']),
       note: serializer.fromJson<String?>(json['note']),
       paymentMethod: serializer.fromJson<String?>(json['paymentMethod']),
+      accountId: serializer.fromJson<int?>(json['accountId']),
       isRecurring: serializer.fromJson<bool>(json['isRecurring']),
       recurrence: $ExpensesTable.$converterrecurrencen.fromJson(
         serializer.fromJson<String?>(json['recurrence']),
@@ -1823,6 +2284,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       'date': serializer.toJson<DateTime>(date),
       'note': serializer.toJson<String?>(note),
       'paymentMethod': serializer.toJson<String?>(paymentMethod),
+      'accountId': serializer.toJson<int?>(accountId),
       'isRecurring': serializer.toJson<bool>(isRecurring),
       'recurrence': serializer.toJson<String?>(
         $ExpensesTable.$converterrecurrencen.toJson(recurrence),
@@ -1845,6 +2307,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     DateTime? date,
     Value<String?> note = const Value.absent(),
     Value<String?> paymentMethod = const Value.absent(),
+    Value<int?> accountId = const Value.absent(),
     bool? isRecurring,
     Value<Recurrence?> recurrence = const Value.absent(),
     Value<DateTime?> nextDueDate = const Value.absent(),
@@ -1864,6 +2327,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     paymentMethod: paymentMethod.present
         ? paymentMethod.value
         : this.paymentMethod,
+    accountId: accountId.present ? accountId.value : this.accountId,
     isRecurring: isRecurring ?? this.isRecurring,
     recurrence: recurrence.present ? recurrence.value : this.recurrence,
     nextDueDate: nextDueDate.present ? nextDueDate.value : this.nextDueDate,
@@ -1893,6 +2357,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       paymentMethod: data.paymentMethod.present
           ? data.paymentMethod.value
           : this.paymentMethod,
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
       isRecurring: data.isRecurring.present
           ? data.isRecurring.value
           : this.isRecurring,
@@ -1929,6 +2394,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           ..write('date: $date, ')
           ..write('note: $note, ')
           ..write('paymentMethod: $paymentMethod, ')
+          ..write('accountId: $accountId, ')
           ..write('isRecurring: $isRecurring, ')
           ..write('recurrence: $recurrence, ')
           ..write('nextDueDate: $nextDueDate, ')
@@ -1951,6 +2417,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     date,
     note,
     paymentMethod,
+    accountId,
     isRecurring,
     recurrence,
     nextDueDate,
@@ -1972,6 +2439,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           other.date == this.date &&
           other.note == this.note &&
           other.paymentMethod == this.paymentMethod &&
+          other.accountId == this.accountId &&
           other.isRecurring == this.isRecurring &&
           other.recurrence == this.recurrence &&
           other.nextDueDate == this.nextDueDate &&
@@ -1991,6 +2459,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
   final Value<DateTime> date;
   final Value<String?> note;
   final Value<String?> paymentMethod;
+  final Value<int?> accountId;
   final Value<bool> isRecurring;
   final Value<Recurrence?> recurrence;
   final Value<DateTime?> nextDueDate;
@@ -2008,6 +2477,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.date = const Value.absent(),
     this.note = const Value.absent(),
     this.paymentMethod = const Value.absent(),
+    this.accountId = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.recurrence = const Value.absent(),
     this.nextDueDate = const Value.absent(),
@@ -2026,6 +2496,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     required DateTime date,
     this.note = const Value.absent(),
     this.paymentMethod = const Value.absent(),
+    this.accountId = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.recurrence = const Value.absent(),
     this.nextDueDate = const Value.absent(),
@@ -2046,6 +2517,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Expression<DateTime>? date,
     Expression<String>? note,
     Expression<String>? paymentMethod,
+    Expression<int>? accountId,
     Expression<bool>? isRecurring,
     Expression<String>? recurrence,
     Expression<DateTime>? nextDueDate,
@@ -2064,6 +2536,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       if (date != null) 'date': date,
       if (note != null) 'note': note,
       if (paymentMethod != null) 'payment_method': paymentMethod,
+      if (accountId != null) 'account_id': accountId,
       if (isRecurring != null) 'is_recurring': isRecurring,
       if (recurrence != null) 'recurrence': recurrence,
       if (nextDueDate != null) 'next_due_date': nextDueDate,
@@ -2084,6 +2557,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Value<DateTime>? date,
     Value<String?>? note,
     Value<String?>? paymentMethod,
+    Value<int?>? accountId,
     Value<bool>? isRecurring,
     Value<Recurrence?>? recurrence,
     Value<DateTime?>? nextDueDate,
@@ -2102,6 +2576,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       date: date ?? this.date,
       note: note ?? this.note,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      accountId: accountId ?? this.accountId,
       isRecurring: isRecurring ?? this.isRecurring,
       recurrence: recurrence ?? this.recurrence,
       nextDueDate: nextDueDate ?? this.nextDueDate,
@@ -2135,6 +2610,9 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     }
     if (paymentMethod.present) {
       map['payment_method'] = Variable<String>(paymentMethod.value);
+    }
+    if (accountId.present) {
+      map['account_id'] = Variable<int>(accountId.value);
     }
     if (isRecurring.present) {
       map['is_recurring'] = Variable<bool>(isRecurring.value);
@@ -2180,6 +2658,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
           ..write('date: $date, ')
           ..write('note: $note, ')
           ..write('paymentMethod: $paymentMethod, ')
+          ..write('accountId: $accountId, ')
           ..write('isRecurring: $isRecurring, ')
           ..write('recurrence: $recurrence, ')
           ..write('nextDueDate: $nextDueDate, ')
@@ -3155,6 +3634,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
+  late final $AccountsTable accounts = $AccountsTable(this);
   late final $TagsTable tags = $TagsTable(this);
   late final $ExpensesTable expenses = $ExpensesTable(this);
   late final $BudgetsTable budgets = $BudgetsTable(this);
@@ -3184,6 +3664,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     categories,
+    accounts,
     tags,
     expenses,
     budgets,
@@ -3666,6 +4147,323 @@ typedef $$CategoriesTableProcessedTableManager =
       CategoryRow,
       PrefetchHooks Function({bool expensesRefs, bool budgetsRefs})
     >;
+typedef $$AccountsTableCreateCompanionBuilder =
+    AccountsCompanion Function({
+      Value<int> id,
+      required String name,
+      required AccountType type,
+      Value<int> openingBalanceMinor,
+      Value<bool> isArchived,
+      Value<String?> externalId,
+    });
+typedef $$AccountsTableUpdateCompanionBuilder =
+    AccountsCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<AccountType> type,
+      Value<int> openingBalanceMinor,
+      Value<bool> isArchived,
+      Value<String?> externalId,
+    });
+
+final class $$AccountsTableReferences
+    extends BaseReferences<_$AppDatabase, $AccountsTable, AccountRow> {
+  $$AccountsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$ExpensesTable, List<ExpenseRow>>
+  _expensesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.expenses,
+    aliasName: 'accounts__id__expenses__account_id',
+  );
+
+  $$ExpensesTableProcessedTableManager get expensesRefs {
+    final manager = $$ExpensesTableTableManager(
+      $_db,
+      $_db.expenses,
+    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_expensesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$AccountsTableFilterComposer
+    extends Composer<_$AppDatabase, $AccountsTable> {
+  $$AccountsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<AccountType, AccountType, String> get type =>
+      $composableBuilder(
+        column: $table.type,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<int> get openingBalanceMinor => $composableBuilder(
+    column: $table.openingBalanceMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> expensesRefs(
+    Expression<bool> Function($$ExpensesTableFilterComposer f) f,
+  ) {
+    final $$ExpensesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.expenses,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpensesTableFilterComposer(
+            $db: $db,
+            $table: $db.expenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$AccountsTableOrderingComposer
+    extends Composer<_$AppDatabase, $AccountsTable> {
+  $$AccountsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get openingBalanceMinor => $composableBuilder(
+    column: $table.openingBalanceMinor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AccountsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AccountsTable> {
+  $$AccountsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<AccountType, String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<int> get openingBalanceMinor => $composableBuilder(
+    column: $table.openingBalanceMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isArchived => $composableBuilder(
+    column: $table.isArchived,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get externalId => $composableBuilder(
+    column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  Expression<T> expensesRefs<T extends Object>(
+    Expression<T> Function($$ExpensesTableAnnotationComposer a) f,
+  ) {
+    final $$ExpensesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.expenses,
+      getReferencedColumn: (t) => t.accountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ExpensesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.expenses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$AccountsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AccountsTable,
+          AccountRow,
+          $$AccountsTableFilterComposer,
+          $$AccountsTableOrderingComposer,
+          $$AccountsTableAnnotationComposer,
+          $$AccountsTableCreateCompanionBuilder,
+          $$AccountsTableUpdateCompanionBuilder,
+          (AccountRow, $$AccountsTableReferences),
+          AccountRow,
+          PrefetchHooks Function({bool expensesRefs})
+        > {
+  $$AccountsTableTableManager(_$AppDatabase db, $AccountsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AccountsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AccountsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AccountsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<AccountType> type = const Value.absent(),
+                Value<int> openingBalanceMinor = const Value.absent(),
+                Value<bool> isArchived = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+              }) => AccountsCompanion(
+                id: id,
+                name: name,
+                type: type,
+                openingBalanceMinor: openingBalanceMinor,
+                isArchived: isArchived,
+                externalId: externalId,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required AccountType type,
+                Value<int> openingBalanceMinor = const Value.absent(),
+                Value<bool> isArchived = const Value.absent(),
+                Value<String?> externalId = const Value.absent(),
+              }) => AccountsCompanion.insert(
+                id: id,
+                name: name,
+                type: type,
+                openingBalanceMinor: openingBalanceMinor,
+                isArchived: isArchived,
+                externalId: externalId,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$AccountsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({expensesRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (expensesRefs) db.expenses],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (expensesRefs)
+                    await $_getPrefetchedData<
+                      AccountRow,
+                      $AccountsTable,
+                      ExpenseRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$AccountsTableReferences
+                          ._expensesRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$AccountsTableReferences(db, table, p0).expensesRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.accountId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$AccountsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AccountsTable,
+      AccountRow,
+      $$AccountsTableFilterComposer,
+      $$AccountsTableOrderingComposer,
+      $$AccountsTableAnnotationComposer,
+      $$AccountsTableCreateCompanionBuilder,
+      $$AccountsTableUpdateCompanionBuilder,
+      (AccountRow, $$AccountsTableReferences),
+      AccountRow,
+      PrefetchHooks Function({bool expensesRefs})
+    >;
 typedef $$TagsTableCreateCompanionBuilder =
     TagsCompanion Function({
       Value<int> id,
@@ -4067,6 +4865,7 @@ typedef $$ExpensesTableCreateCompanionBuilder =
       required DateTime date,
       Value<String?> note,
       Value<String?> paymentMethod,
+      Value<int?> accountId,
       Value<bool> isRecurring,
       Value<Recurrence?> recurrence,
       Value<DateTime?> nextDueDate,
@@ -4086,6 +4885,7 @@ typedef $$ExpensesTableUpdateCompanionBuilder =
       Value<DateTime> date,
       Value<String?> note,
       Value<String?> paymentMethod,
+      Value<int?> accountId,
       Value<bool> isRecurring,
       Value<Recurrence?> recurrence,
       Value<DateTime?> nextDueDate,
@@ -4113,6 +4913,23 @@ final class $$ExpensesTableReferences
       $_db.categories,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_categoryIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $AccountsTable _accountIdTable(_$AppDatabase db) =>
+      db.accounts.createAlias('expenses__account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager? get accountId {
+    final $_column = $_itemColumn<int>('account_id');
+    if ($_column == null) return null;
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_accountIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -4251,6 +5068,29 @@ class $$ExpensesTableFilterComposer
           }) => $$CategoriesTableFilterComposer(
             $db: $db,
             $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AccountsTableFilterComposer get accountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4411,6 +5251,29 @@ class $$ExpensesTableOrderingComposer
     return composer;
   }
 
+  $$AccountsTableOrderingComposer get accountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   $$TagsTableOrderingComposer get tagId {
     final $$TagsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4528,6 +5391,29 @@ class $$ExpensesTableAnnotationComposer
     return composer;
   }
 
+  $$AccountsTableAnnotationComposer get accountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.accountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   $$TagsTableAnnotationComposer get tagId {
     final $$TagsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -4592,6 +5478,7 @@ class $$ExpensesTableTableManager
           ExpenseRow,
           PrefetchHooks Function({
             bool categoryId,
+            bool accountId,
             bool tagId,
             bool expenseReceiptsRefs,
           })
@@ -4615,6 +5502,7 @@ class $$ExpensesTableTableManager
                 Value<DateTime> date = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<String?> paymentMethod = const Value.absent(),
+                Value<int?> accountId = const Value.absent(),
                 Value<bool> isRecurring = const Value.absent(),
                 Value<Recurrence?> recurrence = const Value.absent(),
                 Value<DateTime?> nextDueDate = const Value.absent(),
@@ -4632,6 +5520,7 @@ class $$ExpensesTableTableManager
                 date: date,
                 note: note,
                 paymentMethod: paymentMethod,
+                accountId: accountId,
                 isRecurring: isRecurring,
                 recurrence: recurrence,
                 nextDueDate: nextDueDate,
@@ -4651,6 +5540,7 @@ class $$ExpensesTableTableManager
                 required DateTime date,
                 Value<String?> note = const Value.absent(),
                 Value<String?> paymentMethod = const Value.absent(),
+                Value<int?> accountId = const Value.absent(),
                 Value<bool> isRecurring = const Value.absent(),
                 Value<Recurrence?> recurrence = const Value.absent(),
                 Value<DateTime?> nextDueDate = const Value.absent(),
@@ -4668,6 +5558,7 @@ class $$ExpensesTableTableManager
                 date: date,
                 note: note,
                 paymentMethod: paymentMethod,
+                accountId: accountId,
                 isRecurring: isRecurring,
                 recurrence: recurrence,
                 nextDueDate: nextDueDate,
@@ -4690,6 +5581,7 @@ class $$ExpensesTableTableManager
           prefetchHooksCallback:
               ({
                 categoryId = false,
+                accountId = false,
                 tagId = false,
                 expenseReceiptsRefs = false,
               }) {
@@ -4723,6 +5615,19 @@ class $$ExpensesTableTableManager
                                         ._categoryIdTable(db),
                                     referencedColumn: $$ExpensesTableReferences
                                         ._categoryIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+                        if (accountId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.accountId,
+                                    referencedTable: $$ExpensesTableReferences
+                                        ._accountIdTable(db),
+                                    referencedColumn: $$ExpensesTableReferences
+                                        ._accountIdTable(db)
                                         .id,
                                   )
                                   as T;
@@ -4788,6 +5693,7 @@ typedef $$ExpensesTableProcessedTableManager =
       ExpenseRow,
       PrefetchHooks Function({
         bool categoryId,
+        bool accountId,
         bool tagId,
         bool expenseReceiptsRefs,
       })
@@ -5576,6 +6482,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$CategoriesTableTableManager get categories =>
       $$CategoriesTableTableManager(_db, _db.categories);
+  $$AccountsTableTableManager get accounts =>
+      $$AccountsTableTableManager(_db, _db.accounts);
   $$TagsTableTableManager get tags => $$TagsTableTableManager(_db, _db.tags);
   $$ExpensesTableTableManager get expenses =>
       $$ExpensesTableTableManager(_db, _db.expenses);

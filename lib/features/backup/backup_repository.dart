@@ -32,6 +32,7 @@ class BackupRepository {
     final settings = await _db.select(_db.settings).get();
     final tags = await _db.select(_db.tags).get();
     final receipts = await _db.select(_db.expenseReceipts).get();
+    final accounts = await _db.select(_db.accounts).get();
 
     return BackupPayload(
       exportedAt: DateTime.now(),
@@ -53,6 +54,7 @@ class BackupRepository {
             photoBase64: base64Encode(r.photoBytes),
           ),
       ],
+      accounts: accounts.map(BackupAccount.fromRow).toList(),
     );
   }
 
@@ -66,8 +68,11 @@ class BackupRepository {
     await _db.transaction(() async {
       // Children before parents (FK order). expenseReceipts is a child of
       // expenses, so it goes first, same reasoning as everything below it.
+      // accounts is a parent of expenses (accountId), so it's deleted after
+      // expenses, same as categories/tags.
       await _db.delete(_db.expenseReceipts).go();
       await _db.delete(_db.expenses).go();
+      await _db.delete(_db.accounts).go();
       await _db.delete(_db.tags).go();
       await _db.delete(_db.budgets).go();
       await _db.delete(_db.categories).go();
@@ -79,6 +84,10 @@ class BackupRepository {
           payload.categories.map((c) => c.toReplaceCompanion()),
         );
         b.insertAll(_db.tags, payload.tags.map((t) => t.toReplaceCompanion()));
+        b.insertAll(
+          _db.accounts,
+          payload.accounts.map((a) => a.toReplaceCompanion()),
+        );
         b.insertAll(
           _db.budgets,
           payload.budgets.map((bg) => bg.toReplaceCompanion()),
@@ -122,11 +131,13 @@ class BackupRepository {
     await _db.transaction(() async {
       final categoryIdMap = await _mergeCategories(payload.categories);
       final tagIdMap = await _mergeTags(payload.tags);
+      final accountIdMap = await _mergeAccounts(payload.accounts);
       await _mergeBudgets(payload.budgets, categoryIdMap);
       await _mergeExpenses(
         payload.expenses,
         categoryIdMap,
         tagIdMap,
+        accountIdMap,
         payload.receipts,
       );
     });
@@ -201,6 +212,36 @@ class BackupRepository {
     return idMap;
   }
 
+  /// Matches by [BackupAccount.externalId] first, falling back to normalized
+  /// name — same rule as [_mergeCategories]/[_mergeTags]. Returns
+  /// backup-account-id -> local-account-id.
+  Future<Map<int, int>> _mergeAccounts(List<BackupAccount> backupAccounts) async {
+    final existing = await _db.select(_db.accounts).get();
+    final byExternalId = <String, int>{
+      for (final a in existing)
+        if (a.externalId != null) a.externalId!: a.id,
+    };
+    final byNormalizedName = <String, int>{
+      for (final a in existing) _normalize(a.name): a.id,
+    };
+
+    final idMap = <int, int>{};
+    for (final a in backupAccounts) {
+      final matchedId =
+          (a.externalId != null ? byExternalId[a.externalId] : null) ??
+          byNormalizedName[_normalize(a.name)];
+      if (matchedId != null) {
+        idMap[a.id] = matchedId;
+        continue;
+      }
+      final newId = await _db
+          .into(_db.accounts)
+          .insert(a.toInsertCompanion());
+      idMap[a.id] = newId;
+    }
+    return idMap;
+  }
+
   /// Matches by [BackupBudget.externalId] first, falling back to (mapped
   /// categoryId) slot — null = overall. A slot already occupied locally is
   /// left alone (merge is additive, never overwrites a budget the user has
@@ -246,6 +287,7 @@ class BackupRepository {
     List<BackupExpense> backupExpenses,
     Map<int, int> categoryIdMap,
     Map<int, int> tagIdMap,
+    Map<int, int> accountIdMap,
     List<BackupReceipt> backupReceipts,
   ) async {
     final existing = await _db.select(_db.expenses).get();
@@ -277,9 +319,13 @@ class BackupRepository {
       final fp = e.fingerprint(mappedCategoryId: mappedCategoryId);
       if (!fingerprints.add(fp)) continue; // already present (or dup in file)
       final mappedTagId = e.tagId == null ? null : tagIdMap[e.tagId];
+      final mappedAccountId = e.accountId == null
+          ? null
+          : accountIdMap[e.accountId];
       final companion = e.toInsertCompanion(
         mappedCategoryId: mappedCategoryId,
         mappedTagId: mappedTagId,
+        mappedAccountId: mappedAccountId,
       );
       final receipt = receiptByExpenseId[e.id];
       if (receipt != null) {

@@ -67,6 +67,7 @@ class ExpenseRepository {
     DateTime? nextDueDate,
     DateTime? recurrenceEndDate,
     int? tagId,
+    int? accountId,
     String? fxCurrency,
     Money? fxAmount,
   }) {
@@ -84,6 +85,7 @@ class ExpenseRepository {
             nextDueDate: Value(nextDueDate),
             recurrenceEndDate: Value(recurrenceEndDate),
             tagId: Value(tagId),
+            accountId: Value(accountId),
             fxCurrency: Value(fxCurrency),
             fxAmountMinor: Value(fxAmount?.minor),
           ),
@@ -102,6 +104,7 @@ class ExpenseRepository {
     Value<DateTime?> nextDueDate = const Value.absent(),
     Value<DateTime?> recurrenceEndDate = const Value.absent(),
     Value<int?> tagId = const Value.absent(),
+    Value<int?> accountId = const Value.absent(),
     Value<String?> fxCurrency = const Value.absent(),
     Value<Money?> fxAmount = const Value.absent(),
   }) async {
@@ -123,6 +126,7 @@ class ExpenseRepository {
         nextDueDate: nextDueDate,
         recurrenceEndDate: recurrenceEndDate,
         tagId: tagId,
+        accountId: accountId,
         fxCurrency: fxCurrency,
         fxAmountMinor: fxAmount.present
             ? Value(fxAmount.value?.minor)

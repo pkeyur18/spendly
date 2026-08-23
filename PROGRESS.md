@@ -5,15 +5,16 @@
 
 ## Current status
 
-- **Phase:** UX-enhancement plan, phases 1-3 complete (see
+- **Phase:** UX-enhancement plan, phases 1-4 complete (see
   `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the full phased plan
   and the ledger architecture decision). Branch `feat/ux-enhancements`.
   Sprints 0-7 + 10-12 and Monthly Recap shipped before this.
-  **Drift schema is now v11; backup format v7.** `flutter analyze` clean,
-  `flutter test` **367 passing** (49 test files).
-- **Next:** Phase 4 (accounts, schema v12, backup v8), then phases 5-6 (income,
-  transfers) and phase 7 (insights, goals, app lock, autocomplete). Sprint 8/9 (Beta &
-  Hardening, Store Submission) still not started.
+  **Drift schema is now v12; backup format v8.** `flutter analyze` clean,
+  `flutter test` **389 passing** (51 test files).
+- **Next:** Phase 5 (income, schema v13) — the first phase to touch the new
+  `LedgerEntries` table decision, then phase 6 (transfers, derived balances) and
+  phase 7 (insights, goals, app lock, autocomplete). Sprint 8/9 (Beta & Hardening,
+  Store Submission) still not started.
 - **Doc drift found and fixed:** README claimed schema v7 / backup v3 / 190 tests while
   the code was already at schema v9 / backup v5 — FX spending and trip date-range
   auto-tagging had shipped with no README or PROGRESS entry. Both files now match the
@@ -744,3 +745,76 @@ table in the app is a different order of problem entirely.
   what was asked for; multiple receipts per expense would be a new ask.
 - No compression beyond `image_picker`'s own resize/quality params — no new dependency
   added for this.
+
+## Between-phase fixes (not part of any phase)
+
+- **`c40e462`** — search was permanently stuck on its loading spinner. Root cause: the
+  search date range's upper bound called `DateTime.now()` fresh inside a getter
+  re-evaluated on every `build()`; since a `StreamProvider.family` key is compared by
+  value and `DateTime` equality is exact to the microsecond, this produced a new key on
+  nearly every rebuild (not just when the search text changed), so Riverpod tore down
+  and restarted the query before it ever emitted. Fixed by truncating the bound to day
+  granularity in a pure, tested `transactionsQueryKey` function.
+- **`880b52a`** then **`129e860`** — attempted an `impeccable`-guided redesign of Quick
+  Add's 4-chip metadata row (stadium shape, left-align, bigger touch targets), then
+  reverted it in full at the user's request ("does not look good at all") and kept only
+  a one-line `runSpacing` fix on the `Wrap`. **Lesson: don't redesign a screen's visual
+  language on a "make it look nicer" request without confirming direction first** — the
+  user wanted the existing look preserved with a minimal spacing fix, not a rebuild.
+
+## UX Phase 4 — done (accounts)
+
+- [x] **Schema v12** → new `accounts` table (name, type — cash/bank/card/wallet —,
+      opening balance, archive flag, externalId), plus one additive nullable
+      `expenses.accountId` column. Balance is never stored, only ever derived (matches
+      how budget totals/lifetime stats already work) — Phase 4 doesn't compute a
+      balance yet, that's Phase 6.
+- [x] **`paymentMethod` → `accounts` migration** — every distinct `payment_method`
+      string on existing expenses becomes one `AccountRow` (type defaults to `cash`;
+      free text can't be reliably classified further), with matching expenses pointed
+      at it via `account_id`. `payment_method` itself is left untouched — purely
+      additive, nothing deleted. **In practice this migration is a no-op on every real
+      install**: verified `payment_method` has never been settable from any screen in
+      this app (schema column existed, travelled through backup/export, nothing ever
+      wrote a non-null value) — written correctly anyway per the spec, on the chance a
+      debug/import path set one historically.
+- [x] **`AccountRepository`** → CRUD (never hard-deletes, archive only — same
+      never-destroy-data convention as categories/tags), `watchTotalsByAccount` for the
+      per-account current-month breakdown.
+- [x] **`AccountsScreen`** (Profile → Accounts) → list with per-account this-month
+      spend, create/edit/archive sheet (name, type chips, opening balance).
+- [x] **Quick Add** → a 5th chip, account picker mirroring the trip picker exactly
+      (including "+ New account" inline creation). Placement flagged, not silently
+      assumed: added to the *already-reverted*, original chip row styling (not the
+      redesign that was just backed out), since the user's feedback was about the
+      redesign's look, not about whether a 5th item may ever be added there. Worth
+      revisiting if it reads as crowded again.
+- [x] **Backup v8** → new `accounts` array; each expense gains an `accountId` key
+      (backup-file id, resolved to a local id on Merge/Replace exactly like `tagId`
+      already is — matched by `externalId` first, normalized name fallback). A matched
+      account is never touched by Merge, same as every other master-data table; only a
+      newly-inserted expense's `accountId` gets remapped through the merge's
+      backup-id → local-id map.
+- [x] **`resetToDefaults`** wipes `accounts` too (no default accounts reseeded — unlike
+      categories, there's nothing sensible to seed).
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **389 passed** (was 373 immediately before this phase). New
+  coverage: `account_repository_test.dart` (CRUD, archive, per-account totals),
+  extended `migration_test.dart` (a v1 install with two expenses sharing a
+  `payment_method` value upgrades to exactly one account, both rows linked, the
+  untouched row stays untouched), extended `reset_test.dart`, five new backup
+  round-trip tests (Replace reattaches the account to the right expense; Merge attaches
+  an account to a newly-inserted expense under its *new* local id, not the source
+  device's; merging twice doesn't duplicate; renaming then re-merging keeps the
+  rename; a pre-v8 file merges with no accounts at all), plus a v8 JSON round-trip in
+  `backup_format_test.dart`.
+- Not run on a device/simulator — same standing gap as every prior phase.
+
+### Deferred / notes
+- No balance display yet (opening balance + activity) — that's Phase 6, once transfers
+  exist and a "derived balance" has transfers to derive *from* as well as expenses.
+- Account picker placement in Quick Add (5th chip) is a judgment call flagged to the
+  user, not confirmed — the row was already the subject of back-and-forth feedback this
+  same session.

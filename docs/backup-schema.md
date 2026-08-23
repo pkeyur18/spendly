@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 7,
+  "version": 8,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 7,
+  "version": 8,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -333,6 +333,50 @@ empty list — same additive, no-version-branch pattern as every field above. No
 lost by this: a pre-v7 backup was written before receipts existed, so there was never a
 photo to carry.
 
+## v8 — accounts (schema v12)
+
+An account (cash/bank/card/wallet) is its own table, same shape of decision as receipts in
+v7: `expenses` is read in full by nearly every query in the app, so a new master-data
+concept gets its own table rather than more columns dragged through every one of those
+reads. The payload gets a new top-level array:
+
+```json
+"accounts": [
+  {
+    "id": 1,
+    "name": "HDFC Bank",
+    "type": "bank",
+    "openingBalanceMinor": 500000,
+    "isArchived": false,
+    "externalId": "..."
+  }
+],
+```
+
+and each `expenses` entry gains one new key:
+
+- `accountId` (int, nullable) — the backup-file id of the account it was paid from, or
+  `null`. Same convention as `tagId`: this is the **backup file's** id, resolved to a local
+  account id by Replace and Merge exactly the way `tagId` already is, not a raw local id
+  carried across devices.
+
+`type` serializes as its `.name` string (`"cash"`, `"bank"`, `"card"`, `"wallet"`), same
+convention as `recurrence`/`period`.
+
+- **Replace** wipes `accounts` (after `expenses`, since `expenses.accountId` references it —
+  same FK-order reasoning as everything else) then restores it before restoring `expenses`,
+  reusing original ids verbatim. Because ids line up exactly, an expense's `accountId` needs
+  no remapping.
+- **Merge** matches accounts by `externalId` first, falling back to normalized name — same
+  rule as categories/tags. A matched (already-present) account is left untouched, same as
+  every other master-data table; only a newly-inserted expense's `accountId` gets remapped
+  through the resulting backup-id → local-id map, the same way `tagId` already is.
+
+A pre-v8 file has no `accounts` key and no `accountId` key on its expenses.
+`BackupPayload.fromJson` reads a missing `accounts` as `[]`; `BackupExpense.fromJson` reads
+a missing `accountId` as `null` — same additive, no-version-branch pattern as every field
+above.
+
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
 - **Categories** — matched by `externalId` first when both the backup row and a local row
@@ -340,6 +384,7 @@ photo to carry.
   install seeds the same 8 default category names, so the name fallback is still what stops a
   Merge from doubling those.
 - **Tags** — same rule as categories.
+- **Accounts** — same rule as categories/tags.
 - **Expenses** — matched by `externalId` first; falls back to content fingerprint
   `(amountMinor, date, mappedCategoryId, note, paymentMethod)`.
 - **Budgets** — matched by `externalId` first; falls back to `(mappedCategoryId)` slot
@@ -356,10 +401,11 @@ fix — this replaces it.
 ## Replace algorithm
 
 Runs inside a single Drift transaction so a failure partway through rolls
-back automatically, never leaving partial data: delete `expenses` → delete
-`tags` → delete `budgets` → delete `categories` (child-to-parent FK order),
-then batch-insert categories, tags, budgets, expenses (reusing original ids),
-then delete+batch-insert `settings`.
+back automatically, never leaving partial data: delete `expense_receipts` →
+delete `expenses` → delete `accounts` → delete `tags` → delete `budgets` →
+delete `categories` (child-to-parent FK order), then batch-insert
+categories, tags, accounts, budgets, expenses, expense_receipts (reusing
+original ids throughout), then delete+batch-insert `settings`.
 
 ## Validation (FR-41)
 

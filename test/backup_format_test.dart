@@ -33,6 +33,7 @@ BackupPayload _samplePayload() => BackupPayload(
       nextDueDate: null,
       recurrenceEndDate: null,
       tagId: 1,
+      accountId: null,
       createdAt: DateTime(2026, 7, 1, 9, 3),
       updatedAt: DateTime(2026, 7, 1, 9, 3),
       externalId: null,
@@ -262,6 +263,50 @@ void main() {
     },
   );
 
+  test('a v8 account round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        accounts: const [
+          BackupAccount(
+            id: 1,
+            name: 'HDFC Bank',
+            type: AccountType.bank,
+            openingBalanceMinor: 500000,
+            isArchived: false,
+            externalId: 'acc-1',
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).accounts.single;
+    expect(decoded.name, 'HDFC Bank');
+    expect(decoded.type, AccountType.bank);
+    expect(decoded.openingBalanceMinor, 500000);
+    expect(decoded.isArchived, isFalse);
+    expect(decoded.externalId, 'acc-1');
+  });
+
+  test('a pre-v8 file (no accounts key) decodes with no accounts at all',
+      () async {
+    final v7Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 7,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('accounts'),
+    });
+
+    final decoded = await decodePayload(v7Json);
+    expect(decoded.accounts, isEmpty);
+  });
+
   test('a v7 receipt round-trips as base64', () async {
     final payload = _samplePayload();
     final envelope = await encodeEnvelope(
@@ -313,6 +358,7 @@ void main() {
       nextDueDate: DateTime(2026, 8, 1),
       recurrenceEndDate: DateTime(2027, 1, 1),
       tagId: payload.expenses.single.tagId,
+      accountId: payload.expenses.single.accountId,
       createdAt: payload.expenses.single.createdAt,
       updatedAt: payload.expenses.single.updatedAt,
       externalId: payload.expenses.single.externalId,

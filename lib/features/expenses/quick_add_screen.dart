@@ -23,6 +23,8 @@ import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../tags/tag_edit_sheet.dart';
 import '../tags/tag_repository.dart';
+import '../accounts/account_repository.dart';
+import '../accounts/accounts_screen.dart';
 import 'expense_repository.dart';
 import 'receipt_repository.dart';
 import 'recurring_schedule.dart';
@@ -143,6 +145,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late String _initialAmount;
   int? _categoryId;
   int? _tagId;
+  int? _accountId;
   late DateTime _selectedDate;
   bool _defaulted = false;
 
@@ -209,6 +212,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _initialAmount = _amount;
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
     _tagId = e?.tagId;
+    _accountId = e?.accountId;
     _selectedDate = prefill.date;
     _noteController.text = e?.note ?? '';
     _initialNote = _noteController.text;
@@ -291,6 +295,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                               children: [
                                 _dateChip(context, palette),
                                 _tripChip(context, palette),
+                                _accountChip(context, palette),
                                 _repeatChip(context, palette),
                                 _receiptChip(context, palette),
                               ],
@@ -629,6 +634,132 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       emphasized: selected != null,
       emphasisColor: selected == null ? null : Color(selected.colorValue),
     );
+  }
+
+  /// Account chip: shows the selected account or "Add account", tap opens a
+  /// picker of active accounts. Orthogonal to category and trip — see
+  /// [Expenses.accountId].
+  Widget _accountChip(BuildContext context, AppPalette palette) {
+    final accounts = ref.watch(activeAccountsProvider).value ?? const [];
+    final selected = accounts
+        .where((a) => a.id == _accountId)
+        .cast<AccountRow?>()
+        .firstOrNull;
+    return _metaChip(
+      icon: Icons.account_balance_wallet_outlined,
+      label: selected?.name ?? 'Add account',
+      semanticsLabel: selected == null
+          ? 'Add account'
+          : 'Account, ${selected.name}',
+      onTap: () => _openAccountPicker(accounts),
+      palette: palette,
+      emphasized: selected != null,
+      emphasisColor: selected == null ? null : AppColors.primary,
+    );
+  }
+
+  /// Sentinel distinguishing an explicit "No account" pick from a dismissed
+  /// sheet — same pattern as [_noTripChoice].
+  static const _noAccountChoice = -1;
+
+  Future<void> _openAccountPicker(List<AccountRow> accounts) async {
+    final chosen = await showModalBottomSheet<int?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: Text('Account'),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: accounts.length + 2,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.add,
+                          size: 20,
+                          color: AppColors.primary,
+                        ),
+                        title: const Text(
+                          '+ New account',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          final newId = await showAccountEditSheet(context);
+                          if (newId != null && mounted) {
+                            setState(() {
+                              _accountId = newId;
+                              _touched = true;
+                            });
+                          }
+                        },
+                      );
+                    }
+                    if (i == 1) {
+                      return ListTile(
+                        leading: const Icon(Icons.close, size: 20),
+                        title: const Text('No account'),
+                        trailing: _accountId == null
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: AppColors.primary,
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () => Navigator.of(
+                          sheetContext,
+                        ).pop<int?>(_noAccountChoice),
+                      );
+                    }
+                    final a = accounts[i - 2];
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 20,
+                      ),
+                      title: Text(a.name),
+                      trailing: a.id == _accountId
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: AppColors.primary,
+                              size: 18,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop<int?>(a.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _accountId = chosen == _noAccountChoice ? null : chosen;
+      _touched = true;
+    });
   }
 
   /// Repeat chip: shows the schedule or "Repeat", tap opens the picker.
@@ -1287,6 +1418,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         nextDueDate: Value(nextDue),
         recurrenceEndDate: Value(_recurrenceEndDate),
         tagId: Value(_tagId),
+        accountId: Value(_accountId),
         // Always passed, never absent: moving an expense off a trip has to
         // clear the foreign receipt, not leave a stale one behind.
         fxCurrency: Value(resolved.fxCurrency),
@@ -1305,6 +1437,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         nextDueDate: nextDue,
         recurrenceEndDate: _recurrenceEndDate,
         tagId: _tagId,
+        accountId: _accountId,
         fxCurrency: resolved.fxCurrency,
         fxAmount: resolved.fxAmount,
       );

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../accounts/accounts_screen.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../backup/backup_restore_screen.dart';
 import '../settings/theme_mode_provider.dart';
@@ -158,6 +159,14 @@ class ProfileScreen extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (_) => const BackupRestoreScreen(),
                     ),
+                  ),
+                ),
+                _MenuRow(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Accounts',
+                  subtitle: 'Cash, bank, card and wallet balances',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AccountsScreen()),
                   ),
                 ),
                 _MenuRow(
