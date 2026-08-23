@@ -188,8 +188,8 @@ class TopExpensesCard extends StatelessWidget {
   }
 }
 
-/// Export CSV / Export PDF buttons that generate then hand off to the OS share
-/// sheet (FR-21, FR-22). Email is one of the share targets.
+/// Export Excel / Export PDF buttons that generate then hand off to the OS
+/// share sheet (FR-21, FR-22). Email is one of the share targets.
 class ExportRow extends StatefulWidget {
   const ExportRow({
     super.key,
@@ -226,12 +226,13 @@ class _ExportRowState extends State<ExportRow> {
         );
         await shareReportFile(bytes: bytes, filename: '$safe.pdf');
       } else {
-        final csv = buildCsv(
-          widget.data.expenses,
+        final bytes = buildXlsx(
+          widget.data,
           widget.byId,
+          title: widget.title,
           profile: widget.profile,
         );
-        await shareReportFile(bytes: csv.codeUnits, filename: '$safe.csv');
+        await shareReportFile(bytes: bytes, filename: '$safe.xlsx');
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
@@ -255,7 +256,7 @@ class _ExportRowState extends State<ExportRow> {
                 borderRadius: BorderRadius.circular(AppRadius.button),
               ),
             ),
-            child: const Text('Export CSV'),
+            child: const Text('Export Excel'),
           ),
         ),
         const SizedBox(width: AppSpacing.md),

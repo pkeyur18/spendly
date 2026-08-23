@@ -131,7 +131,7 @@ Single-user app. No login, no account. All data local by default.
 | FR-18 | User is notified when the monthly report is ready; tapping the notification opens the previous month's report |
 | FR-19 | User can generate a report for any custom date range on demand (quick-range chips + custom picker) |
 | FR-20 | Reports include: total spend, category breakdown, top 5 expenses, comparison vs. previous period (% change), daily average, transaction count, top category, budget-used % |
-| FR-21 | User can export a report as PDF or CSV (PDF bundles the app fonts so ₹ renders; CSV is RFC-4180 with a profile header block) |
+| FR-21 | User can export a report as PDF or Excel (.xlsx) (PDF bundles the app fonts so ₹ renders; Excel has a Summary sheet with totals/category/weekly breakdown as in-cell bar visuals, and a Transactions sheet with the full raw list) |
 | FR-22 | User can share a report via the OS share sheet (email is a share target, not a backend) |
 
 ### 5.8 Budgets
@@ -158,7 +158,7 @@ Single-user app. No login, no account. All data local by default.
 |---|---|
 | FR-30 | All data stored locally by default (offline-first, Drift/SQLite). Money is stored as integer minor units (paise), never float |
 | FR-31 | *(Descoped for v1)* Account-based cloud sync is out of scope; backup is share-sheet-only (see 5.11) |
-| FR-32 | Data export (CSV) available at any time via report export |
+| FR-32 | Data export (Excel) available at any time via report export |
 
 ### 5.11 Backup, Export & Import
 | ID | Requirement |

@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:excel/excel.dart' as xl;
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -14,57 +14,292 @@ import '../../core/money/money.dart';
 import '../profile/profile_provider.dart';
 import 'report_model.dart';
 
-// ---- CSV (FR-21, FR-32) — pure, unit-tested ----
+// ---- Excel (FR-21, FR-32) — Summary + Transactions sheets ----
+//
+// The `excel` package has no native chart/image support (confirmed against
+// its roadmap), so "graphical" here means real, checkable cell content: a
+// category's/week's share rendered as a row of colored cells (a segmented
+// bar), not a picture. Layout mirrors the approved "stat-tile dashboard"
+// mockup — tiles can't vary a single row's height per column the way the
+// mockup's vertical sparkline did, so the weekly trend uses the same
+// horizontal segmented bar as the category breakdown.
 
-/// Non-blank "Label,value" lines for [profile]'s name/email/phone, or an
-/// empty list if [profile] is null/entirely blank.
-List<String> _profileLines(Profile? profile) {
-  if (profile == null) return const [];
-  return [
-    if (profile.name.isNotEmpty) 'Name,${_csvField(profile.name)}',
-    if (profile.email.isNotEmpty) 'Email,${_csvField(profile.email)}',
-    if (profile.phone.isNotEmpty) 'Phone,${_csvField(profile.phone)}',
-  ];
+const _accentHex = 'FF6366F1';
+const _accentSoftHex = 'FFEEEEFD';
+const _trackHex = 'FFE5E5EA';
+const _dimHex = 'FF6B6875';
+const _inkHex = 'FF1D1B22';
+const _barSegments = 10;
+const _colCategory = 0;
+const _colAmount = 1;
+const _colBarStart = 2;
+const _sheetCols = _colBarStart + _barSegments; // A..L
+
+xl.ExcelColor _xlColor(String argbHex) => xl.ExcelColor.fromHexString(argbHex);
+
+/// A category's stored ARGB [Color] value, forced fully opaque for Excel.
+xl.ExcelColor _categoryColor(int colorValue) {
+  final rgb = (colorValue & 0x00FFFFFF).toRadixString(16).padLeft(6, '0');
+  return _xlColor('FF${rgb.toUpperCase()}');
 }
 
-/// The in-range transactions as RFC-4180 CSV. FR-32 export.
-String buildCsv(
-  List<ExpenseRow> expenses,
-  Map<int, CategoryRow> byId, {
-  Profile? profile,
-}) {
-  final df = DateFormat('yyyy-MM-dd');
-  final profileLines = _profileLines(profile);
-  final rows = <String>[
-    ...profileLines,
-    if (profileLines.isNotEmpty) '',
-    'Date,Category,Note,Amount,Payment method',
-  ];
-  for (final e in expenses) {
-    rows.add(
-      [
-        df.format(e.date),
-        byId[e.categoryId]?.name ?? '',
-        e.note ?? '',
-        _decimal(e.amountMinor),
-        e.paymentMethod ?? '',
-      ].map(_csvField).join(','),
+xl.CellStyle _moneyStyle() => xl.CellStyle(
+  numberFormat: xl.NumFormat.custom(formatCode: '"₹"#,##0'),
+  horizontalAlign: xl.HorizontalAlign.Right,
+);
+
+/// One segmented "bar": [filled] of [_barSegments] cells tinted [color],
+/// the rest left as a neutral track. FR-32's graphical category/week read.
+void _writeBar(xl.Sheet sheet, int row, double fraction, xl.ExcelColor color) {
+  final filled = (fraction * _barSegments).round().clamp(0, _barSegments);
+  for (var i = 0; i < _barSegments; i++) {
+    sheet
+        .cell(
+          xl.CellIndex.indexByColumnRow(
+            columnIndex: _colBarStart + i,
+            rowIndex: row,
+          ),
+        )
+        .cellStyle = xl.CellStyle(
+      backgroundColorHex: i < filled ? color : _xlColor(_trackHex),
     );
   }
-  return rows.join('\r\n');
 }
 
-/// Exact major-unit string from minor units — no float.
-String _decimal(int minor) {
-  final sign = minor < 0 ? '-' : '';
-  final a = minor.abs();
-  return '$sign${a ~/ 100}.${(a % 100).toString().padLeft(2, '0')}';
+void _setCell(
+  xl.Sheet sheet,
+  int col,
+  int row,
+  xl.CellValue value, {
+  xl.CellStyle? style,
+}) {
+  final cell = sheet.cell(
+    xl.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+  );
+  cell.value = value;
+  if (style != null) cell.cellStyle = style;
 }
 
-/// Quote a field iff it contains a comma, quote, CR or LF; embedded quotes doubled.
-String _csvField(String v) {
-  if (v.contains(RegExp(r'[",\r\n]'))) return '"${v.replaceAll('"', '""')}"';
-  return v;
+/// Merge [col, row] .. [col + colSpan - 1, row], value/style on the anchor.
+void _mergeRow(
+  xl.Sheet sheet,
+  int col,
+  int row,
+  int colSpan,
+  xl.CellValue value,
+  xl.CellStyle style,
+) {
+  _setCell(sheet, col, row, value, style: style);
+  sheet.merge(
+    xl.CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+    xl.CellIndex.indexByColumnRow(
+      columnIndex: col + colSpan - 1,
+      rowIndex: row,
+    ),
+  );
+}
+
+/// One of the four top KPI tiles (label row + value row, [tileIndex] 0..3).
+void _writeTile(
+  xl.Sheet sheet,
+  int tileIndex,
+  int labelRow,
+  String label,
+  String value, {
+  bool accent = false,
+}) {
+  final col = tileIndex * 3;
+  _mergeRow(
+    sheet,
+    col,
+    labelRow,
+    3,
+    xl.TextCellValue(label.toUpperCase()),
+    xl.CellStyle(
+      fontSize: 9,
+      fontColorHex: _xlColor(_dimHex),
+      horizontalAlign: xl.HorizontalAlign.Center,
+    ),
+  );
+  _mergeRow(
+    sheet,
+    col,
+    labelRow + 1,
+    3,
+    xl.TextCellValue(value),
+    xl.CellStyle(
+      bold: true,
+      fontSize: 14,
+      fontColorHex: _xlColor(accent ? _accentHex : _inkHex),
+      horizontalAlign: xl.HorizontalAlign.Center,
+    ),
+  );
+}
+
+/// Full report as an .xlsx: a Summary sheet (totals, category and weekly
+/// breakdown as segmented bars) and a Transactions sheet (today's CSV
+/// columns, typed). FR-21/FR-32 export.
+Uint8List buildXlsx(
+  ReportData data,
+  Map<int, CategoryRow> byId, {
+  required String title,
+  Profile? profile,
+}) {
+  final excel = xl.Excel.createExcel();
+  final summary = excel['Summary'];
+  final txns = excel['Transactions'];
+  for (final name in excel.sheets.keys.toList()) {
+    if (name != 'Summary' && name != 'Transactions') excel.delete(name);
+  }
+  excel.setDefaultSheet('Summary');
+  String money(Money m) => '₹${m.minor ~/ 100}';
+
+  for (var c = _colBarStart; c < _sheetCols; c++) {
+    summary.setColumnWidth(c, 2.6);
+  }
+  summary.setColumnWidth(_colCategory, 18);
+  summary.setColumnWidth(_colAmount, 12);
+
+  var row = 0;
+  _mergeRow(
+    summary,
+    0,
+    row,
+    _sheetCols,
+    xl.TextCellValue('Spend Summary — $title'),
+    xl.CellStyle(
+      bold: true,
+      fontSize: 15,
+      fontColorHex: _xlColor(_accentHex),
+      backgroundColorHex: _xlColor(_accentSoftHex),
+    ),
+  );
+  row += 2;
+
+  final compare = data.changePct == null
+      ? 'No prior-period spend'
+      : '${data.changeUp ? '↑' : '↓'} ${data.changePct!.abs().toStringAsFixed(0)}% vs previous';
+  _writeTile(summary, 0, row, 'Total spent', money(data.total), accent: true);
+  _writeTile(summary, 1, row, 'Transactions', '${data.txnCount}');
+  _writeTile(summary, 2, row, 'Daily average', money(data.dailyAverage));
+  _writeTile(
+    summary,
+    3,
+    row,
+    'Top category',
+    data.topCategory?.$1.name ?? '—',
+  );
+  row += 3;
+  _setCell(
+    summary,
+    0,
+    row,
+    xl.TextCellValue(compare),
+    style: xl.CellStyle(fontColorHex: _xlColor(_dimHex), fontSize: 10),
+  );
+  row += 2;
+
+  _mergeRow(
+    summary,
+    0,
+    row,
+    _sheetCols,
+    xl.TextCellValue('By category'),
+    xl.CellStyle(bold: true, backgroundColorHex: _xlColor(_trackHex)),
+  );
+  row++;
+  _setCell(summary, _colCategory, row, xl.TextCellValue('Category'));
+  _setCell(summary, _colAmount, row, xl.TextCellValue('Amount'));
+  row++;
+  for (final slice in data.breakdown) {
+    _setCell(summary, _colCategory, row, xl.TextCellValue(slice.$1.name));
+    _setCell(
+      summary,
+      _colAmount,
+      row,
+      xl.DoubleCellValue(slice.$2.minor / 100),
+      style: _moneyStyle(),
+    );
+    _writeBar(summary, row, slice.$3, _categoryColor(slice.$1.colorValue));
+    row++;
+  }
+  row++;
+
+  _mergeRow(
+    summary,
+    0,
+    row,
+    _sheetCols,
+    xl.TextCellValue('Weekly trend'),
+    xl.CellStyle(bold: true, backgroundColorHex: _xlColor(_trackHex)),
+  );
+  row++;
+  _setCell(summary, _colCategory, row, xl.TextCellValue('Week'));
+  _setCell(summary, _colAmount, row, xl.TextCellValue('Amount'));
+  row++;
+  final maxWeek = data.weekly.isEmpty
+      ? 0
+      : data.weekly.map((w) => w.$2.minor).reduce((a, b) => a > b ? a : b);
+  for (final week in data.weekly) {
+    _setCell(summary, _colCategory, row, xl.TextCellValue(week.$1));
+    _setCell(
+      summary,
+      _colAmount,
+      row,
+      xl.DoubleCellValue(week.$2.minor / 100),
+      style: _moneyStyle(),
+    );
+    final fraction = maxWeek == 0 ? 0.0 : week.$2.minor / maxWeek;
+    _writeBar(summary, row, fraction, _xlColor(_accentHex));
+    row++;
+  }
+  row++;
+
+  final footer = [
+    'Generated by Spendly',
+    if (profile != null && !profile.isEmpty)
+      [
+        profile.name,
+        profile.email,
+        profile.phone,
+      ].where((s) => s.isNotEmpty).join(' · '),
+  ].join(' · ');
+  _setCell(
+    summary,
+    0,
+    row,
+    xl.TextCellValue(footer),
+    style: xl.CellStyle(fontColorHex: _xlColor(_dimHex), fontSize: 9),
+  );
+
+  // ---- Transactions sheet — today's CSV columns, typed ----
+  txns.setColumnWidth(0, 12);
+  txns.setColumnWidth(1, 16);
+  txns.setColumnWidth(2, 28);
+  txns.setColumnWidth(3, 12);
+  txns.setColumnWidth(4, 16);
+  txns.appendRow([
+    xl.TextCellValue('Date'),
+    xl.TextCellValue('Category'),
+    xl.TextCellValue('Note'),
+    xl.TextCellValue('Amount'),
+    xl.TextCellValue('Payment method'),
+  ]);
+  for (final e in data.expenses) {
+    txns.appendRow([
+      xl.DateCellValue(
+        year: e.date.year,
+        month: e.date.month,
+        day: e.date.day,
+      ),
+      xl.TextCellValue(byId[e.categoryId]?.name ?? ''),
+      xl.TextCellValue(e.note ?? ''),
+      xl.DoubleCellValue(e.amountMinor / 100),
+      xl.TextCellValue(e.paymentMethod ?? ''),
+    ]);
+  }
+
+  return Uint8List.fromList(excel.save()!);
 }
 
 // ---- PDF (FR-21) ----
@@ -208,7 +443,7 @@ Future<Uint8List> buildPdf(
   return doc.save();
 }
 
-// ---- Share (FR-22) — one path serves PDF, CSV and email (email = a share target) ----
+// ---- Share (FR-22) — one path serves PDF, Excel and email (email = a share target) ----
 
 /// Write [bytes] to a temp file and hand it to the OS share sheet (which lists
 /// Mail, Files, cloud drives, etc.).

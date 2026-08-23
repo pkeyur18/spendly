@@ -25,7 +25,7 @@ class ReportData {
 
   final DateTime start;
   final DateTime end; // half-open
-  final List<ExpenseRow> expenses; // full in-range list (CSV export, FR-32)
+  final List<ExpenseRow> expenses; // full in-range list (Excel export, FR-32)
   final Money total;
   final Money previousTotal;
 
@@ -55,7 +55,7 @@ ReportData buildReport({
   required Map<int, CategoryRow> categoriesById,
 }) {
   // Categories flagged "ignore for budget" are excluded from every aggregate
-  // below, but [expenses] itself stays the full raw list (CSV export/FR-32).
+  // below, but [expenses] itself stays the full raw list (Excel export/FR-32).
   final ignored = ignoredCategoryIds(categoriesById);
   final counted = expenses
       .where((e) => !ignored.contains(e.categoryId))
