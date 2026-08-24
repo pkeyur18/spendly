@@ -7,6 +7,8 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/buttons.dart';
+import '../../core/widgets/glass.dart';
 import 'goal_repository.dart';
 
 /// Savings goals (Phase 7) — a target amount the user is putting money
@@ -264,13 +266,8 @@ class GoalDetailScreen extends ConsumerWidget {
 
 /// Create (no [existing]) or edit a goal: name, target amount, archive.
 Future<int?> showGoalEditSheet(BuildContext context, {SavingsGoalRow? existing}) {
-  return showModalBottomSheet<int>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<int>(
+    context,
     builder: (_) => _GoalEditSheet(existing: existing),
   );
 }
@@ -338,30 +335,10 @@ class _GoalEditSheetState extends ConsumerState<_GoalEditSheet> {
   }
 
   Widget _saveButton() {
-    return Semantics(
-      button: true,
-      label: _saving ? 'Saving' : 'Save goal',
-      child: GestureDetector(
-        onTap: _saving ? null : _save,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          decoration: BoxDecoration(
-            gradient: AppColors.brandGradient,
-            borderRadius: BorderRadius.circular(AppRadius.button),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            _saving ? 'Saving…' : 'Save',
-            style: const TextStyle(
-              fontFamily: 'Sora',
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
+    return PrimaryGradientButton(
+      label: _saving ? 'Saving…' : 'Save',
+      semanticLabel: _saving ? 'Saving' : 'Save goal',
+      onPressed: _saving ? null : _save,
     );
   }
 

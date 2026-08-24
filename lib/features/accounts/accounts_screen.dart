@@ -7,7 +7,9 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/icon_color_picker.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
 import 'account_detail_screen.dart';
@@ -288,13 +290,8 @@ Future<({int id, bool archived})?> showAccountEditSheet(
   BuildContext context, {
   AccountRow? existing,
 }) {
-  return showModalBottomSheet<({int id, bool archived})>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<({int id, bool archived})>(
+    context,
     builder: (_) => _AccountEditSheet(existing: existing),
   );
 }
@@ -496,12 +493,10 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
               onChanged: (v) => setState(() => _includeInNetWorth = v),
             ),
             const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving…' : 'Save'),
-              ),
+            PrimaryGradientButton(
+              label: _saving ? 'Saving…' : 'Save',
+              semanticLabel: _isEdit ? 'Save account' : 'Add account',
+              onPressed: _saving ? null : _save,
             ),
             if (_isEdit) ...[
               const SizedBox(height: AppSpacing.sm),

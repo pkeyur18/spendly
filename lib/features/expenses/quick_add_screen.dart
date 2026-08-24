@@ -18,6 +18,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/repeat_picker.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
@@ -682,15 +683,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   static const _noAccountChoice = -1;
 
   Future<void> _openAccountPicker(List<AccountRow> accounts) async {
-    final chosen = await showModalBottomSheet<int?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<int?>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -844,8 +838,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _pickReceiptPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
+    final source = await showGlassSheet<ImageSource>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -889,14 +883,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _showReceiptPreview() async {
-    final action = await showModalBottomSheet<_ReceiptAction>(
-      context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final action = await showGlassSheet<_ReceiptAction>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -947,15 +935,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _openTagPicker(List<TagRow> tags) async {
-    final chosen = await showModalBottomSheet<int?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<int?>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -1184,15 +1165,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _openCategoryPicker(List<CategoryRow> categories) async {
-    final chosen = await showModalBottomSheet<CategoryRow>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<CategoryRow>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
