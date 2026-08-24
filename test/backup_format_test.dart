@@ -436,6 +436,49 @@ void main() {
     expect(decoded.ledgerEntries, isEmpty);
   });
 
+  test('a v10 savings goal round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        savingsGoals: const [
+          BackupGoal(
+            id: 1,
+            name: 'New laptop',
+            targetMinor: 8000000,
+            savedMinor: 2000000,
+            isArchived: false,
+            externalId: 'goal-1',
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).savingsGoals.single;
+    expect(decoded.name, 'New laptop');
+    expect(decoded.targetMinor, 8000000);
+    expect(decoded.savedMinor, 2000000);
+    expect(decoded.externalId, 'goal-1');
+  });
+
+  test('a pre-v10 file (no savingsGoals key) decodes with no goals at all',
+      () async {
+    final v9Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 9,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('savingsGoals'),
+    });
+
+    final decoded = await decodePayload(v9Json);
+    expect(decoded.savingsGoals, isEmpty);
+  });
+
   test('a v7 receipt round-trips as base64', () async {
     final payload = _samplePayload();
     final envelope = await encodeEnvelope(

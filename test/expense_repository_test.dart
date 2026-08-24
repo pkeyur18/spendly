@@ -484,4 +484,59 @@ void main() {
       expect(rows, hasLength(2));
     });
   });
+
+  group('topNotes', () {
+    test('most-frequently-used note comes first', () async {
+      for (var i = 0; i < 3; i++) {
+        await repo.add(
+          amount: Money.parse('10'),
+          categoryId: 1,
+          date: DateTime(2026, 3, i + 1),
+          note: 'Coffee',
+        );
+      }
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 10),
+        note: 'Gas',
+      );
+      final notes = await repo.topNotes();
+      expect(notes.first, 'Coffee');
+      expect(notes, contains('Gas'));
+    });
+
+    test('a note used on multiple expenses appears only once', () async {
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 1),
+        note: 'Coffee',
+      );
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 2),
+        note: 'Coffee',
+      );
+      expect(await repo.topNotes(), ['Coffee']);
+    });
+
+    test('expenses with no note are excluded', () async {
+      await repo.add(amount: Money.parse('10'), categoryId: 1, date: DateTime(2026, 3, 1));
+      expect(await repo.topNotes(), isEmpty);
+    });
+
+    test('respects the limit', () async {
+      for (final note in ['A', 'B', 'C']) {
+        await repo.add(
+          amount: Money.parse('10'),
+          categoryId: 1,
+          date: DateTime(2026, 3, 1),
+          note: note,
+        );
+      }
+      expect(await repo.topNotes(limit: 2), hasLength(2));
+    });
+  });
 }

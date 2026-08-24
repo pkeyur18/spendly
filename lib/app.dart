@@ -14,6 +14,8 @@ import 'features/home/app_shell.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/profile/profile_provider.dart';
 import 'features/recap/recap_providers.dart';
+import 'features/security/app_lock_provider.dart';
+import 'features/security/lock_screen.dart';
 import 'features/settings/theme_mode_provider.dart';
 import 'features/widgets/widget_refresh.dart';
 import 'features/widgets/widget_snapshot.dart' show widgetAppGroupId;
@@ -76,6 +78,13 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       ref.invalidate(recurringReminderCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
     }
+    // Re-lock on backgrounding, not just cold start — otherwise App Lock
+    // would only ever gate the very first launch, and anyone could resume
+    // the app from the app switcher with nothing to unlock.
+    if (state == AppLifecycleState.paused &&
+        (ref.read(appLockEnabledProvider).value ?? false)) {
+      ref.read(appUnlockedProvider.notifier).set(false);
+    }
   }
 
   /// Widget quick-add deep link: `spendly://quickadd?category=<id>` opens
@@ -102,6 +111,12 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);
+    // Falls back to "not locked" while the persisted value loads, same as
+    // every other settings-backed toggle in this app — a locked-by-default
+    // flash on every cold start would be worse than the one-frame gap this
+    // avoids being theoretically lockable.
+    final lockEnabled = ref.watch(appLockEnabledProvider).value ?? false;
+    final unlocked = ref.watch(appUnlockedProvider);
 
     return MaterialApp(
       title: 'Spendly',
@@ -120,17 +135,20 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
         curve: Curves.ease,
         child: child!,
       ),
-      home: profileAsync.when(
-        loading: () => const Scaffold(body: LoadingView()),
-        error: (e, _) => Scaffold(
-          body: ErrorView(
-            message: "Couldn't load your profile.",
-            onRetry: () => ref.invalidate(profileProvider),
-          ),
-        ),
-        data: (profile) =>
-            profile.name.isEmpty ? const WelcomeScreen() : const AppShell(),
-      ),
+      home: (lockEnabled && !unlocked)
+          ? const AppLockScreen()
+          : profileAsync.when(
+              loading: () => const Scaffold(body: LoadingView()),
+              error: (e, _) => Scaffold(
+                body: ErrorView(
+                  message: "Couldn't load your profile.",
+                  onRetry: () => ref.invalidate(profileProvider),
+                ),
+              ),
+              data: (profile) => profile.name.isEmpty
+                  ? const WelcomeScreen()
+                  : const AppShell(),
+            ),
     );
   }
 }

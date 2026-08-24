@@ -26,6 +26,7 @@ import '../tags/tag_repository.dart';
 import '../accounts/account_repository.dart';
 import '../accounts/accounts_screen.dart';
 import 'expense_repository.dart';
+import 'note_autocomplete.dart';
 import 'receipt_repository.dart';
 import 'recurring_schedule.dart';
 import 'widgets/expense_tile.dart' show relativeDayLabel;
@@ -195,6 +196,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   void initState() {
     super.initState();
     _noteFocusNode.addListener(() => setState(() {}));
+    // Rebuilds the note-suggestions row (see the AnimatedSize below the
+    // keypad) as the user types, so it filters live rather than only once
+    // on focus.
+    _noteController.addListener(() => setState(() {}));
     final prefill = quickAddPrefill(
       editing: widget.editing,
       duplicateOf: widget.duplicateOf,
@@ -337,7 +342,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                             duration: const Duration(milliseconds: 200),
                             alignment: Alignment.topCenter,
                             child: _noteFocusNode.hasFocus
-                                ? const SizedBox.shrink()
+                                ? _noteSuggestions(context, palette)
                                 : Column(
                                     children: [
                                       AmountKeypad(
@@ -1156,6 +1161,38 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           hintText: 'Add a note',
           counterText: '',
         ),
+      ),
+    );
+  }
+
+  /// Frequency-ranked note autocomplete (Phase 7) — fills the space the
+  /// keypad vacates while the note field is focused, rather than adding a
+  /// new element to the screen's existing layout. Empty (not just hidden)
+  /// when there's nothing to suggest, so `AnimatedSize` still collapses it.
+  Widget _noteSuggestions(BuildContext context, AppPalette palette) {
+    final ranked = ref.watch(topNotesProvider).value ?? const <String>[];
+    final matches = matchingNotes(ranked, _noteController.text);
+    if (matches.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final note in matches)
+            ActionChip(
+              label: Text(note),
+              backgroundColor: palette.card,
+              side: BorderSide(color: palette.line),
+              onPressed: () {
+                _noteController.text = note;
+                _noteController.selection = TextSelection.collapsed(
+                  offset: note.length,
+                );
+                _touched = true;
+              },
+            ),
+        ],
       ),
     );
   }

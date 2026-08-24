@@ -14,6 +14,7 @@ import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 import 'package:spendly/features/expenses/receipt_repository.dart';
+import 'package:spendly/features/goals/goal_repository.dart';
 import 'package:spendly/features/ledger/ledger_repository.dart';
 import 'package:spendly/features/tags/tag_repository.dart';
 
@@ -921,6 +922,85 @@ void main() {
       expect(entry.kind, LedgerEntryKind.transfer);
       expect(entry.accountId, a);
       expect(entry.counterAccountId, b);
+    });
+  });
+
+  group('savings goals', () {
+    test('export then replace preserves saved progress and target', () async {
+      final goalRepo = GoalRepository(db);
+      final id = await goalRepo.create(
+        name: 'New laptop',
+        target: Money.parse('80000'),
+      );
+      await goalRepo.adjustSaved(id, Money.parse('20000'));
+
+      final payload = await repo.exportAll();
+      expect(payload.savingsGoals, hasLength(1));
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restored = (await freshDb.select(freshDb.savingsGoals).get()).single;
+      expect(restored.name, 'New laptop');
+      expect(restored.targetMinor, Money.parse('80000').minor);
+      expect(restored.savedMinor, Money.parse('20000').minor);
+    });
+
+    test('merging the same backup twice does not duplicate the goal',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await GoalRepository(
+        sourceDb,
+      ).create(name: 'Emergency fund', target: Money.parse('50000'));
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+      await repo.mergeAll(payload); // run twice
+
+      expect(await db.select(db.savingsGoals).get(), hasLength(1));
+    });
+
+    test('renaming a goal then merging the original backup matches by '
+        'externalId, keeps the rename, does not duplicate', () async {
+      final goalRepo = GoalRepository(db);
+      final id = await goalRepo.create(
+        name: 'Old name',
+        target: Money.parse('1000'),
+      );
+      final payload = await repo.exportAll(); // carries externalId + 'Old name'
+      await goalRepo.update(id, name: 'New name');
+
+      await repo.mergeAll(payload);
+
+      final goals = await db.select(db.savingsGoals).get();
+      expect(goals, hasLength(1));
+      expect(goals.single.name, 'New name'); // untouched by the merge
+    });
+
+    test('a pre-v10 backup (no savingsGoals key) merges with no goals at all',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await ExpenseRepository(
+        sourceDb,
+      ).add(amount: Money.parse('20'), categoryId: 1, date: DateTime(2026, 7, 3));
+      final exported = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+      final preV10 = BackupPayload(
+        exportedAt: exported.exportedAt,
+        categories: exported.categories,
+        expenses: exported.expenses,
+        budgets: exported.budgets,
+        settings: exported.settings,
+        tags: exported.tags,
+        // No `savingsGoals:` — defaults to const [].
+      );
+
+      await repo.mergeAll(preV10);
+
+      expect(await db.select(db.expenses).get(), hasLength(1));
+      expect(await db.select(db.savingsGoals).get(), isEmpty);
     });
   });
 }

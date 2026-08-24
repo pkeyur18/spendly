@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v16, backup format v9, 444 passing tests (54 test
+> Recap feature. Drift schema v17, backup format v10, 483 passing tests (57 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -85,6 +85,23 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   two tables are ever combined. A derived balance — opening balance + income − expenses ±
   transfers, this month only, matching opening balance's own monthly reset — shows on every
   account and totals up into a dashboard card, both computed fresh on read, never stored.
+- **Insights** — pure derived math over existing history, no schema of its own: categories
+  whose current-month spend moved at least 30% against their trailing 3-month average
+  (filtered to a minimum absolute amount so a tiny category's swing isn't noise), plus the
+  monthly-equivalent total of every active recurring expense/subscription. Reachable from
+  Profile; needs a few months of history to have anything to say.
+- **Savings goals** — a target amount with a manually-adjusted running total ("Add money" /
+  "Withdraw") rather than anything derived from income/expense activity — tying a
+  multi-month goal to the monthly-resetting balance machinery would reset the goal right
+  along with it. Progress bar, tap to add/withdraw or edit; archived rather than deleted.
+- **App Lock** — optional biometric or device PIN/pattern unlock (`local_auth`) on cold
+  start and every resume from the background, off by default. The one setting excluded
+  from backup export — restoring a file on a new device must never lock you out of the app
+  you just installed it on. Disabled in Profile on a device with no biometric enrollment
+  and no PIN/pattern/passcode set, rather than offering a toggle that would strand you.
+- **Note autocomplete** — Quick Add suggests previously-used notes, ranked by how often
+  you've typed them, filtered live as you type; fills the space the keypad vacates while
+  the note field is focused rather than adding anything new to the screen's layout.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -107,11 +124,12 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v16 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v17 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, `excel`, `share_plus` |
 | Backup crypto | `cryptography` (AES-256-GCM + PBKDF2) |
+| App Lock | `local_auth` (biometric/PIN) |
 | Widgets bridge | `home_widget` → native Swift/WidgetKit (iOS) & Kotlin/Glance (Android) |
 | Media / files | `image_picker`, `file_picker`, `flutter_colorpicker`, `path_provider` |
 
@@ -141,7 +159,10 @@ lib/
     ├── home/                       # dashboard + charts + providers
     ├── expenses/                   # quick add, all-transactions, repository, recurrence
     ├── accounts/                   # cash/bank/card/wallet accounts, manage screen
-    ├── ledger/                     # income entries, cashflow/savings-rate math
+    ├── ledger/                     # income entries, transfers, cashflow/balance math
+    ├── goals/                      # savings goals: manual add/withdraw, progress
+    ├── insights/                   # category trend + subscriptions math, feed screen
+    ├── security/                   # App Lock: local_auth wrapper, lock screen
     ├── categories/                 # manager, edit sheet (strip+popup), archived
     ├── budgets/                    # per-month budget setup + repository
     ├── reports/                    # monthly/custom reports, export (PDF/CSV)

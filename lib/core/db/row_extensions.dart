@@ -39,6 +39,19 @@ extension LedgerEntryRowX on LedgerEntryRow {
   Money get amount => Money.fromMinor(amountMinor);
 }
 
+extension SavingsGoalRowX on SavingsGoalRow {
+  Money get target => Money.fromMinor(targetMinor);
+  Money get saved => Money.fromMinor(savedMinor);
+
+  /// 0.0–1.0, never over 100% even once the goal is exceeded — a progress
+  /// bar has nowhere to put the overflow. [isComplete] is the un-clamped
+  /// signal for that case.
+  double get progressRatio =>
+      targetMinor <= 0 ? 0 : (savedMinor / targetMinor).clamp(0, 1);
+
+  bool get isComplete => targetMinor > 0 && savedMinor >= targetMinor;
+}
+
 extension AccountRowX on AccountRow {
   Money get openingBalance => Money.fromMinor(openingBalanceMinor);
 

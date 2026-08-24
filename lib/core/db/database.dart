@@ -298,6 +298,27 @@ class LedgerEntries extends Table {
       text().nullable().clientDefault(generateExternalId)();
 }
 
+/// A savings target the user is putting money aside for (Phase 7, schema
+/// v17) — "New laptop", "Emergency fund". Deliberately simple: [savedMinor]
+/// is a plain running counter the user adjusts directly (add/withdraw), not
+/// derived from income/expense activity or a logged contribution history.
+/// Tying goal progress to the monthly-resetting balance/cashflow machinery
+/// would make a multi-month goal reset with it every month, which defeats
+/// the point of a goal; a manual counter has no such coupling.
+@DataClassName('SavingsGoalRow')
+class SavingsGoals extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 60)();
+  IntColumn get targetMinor => integer()();
+  IntColumn get savedMinor => integer().withDefault(const Constant(0))();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
+}
+
 @DriftDatabase(
   tables: [
     Categories,
@@ -308,6 +329,7 @@ class LedgerEntries extends Table {
     ExpenseReceipts,
     Accounts,
     LedgerEntries,
+    SavingsGoals,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -325,7 +347,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -504,6 +526,10 @@ class AppDatabase extends _$AppDatabase {
         if (!await _hasColumn('ledger_entries', 'counter_account_id')) {
           await m.addColumn(ledgerEntries, ledgerEntries.counterAccountId);
         }
+      }
+      if (from < 17) {
+        // Whole new table — no populated-table hazard.
+        await m.createTable(savingsGoals);
       }
     },
   );

@@ -474,6 +474,42 @@ verbatim, Merge through the account id map). No version bump, same additive patt
   every other field but move money between different account pairs are never treated as
   duplicates of each other.
 
+## v10 — savings goals (schema v17)
+
+A savings goal is its own table with no FK to anything else — the simplest of the
+whole-new-table additions. The payload gets a new top-level array:
+
+```json
+"savingsGoals": [
+  {
+    "id": 1,
+    "name": "New laptop",
+    "targetMinor": 8000000,
+    "savedMinor": 2000000,
+    "isArchived": false,
+    "externalId": "..."
+  }
+],
+```
+
+- **Replace** wipes and restores `savingsGoals` (any position relative to the other
+  deletes/inserts — nothing references it, nothing it references), reusing original ids
+  verbatim.
+- **Merge** matches by `externalId` first, falling back to normalized name — same rule as
+  categories/tags. A matched (already-present) goal is left untouched, including its saved
+  progress; only a newly-inserted goal carries the backup's `savedMinor` over, which is safe
+  since there's no local progress on a goal that didn't already exist here for it to clobber.
+
+A pre-v10 file has no `savingsGoals` key at all. `BackupPayload.fromJson` reads it as `[]` —
+same additive, no-destructive-branch pattern as every new array before it.
+
+## App Lock is never in the payload
+
+Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export
+entirely — same list as the auto-backup bookkeeping keys (`BackupRepository._excludedSettingsKeys`).
+Restoring a backup on a new device must never silently lock the person out of the app they
+just installed it on; App Lock is a device-local security preference, not portable state.
+
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
 - **Categories** — matched by `externalId` first when both the backup row and a local row

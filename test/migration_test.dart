@@ -54,7 +54,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v16 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v17 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -261,5 +261,19 @@ void main() {
     // income, same as every row that existed before transfers did.
     expect(entry.kind, LedgerEntryKind.income);
     expect(entry.counterAccountId, isNull);
+
+    // from<17: savings_goals is a whole new table (no populated-table
+    // hazard), queryable right away.
+    final goalId = await db
+        .into(db.savingsGoals)
+        .insert(
+          SavingsGoalsCompanion.insert(name: 'New laptop', targetMinor: 80000),
+        );
+    final goal = await (db.select(
+      db.savingsGoals,
+    )..where((t) => t.id.equals(goalId))).getSingle();
+    expect(goal.name, 'New laptop');
+    expect(goal.savedMinor, 0);
+    expect(goal.externalId, isNotNull);
   });
 }

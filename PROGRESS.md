@@ -1159,9 +1159,92 @@ providers themselves are thin fold/sum glue over those already-tested pieces.
   tested manually.
 
 ### Deferred / notes
-- Phase 7 (insight feed, savings goals, app lock via `local_auth`, note/merchant
-  autocomplete) remains unstarted, per the original roadmap — not requested yet.
 - The account detail timeline's day-total header still sums only expenses (unchanged
   meaning: "spent that day"), deliberately not netting in income/transfers of different
   signs into one ambiguous number.
+
+## Phase 7 — Insight, goals, security (schema v17, backup v10) — done, final phase
+
+Implemented per `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s Phase 7
+section — the last phase on the original roadmap. Proceeded directly from the existing
+spec, same as Phases 5–6.
+
+- [x] **Insight feed** (`lib/features/insights/`) — pure derived math, no schema.
+      `significantCategoryTrends()` compares each category's current-month spend to its
+      trailing 3-completed-month average (zero-filling a month with no spend in that
+      category, not skipping it — skipping would inflate the average for anyone who only
+      spent in 1 of 3), flags a move of ≥30% with a ≥₹500 current-month floor so a tiny
+      category's swing isn't noise, sorted by size of move. `monthlySubscriptionsTotal()`
+      normalizes every active recurring template to its monthly-equivalent cost
+      (daily/weekly cadences × average periods-per-month, not a flat ×30/×4 that would
+      drift). New Insights screen off Profile; empty state explains it needs a few months
+      of history, matching why this was sequenced last in the roadmap.
+- [x] **Savings goals** (`lib/features/goals/`, schema v17 `SavingsGoals` table) —
+      **deliberately NOT derived from income/expense/cashflow activity.** `savedMinor` is a
+      plain running counter the user adjusts via "Add money"/"Withdraw" (clamped at zero on
+      withdrawal). Tying a goal's progress to the monthly-resetting balance/cashflow
+      machinery (Phase 5/6) would reset a multi-month goal right along with it every
+      month, defeating the point. New Goals screen + detail screen (progress bar,
+      add/withdraw dialog, edit/archive sheet) off Profile.
+- [x] **App Lock** (`lib/features/security/`) — new dependency `local_auth` (the only one
+      the whole roadmap called for; resolved cleanly, `flutter pub add` reported no
+      conflict with the pinned `share_plus`/`file_picker` versions). Biometric-or-PIN
+      unlock (`biometricOnly: false`), gated at the very top of `app.dart`'s `home:` before
+      even the onboarding/profile check. Re-locks on `AppLifecycleState.paused`, not just
+      cold start — an in-memory-only `appUnlockedProvider` (no persistence) means resuming
+      from the background always re-locks too. Toggle lives in a new "Security" section on
+      Profile, disabled with an explanatory subtitle on a device with no biometric
+      enrollment and no PIN/pattern/passcode (`isDeviceSupported()`), rather than offering
+      a switch that would strand the user. The enabled flag is excluded from backup export
+      (`_excludedSettingsKeys`) — restoring a file on a new device must never silently lock
+      someone out of the app they just installed.
+      **Native config required and verified**: `MainActivity` changed from
+      `FlutterActivity` to `FlutterFragmentActivity` (local_auth's Android
+      `BiometricPrompt` needs a `FragmentActivity` host — build fails without this),
+      `android.permission.USE_BIOMETRIC` added to the manifest, `NSFaceIDUsageDescription`
+      added to `Info.plist`. `minSdk` needed no change — this project already inherits
+      Flutter's own default of 24, above local_auth's floor.
+- [x] **Note/merchant autocomplete** (`lib/features/expenses/note_autocomplete.dart` +
+      `ExpenseRepository.topNotes()`) — every distinct past note, most-frequently-used
+      first (one query, fetched once per Quick Add session, then filtered client-side by
+      live-typed prefix — not a query per keystroke). **Deliberately minimal-footprint
+      integration**: the suggestion chips fill the space Quick Add's keypad already
+      vacates while the note field is focused (previously just `SizedBox.shrink()`) rather
+      than adding a new element to the screen's layout — this is the same screen an
+      earlier session's chip redesign was rejected on for drifting from the established
+      look, so this pass added a wholly new (previously-empty) affordance instead of
+      touching anything that already existed.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **483 passed** (was 444 before this phase; 57 test files, up from 54).
+  New coverage: `insight_math_test.dart` (13 tests: trend threshold/floor/sort, three
+  subscription-cadence-normalization cases), `note_autocomplete_test.dart` (6 tests),
+  `goal_repository_test.dart` (10 tests: CRUD, adjustSaved add/withdraw/clamp, archive,
+  progress-ratio row extension), 4 new `expense_repository_test.dart` `topNotes` cases, an
+  extended v1→v17 migration assertion, 2 new `backup_format_test.dart` cases (v10
+  round-trip, pre-v10 absence), and a new `savings goals` group in
+  `backup_repository_test.dart` (4 tests: export→replace, merge-twice dedupe, rename
+  matches by externalId, pre-v10 merge).
+- **`flutter build apk --debug`** ✓ and **`flutter build ios --debug --simulator
+  --no-codesign`** ✓ — run specifically because this phase's `local_auth` dependency
+  touches native Android/iOS config (the exact pattern PROGRESS.md's "Stack / tooling"
+  section already establishes for every prior native-dependency change: file_picker,
+  share_plus, home_widget). Confirms `local_auth` doesn't trip the project's known
+  Kotlin-plugin fragility (`android.builtInKotlin=false` — see "Stack / tooling"): the
+  build's KGP warning still lists only the same four pre-existing plugins
+  (`file_picker`, `flutter_timezone`, `home_widget`, `share_plus`), not `local_auth`.
+- Not run on a device/simulator interactively (app launch, biometric prompt itself,
+  fingerprint/Face ID hardware) — per standing user instruction, that's manual testing on
+  the user's own device, and is exactly what App Lock most needs given it's security- and
+  native-platform-sensitive.
+
+### Deferred / notes
+- This is the final phase of the original roadmap (`docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`).
+  No further phases are planned; any next feature work starts a new spec.
+- Insights' 30%-threshold/₹500-floor/3-month-window constants are not user-configurable —
+  a reasonable v1 default per the "pure derived math" framing in the spec, not a gap.
+- App Lock has no separate "require immediately" vs "require after N minutes" grace-period
+  setting — every backgrounding re-locks, full stop. Simpler and safer default; a grace
+  period is easy to add later if it turns out to be annoying in practice.
 

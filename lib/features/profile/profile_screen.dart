@@ -15,8 +15,11 @@ import 'edit_profile_screen.dart';
 import 'lifetime_stats.dart';
 import 'profile_provider.dart';
 import '../expenses/recurring_screen.dart';
+import '../goals/goals_screen.dart';
+import '../insights/insights_screen.dart';
 import '../ledger/income_screen.dart';
 import '../recap/monthly_recap_screen.dart';
+import '../security/app_lock_provider.dart';
 
 /// Profile (FR-51, FR-57) — prototype phone 10. The account/settings hub:
 /// avatar, lifetime stats, and links to Edit Profile, Avatar Picker, Theme,
@@ -201,8 +204,26 @@ class ProfileScreen extends ConsumerWidget {
                     );
                   },
                 ),
+                _MenuRow(
+                  icon: Icons.flag_outlined,
+                  title: 'Savings goals',
+                  subtitle: 'Targets you\'re putting money aside for',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const GoalsScreen()),
+                  ),
+                ),
+                _MenuRow(
+                  icon: Icons.insights_outlined,
+                  title: 'Insights',
+                  subtitle: 'Category trends and recurring spend',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const InsightsScreen()),
+                  ),
+                ),
               ],
             ),
+            const SectionTitle('Security'),
+            const _AppLockRow(),
             const SectionTitle('Account actions'),
             _MenuGroup(
               children: [
@@ -432,6 +453,74 @@ class _MenuRow extends StatelessWidget {
       button: true,
       label: '$title, $subtitle',
       child: InkWell(onTap: onTap, child: row),
+    );
+  }
+}
+
+/// App Lock toggle (Phase 7) — a `_MenuRow`-shaped row with a trailing
+/// switch instead of a chevron, disabled with an explanatory subtitle on a
+/// device with no biometric enrollment and no PIN/pattern/passcode set,
+/// since turning it on there would lock the user out with no way back in.
+class _AppLockRow extends ConsumerWidget {
+  const _AppLockRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final enabled = ref.watch(appLockEnabledProvider).value ?? false;
+    final supported = ref.watch(appLockSupportedProvider).value ?? false;
+    final subtitle = supported
+        ? 'Require biometric or PIN unlock on launch'
+        : 'Set a device PIN, pattern or biometric to use this';
+
+    return _MenuGroup(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.lock_outline,
+                  size: 17,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'App lock',
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 11, color: palette.textDim),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: enabled,
+                activeThumbColor: AppColors.primary,
+                onChanged: supported
+                    ? (value) =>
+                        ref.read(appLockEnabledProvider.notifier).setEnabled(value)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

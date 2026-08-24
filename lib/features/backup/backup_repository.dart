@@ -21,6 +21,7 @@ class BackupRepository {
     SettingsRepository.autoBackupFrequencyKey,
     SettingsRepository.lastBackupAtKey,
     SettingsRepository.lastBackupSizeKey,
+    SettingsRepository.appLockEnabledKey,
   };
 
   /// Everything except the app's own backup bookkeeping (so importing this
@@ -34,6 +35,7 @@ class BackupRepository {
     final receipts = await _db.select(_db.expenseReceipts).get();
     final accounts = await _db.select(_db.accounts).get();
     final ledgerEntries = await _db.select(_db.ledgerEntries).get();
+    final savingsGoals = await _db.select(_db.savingsGoals).get();
 
     return BackupPayload(
       exportedAt: DateTime.now(),
@@ -57,6 +59,7 @@ class BackupRepository {
       ],
       accounts: accounts.map(BackupAccount.fromRow).toList(),
       ledgerEntries: ledgerEntries.map(BackupLedgerEntry.fromRow).toList(),
+      savingsGoals: savingsGoals.map(BackupGoal.fromRow).toList(),
     );
   }
 
@@ -82,6 +85,8 @@ class BackupRepository {
       await _db.delete(_db.budgets).go();
       await _db.delete(_db.categories).go();
       await _db.delete(_db.settings).go();
+      // No FK to anything else — order doesn't matter for this one.
+      await _db.delete(_db.savingsGoals).go();
 
       await _db.batch((b) {
         b.insertAll(
@@ -128,6 +133,12 @@ class BackupRepository {
             payload.ledgerEntries.map((l) => l.toReplaceCompanion()),
           );
         }
+        if (payload.savingsGoals.isNotEmpty) {
+          b.insertAll(
+            _db.savingsGoals,
+            payload.savingsGoals.map((g) => g.toReplaceCompanion()),
+          );
+        }
       });
     });
   }
@@ -152,6 +163,7 @@ class BackupRepository {
         payload.receipts,
       );
       await _mergeLedgerEntries(payload.ledgerEntries, accountIdMap);
+      await _mergeGoals(payload.savingsGoals);
     });
   }
 
@@ -430,6 +442,34 @@ class BackupRepository {
     }
     if (toInsert.isNotEmpty) {
       await _db.batch((batch) => batch.insertAll(_db.ledgerEntries, toInsert));
+    }
+  }
+
+  /// Matches by [BackupGoal.externalId] first, falling back to normalized
+  /// name — same rule as [_mergeTags]. A matched (already-present) goal is
+  /// left untouched, same as every other master-data table; only a new one
+  /// is inserted, carrying its saved progress over verbatim (there's no
+  /// local progress to clobber for a goal that didn't already exist here).
+  Future<void> _mergeGoals(List<BackupGoal> backupGoals) async {
+    final existing = await _db.select(_db.savingsGoals).get();
+    final byExternalId = <String, int>{
+      for (final g in existing)
+        if (g.externalId != null) g.externalId!: g.id,
+    };
+    final byNormalizedName = <String, int>{
+      for (final g in existing) _normalize(g.name): g.id,
+    };
+
+    final toInsert = <SavingsGoalsCompanion>[];
+    for (final g in backupGoals) {
+      final matchedId =
+          (g.externalId != null ? byExternalId[g.externalId] : null) ??
+          byNormalizedName[_normalize(g.name)];
+      if (matchedId != null) continue; // already present locally
+      toInsert.add(g.toInsertCompanion());
+    }
+    if (toInsert.isNotEmpty) {
+      await _db.batch((batch) => batch.insertAll(_db.savingsGoals, toInsert));
     }
   }
 

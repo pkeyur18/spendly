@@ -717,6 +717,79 @@ class BackupLedgerEntry {
       '$mappedAccountId|$mappedCounterAccountId|$sourceLabel|$note';
 }
 
+/// A savings goal (backup v10, schema v17). No FK to any other table — the
+/// simplest of these DTOs, same shape as [BackupTag] minus the color.
+class BackupGoal {
+  const BackupGoal({
+    required this.id,
+    required this.name,
+    required this.targetMinor,
+    required this.savedMinor,
+    required this.isArchived,
+    required this.externalId,
+  });
+
+  final int id;
+  final String name;
+  final int targetMinor;
+  final int savedMinor;
+  final bool isArchived;
+  final String? externalId;
+
+  factory BackupGoal.fromRow(SavingsGoalRow row) => BackupGoal(
+    id: row.id,
+    name: row.name,
+    targetMinor: row.targetMinor,
+    savedMinor: row.savedMinor,
+    isArchived: row.isArchived,
+    externalId: row.externalId,
+  );
+
+  factory BackupGoal.fromJson(Map<String, dynamic> j) => BackupGoal(
+    id: j['id'] as int,
+    name: j['name'] as String,
+    targetMinor: j['targetMinor'] as int,
+    savedMinor: j['savedMinor'] as int,
+    isArchived: j['isArchived'] as bool,
+    externalId: j['externalId'] as String?,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'targetMinor': targetMinor,
+    'savedMinor': savedMinor,
+    'isArchived': isArchived,
+    'externalId': externalId,
+  };
+
+  /// Merge: new row, id auto-assigned. Carries the backup's own saved
+  /// progress along — a goal only exists on this merge path when it didn't
+  /// already match one locally, so there's no local progress it could
+  /// clobber.
+  SavingsGoalsCompanion toInsertCompanion() => SavingsGoalsCompanion.insert(
+    name: name,
+    targetMinor: targetMinor,
+    savedMinor: Value(savedMinor),
+    isArchived: Value(isArchived),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
+  );
+
+  /// Replace: tables are wiped first, so the original id is reused verbatim.
+  SavingsGoalsCompanion toReplaceCompanion() => SavingsGoalsCompanion(
+    id: Value(id),
+    name: Value(name),
+    targetMinor: Value(targetMinor),
+    savedMinor: Value(savedMinor),
+    isArchived: Value(isArchived),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
+  );
+}
+
 class BackupSetting {
   const BackupSetting({required this.key, required this.value});
 
@@ -748,6 +821,7 @@ class BackupPayload {
     this.receipts = const [],
     this.accounts = const [],
     this.ledgerEntries = const [],
+    this.savingsGoals = const [],
   });
 
   final DateTime exportedAt;
@@ -759,6 +833,7 @@ class BackupPayload {
   final List<BackupReceipt> receipts;
   final List<BackupAccount> accounts;
   final List<BackupLedgerEntry> ledgerEntries;
+  final List<BackupGoal> savingsGoals;
 
   (DateTime, DateTime)? get expenseDateRange {
     if (expenses.isEmpty) return null;
@@ -829,6 +904,12 @@ class BackupPayload {
                       BackupLedgerEntry.fromJson(e as Map<String, dynamic>),
                 )
                 .toList(),
+      // Pre-v10 backups have no "savingsGoals" key at all.
+      savingsGoals: j['savingsGoals'] == null
+          ? const []
+          : (j['savingsGoals'] as List)
+                .map((e) => BackupGoal.fromJson(e as Map<String, dynamic>))
+                .toList(),
     );
   }
 
@@ -848,5 +929,6 @@ class BackupPayload {
     'receipts': receipts.map((r) => r.toJson()).toList(),
     'accounts': accounts.map((a) => a.toJson()).toList(),
     'ledgerEntries': ledgerEntries.map((l) => l.toJson()).toList(),
+    'savingsGoals': savingsGoals.map((g) => g.toJson()).toList(),
   };
 }

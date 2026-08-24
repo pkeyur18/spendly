@@ -39,6 +39,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Spendly uses your camera to set a profile photo.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Spendly uses Face ID to unlock the app when App Lock is turned on.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Spendly uses your photo library to set a profile photo.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -389,6 +389,22 @@ class ExpenseRepository {
       },
     );
   }
+
+  /// Every distinct past note, most-frequently-used first — feeds Quick
+  /// Add's note autocomplete (`note_autocomplete.dart` does the actual
+  /// prefix filtering, client-side, against this one fetched-once pool).
+  /// [limit] caps the pool this pulls from the database, not what's shown.
+  Future<List<String>> topNotes({int limit = 30}) async {
+    final count = _db.expenses.id.count();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.note, count])
+      ..where(_db.expenses.note.isNotNull())
+      ..groupBy([_db.expenses.note])
+      ..orderBy([OrderingTerm(expression: count, mode: OrderingMode.desc)])
+      ..limit(limit);
+    final rows = await query.get();
+    return [for (final r in rows) r.read(_db.expenses.note)!];
+  }
 }
 
 /// Half-open [start, end) bounds for the calendar month containing [month].
@@ -416,6 +432,14 @@ class ExpenseRepository {
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>(
   (ref) => ExpenseRepository(ref.watch(databaseProvider)),
+);
+
+/// One-shot pool for Quick Add's note autocomplete — see `topNotes`'s doc
+/// comment. Not a `StreamProvider`: a note typed in the still-open Quick Add
+/// session isn't in this pool until saved and the screen reopens, which is
+/// fine for a "past notes" suggestion feature.
+final topNotesProvider = FutureProvider<List<String>>(
+  (ref) => ref.watch(expenseRepositoryProvider).topNotes(),
 );
 
 /// Raw expense list for a half-open [start, end) range, capped at a row limit,
