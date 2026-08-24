@@ -20,7 +20,12 @@ export 'backup_crypto.dart' show BackupWrongPasswordException;
 /// expense. Same additive pattern — an older file simply lacks both keys,
 /// which [BackupPayload.fromJson]/[BackupExpense.fromJson] read as an empty
 /// list / null respectively.
-const currentBackupVersion = 5;
+/// v9 added the `ledgerEntries` payload field (schema v15, income entries) —
+/// a whole new top-level array, unlike the additive fields above, so this is
+/// the first version bump since v4/v8's `accounts` addition.
+///
+/// v10 added the `savingsGoals` payload field (schema v17, Phase 7).
+const currentBackupVersion = 10;
 
 class BackupCorruptException implements Exception {
   const BackupCorruptException(this.reason);

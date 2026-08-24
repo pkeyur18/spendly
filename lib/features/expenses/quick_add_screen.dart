@@ -1,5 +1,9 @@
+import 'dart:io' show File;
+import 'dart:typed_data';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -19,15 +23,32 @@ import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../tags/tag_edit_sheet.dart';
 import '../tags/tag_repository.dart';
+import '../accounts/account_repository.dart';
+import '../accounts/accounts_screen.dart';
 import 'expense_repository.dart';
+import 'note_autocomplete.dart';
+import 'receipt_repository.dart';
+import 'recurring_schedule.dart';
 import 'widgets/expense_tile.dart' show relativeDayLabel;
 
 /// Fast expense entry (FR-2, FR-5): keypad + category grid, ≤3-tap save.
 /// Reused for editing (FR-6, FR-15) when [editing] is supplied.
 class QuickAddScreen extends ConsumerStatefulWidget {
-  const QuickAddScreen({super.key, this.editing, this.initialCategoryId});
+  const QuickAddScreen({
+    super.key,
+    this.editing,
+    this.duplicateOf,
+    this.initialCategoryId,
+  });
 
   final ExpenseRow? editing;
+
+  /// Expense to copy the fields from, without editing it — "add again".
+  /// Prefills like [editing] does, but saves as a brand-new expense dated
+  /// today. Deliberately a separate field rather than a flag on [editing], so
+  /// every edit-only code path (`_isEdit`, the update call, the FX freeze
+  /// rule) keeps reading `editing` and stays untouched by a copy.
+  final ExpenseRow? duplicateOf;
 
   /// Preselected category for a fresh entry (widget deep-link, FR-3). Ignored
   /// when [editing] is set (the edited expense's own category wins).
@@ -36,6 +57,28 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
 }
+
+/// What a freshly-opened Quick Add starts from: which expense supplies the
+/// prefilled fields, and which date it opens on.
+///
+/// Pulled out as a free function so the edit-vs-copy split is testable without
+/// a widget harness (same reason as [tripForDate]). The distinction matters
+/// because only one of the two modes may write back to the source row — a copy
+/// that took the edit path would overwrite the expense it was copied from.
+({ExpenseRow? source, DateTime date}) quickAddPrefill({
+  required ExpenseRow? editing,
+  required ExpenseRow? duplicateOf,
+  required DateTime now,
+}) {
+  return (
+    source: editing ?? duplicateOf,
+    // Only an edit inherits the original's date. "Add again" means again now.
+    date: editing?.date ?? now,
+  );
+}
+
+/// Choice made in the receipt preview sheet.
+enum _ReceiptAction { replace, remove }
 
 /// Categories shown in the quick-add grid before it switches to a
 /// truncated view with a "More" tile.
@@ -103,6 +146,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   late String _initialAmount;
   int? _categoryId;
   int? _tagId;
+  int? _accountId;
   late DateTime _selectedDate;
   bool _defaulted = false;
 
@@ -130,6 +174,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   /// closing an untouched form never prompts.
   bool _touched = false;
 
+  /// Repeat schedule, null = does not repeat. Only ever inherited from an
+  /// edit: a copy ("add again") must not silently become a second template
+  /// for the same series.
+  late Recurrence? _recurrence = widget.editing?.recurrence;
+  late DateTime? _recurrenceEndDate = widget.editing?.recurrenceEndDate;
+
+  /// Receipt photo. Unlike every other prefilled field, this one isn't on
+  /// [ExpenseRow] — receipts live in a separate table (see the doc comment on
+  /// `ExpenseReceipts`) specifically so loading them isn't part of every
+  /// expense read, which means it has to be fetched asynchronously here
+  /// rather than seeded synchronously in [initState] like the rest.
+  Uint8List? _receiptBytes;
+  bool _receiptLoading = false;
+
   bool get _isEdit => widget.editing != null;
 
   bool get _isDirty => _touched || _noteController.text.trim() != _initialNote;
@@ -138,7 +196,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   void initState() {
     super.initState();
     _noteFocusNode.addListener(() => setState(() {}));
-    final e = widget.editing;
+    // Rebuilds the note-suggestions row (see the AnimatedSize below the
+    // keypad) as the user types, so it filters live rather than only once
+    // on focus.
+    _noteController.addListener(() => setState(() {}));
+    final prefill = quickAddPrefill(
+      editing: widget.editing,
+      duplicateOf: widget.duplicateOf,
+      now: DateTime.now(),
+    );
+    final e = prefill.source;
     // Prefill from the expense being edited; strip trailing ".00".
     _amount = e == null
         ? '0'
@@ -150,9 +217,36 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     _initialAmount = _amount;
     _categoryId = e?.categoryId ?? widget.initialCategoryId;
     _tagId = e?.tagId;
-    _selectedDate = e?.date ?? DateTime.now();
+    _accountId = e?.accountId;
+    _selectedDate = prefill.date;
     _noteController.text = e?.note ?? '';
     _initialNote = _noteController.text;
+    if (e != null) {
+      _loadReceipt(e.id);
+    } else {
+      // A fresh add only — editing/duplicating already inherited the
+      // source's account above, and must never have it silently swapped for
+      // whatever happens to be the default right now.
+      _loadDefaultAccount();
+    }
+  }
+
+  Future<void> _loadReceipt(int expenseId) async {
+    setState(() => _receiptLoading = true);
+    final bytes = await ref
+        .read(receiptRepositoryProvider)
+        .forExpense(expenseId);
+    if (!mounted) return;
+    setState(() {
+      _receiptBytes = bytes;
+      _receiptLoading = false;
+    });
+  }
+
+  Future<void> _loadDefaultAccount() async {
+    final account = await ref.read(accountRepositoryProvider).defaultAccount();
+    if (!mounted || _accountId != null) return;
+    setState(() => _accountId = account?.id);
   }
 
   @override
@@ -211,10 +305,17 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                           Center(
                             child: Wrap(
                               spacing: AppSpacing.sm,
+                              // Four chips wrap to two lines on most phones;
+                              // without runSpacing the two lines had zero gap
+                              // and touched.
+                              runSpacing: AppSpacing.sm,
                               alignment: WrapAlignment.center,
                               children: [
                                 _dateChip(context, palette),
                                 _tripChip(context, palette),
+                                _accountChip(context, palette),
+                                _repeatChip(context, palette),
+                                _receiptChip(context, palette),
                               ],
                             ),
                           ),
@@ -241,7 +342,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                             duration: const Duration(milliseconds: 200),
                             alignment: Alignment.topCenter,
                             child: _noteFocusNode.hasFocus
-                                ? const SizedBox.shrink()
+                                ? _noteSuggestions(context, palette)
                                 : Column(
                                     children: [
                                       AmountKeypad(
@@ -553,6 +654,384 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
+  /// Account chip: shows the selected account or "Add account", tap opens a
+  /// picker of active accounts. Orthogonal to category and trip — see
+  /// [Expenses.accountId].
+  Widget _accountChip(BuildContext context, AppPalette palette) {
+    final accounts = ref.watch(activeAccountsProvider).value ?? const [];
+    final selected = accounts
+        .where((a) => a.id == _accountId)
+        .cast<AccountRow?>()
+        .firstOrNull;
+    return _metaChip(
+      icon: Icons.account_balance_wallet_outlined,
+      label: selected?.name ?? 'Add account',
+      semanticsLabel: selected == null
+          ? 'Add account'
+          : 'Account, ${selected.name}',
+      onTap: () => _openAccountPicker(accounts),
+      palette: palette,
+      emphasized: selected != null,
+      emphasisColor: selected == null ? null : AppColors.primary,
+    );
+  }
+
+  /// Sentinel distinguishing an explicit "No account" pick from a dismissed
+  /// sheet — same pattern as [_noTripChoice].
+  static const _noAccountChoice = -1;
+
+  Future<void> _openAccountPicker(List<AccountRow> accounts) async {
+    final chosen = await showModalBottomSheet<int?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: Text('Account'),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: accounts.length + 2,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.add,
+                          size: 20,
+                          color: AppColors.primary,
+                        ),
+                        title: const Text(
+                          '+ New account',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          final newId = await showAccountEditSheet(context);
+                          if (newId != null && mounted) {
+                            setState(() {
+                              _accountId = newId;
+                              _touched = true;
+                            });
+                          }
+                        },
+                      );
+                    }
+                    if (i == 1) {
+                      return ListTile(
+                        leading: const Icon(Icons.close, size: 20),
+                        title: const Text('No account'),
+                        trailing: _accountId == null
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: AppColors.primary,
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () => Navigator.of(
+                          sheetContext,
+                        ).pop<int?>(_noAccountChoice),
+                      );
+                    }
+                    final a = accounts[i - 2];
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 20,
+                      ),
+                      title: Text(a.name),
+                      trailing: a.id == _accountId
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: AppColors.primary,
+                              size: 18,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop<int?>(a.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _accountId = chosen == _noAccountChoice ? null : chosen;
+      _touched = true;
+    });
+  }
+
+  /// Repeat chip: shows the schedule or "Repeat", tap opens the picker.
+  Widget _repeatChip(BuildContext context, AppPalette palette) {
+    final label = _recurrence == null
+        ? 'Repeat'
+        : recurrenceLabel(_recurrence!);
+    return _metaChip(
+      icon: Icons.repeat_rounded,
+      label: label,
+      semanticsLabel: _recurrence == null
+          ? 'Repeat, off'
+          : 'Repeats $label${_recurrenceEndDate == null ? '' : ', until '
+              '\${relativeDayLabel(_recurrenceEndDate!)}'}',
+      onTap: _openRepeatSheet,
+      palette: palette,
+      emphasized: _recurrence != null,
+      emphasisColor: _recurrence == null ? null : AppColors.primary,
+    );
+  }
+
+  Future<void> _openRepeatSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          void choose(Recurrence? r) {
+            setState(() {
+              _recurrence = r;
+              _touched = true;
+              // An end date without a schedule is meaningless, and leaving a
+              // stale one behind would silently truncate the series if repeat
+              // were switched back on later.
+              if (r == null) _recurrenceEndDate = null;
+            });
+            setSheetState(() {});
+          }
+
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                  ),
+                  child: Text(
+                    'Repeat',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                RadioGroup<Recurrence?>(
+                  groupValue: _recurrence,
+                  onChanged: choose,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<Recurrence?>(
+                        value: null,
+                        title: const Text('Does not repeat'),
+                      ),
+                      for (final r in Recurrence.values)
+                        RadioListTile<Recurrence?>(
+                          value: r,
+                          title: Text(recurrenceLabel(r)),
+                        ),
+                    ],
+                  ),
+                ),
+                if (_recurrence != null)
+                  ListTile(
+                    leading: const Icon(Icons.event_busy_outlined),
+                    title: const Text('Ends'),
+                    subtitle: Text(
+                      _recurrenceEndDate == null
+                          ? 'Never — until you switch it off'
+                          : relativeDayLabel(_recurrenceEndDate!),
+                    ),
+                    trailing: _recurrenceEndDate == null
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear end date',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              setState(() => _recurrenceEndDate = null);
+                              setSheetState(() {});
+                            },
+                          ),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: sheetContext,
+                        initialDate: _recurrenceEndDate ??
+                            DateTime.now().add(const Duration(days: 365)),
+                        firstDate: _selectedDate,
+                        lastDate: DateTime(DateTime.now().year + 20),
+                      );
+                      if (picked == null) return;
+                      setState(() {
+                        _recurrenceEndDate = picked;
+                        _touched = true;
+                      });
+                      setSheetState(() {});
+                    },
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Receipt chip: "Add receipt" when nothing is attached, "Receipt added"
+  /// once something is — a spinner briefly in between while an edit/copy's
+  /// existing photo loads from its own table (see [_receiptBytes]'s doc
+  /// comment for why that fetch isn't synchronous like every other field).
+  Widget _receiptChip(BuildContext context, AppPalette palette) {
+    if (_receiptLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return _metaChip(
+      icon: Icons.receipt_long_outlined,
+      label: _receiptBytes == null ? 'Add receipt' : 'Receipt added',
+      semanticsLabel: _receiptBytes == null
+          ? 'Add a receipt photo'
+          : 'Receipt photo attached, tap to view or remove',
+      onTap: _receiptBytes == null ? _pickReceiptPhoto : _showReceiptPreview,
+      palette: palette,
+      emphasized: _receiptBytes != null,
+      emphasisColor: _receiptBytes == null ? null : AppColors.primary,
+    );
+  }
+
+  Future<void> _pickReceiptPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Camera'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Photo library'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      // Well above the avatar's 800x800 — a receipt has to stay legible when
+      // zoomed in on a phone screen — but still bounded, so a photo taken
+      // straight off a modern camera doesn't land in the backup JSON at full
+      // resolution.
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 80,
+    );
+    if (picked == null || !mounted) return;
+
+    final bytes = await File(picked.path).readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _receiptBytes = bytes;
+      _touched = true;
+    });
+  }
+
+  Future<void> _showReceiptPreview() async {
+    final action = await showModalBottomSheet<_ReceiptAction>(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.card),
+        ),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                child: Image.memory(
+                  _receiptBytes!,
+                  fit: BoxFit.contain,
+                  height: 280,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Replace'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ReceiptAction.replace),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.red),
+              title: const Text(
+                'Remove',
+                style: TextStyle(color: AppColors.red),
+              ),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ReceiptAction.remove),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case _ReceiptAction.replace:
+        await _pickReceiptPhoto();
+      case _ReceiptAction.remove:
+        setState(() {
+          _receiptBytes = null;
+          _touched = true;
+        });
+      case null:
+        break;
+    }
+  }
+
   Future<void> _openTagPicker(List<TagRow> tags) async {
     final chosen = await showModalBottomSheet<int?>(
       context: context,
@@ -682,6 +1161,38 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           hintText: 'Add a note',
           counterText: '',
         ),
+      ),
+    );
+  }
+
+  /// Frequency-ranked note autocomplete (Phase 7) — fills the space the
+  /// keypad vacates while the note field is focused, rather than adding a
+  /// new element to the screen's existing layout. Empty (not just hidden)
+  /// when there's nothing to suggest, so `AnimatedSize` still collapses it.
+  Widget _noteSuggestions(BuildContext context, AppPalette palette) {
+    final ranked = ref.watch(topNotesProvider).value ?? const <String>[];
+    final matches = matchingNotes(ranked, _noteController.text);
+    if (matches.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (final note in matches)
+            ActionChip(
+              label: Text(note),
+              backgroundColor: palette.card,
+              side: BorderSide(color: palette.line),
+              onPressed: () {
+                _noteController.text = note;
+                _noteController.selection = TextSelection.collapsed(
+                  offset: note.length,
+                );
+                _touched = true;
+              },
+            ),
+        ],
       ),
     );
   }
@@ -925,30 +1436,68 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final oldAmount = widget.editing?.amount ?? Money.zero;
     final note = _noteController.text.trim();
     final repo = ref.read(expenseRepositoryProvider);
+    // Preserve an in-flight schedule: re-deriving the due date on every save
+    // would rewind a series the user has already been confirming. Only a
+    // changed frequency or end date — or a template that never had a date, as
+    // the v10 migration leaves pre-existing recurring rows — earns a new one.
+    final previous = widget.editing;
+    final scheduleChanged =
+        _recurrence != previous?.recurrence ||
+        _recurrenceEndDate != previous?.recurrenceEndDate ||
+        previous?.nextDueDate == null;
+    final nextDue = _recurrence == null
+        ? null
+        : scheduleChanged
+        ? firstDueDate(
+            _selectedDate,
+            _recurrence,
+            endDate: _recurrenceEndDate,
+          )
+        : previous!.nextDueDate;
+    final int expenseId;
     if (_isEdit) {
+      expenseId = widget.editing!.id;
       await repo.update(
-        widget.editing!.id,
+        expenseId,
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
         note: Value(note.isEmpty ? null : note),
+        isRecurring: _recurrence != null && nextDue != null,
+        recurrence: Value(_recurrence),
+        nextDueDate: Value(nextDue),
+        recurrenceEndDate: Value(_recurrenceEndDate),
         tagId: Value(_tagId),
+        accountId: Value(_accountId),
         // Always passed, never absent: moving an expense off a trip has to
         // clear the foreign receipt, not leave a stale one behind.
         fxCurrency: Value(resolved.fxCurrency),
         fxAmount: Value(resolved.fxAmount),
       );
     } else {
-      await repo.add(
+      expenseId = await repo.add(
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
         note: note.isEmpty ? null : note,
+        // A schedule with no future occurrence left (end date already passed)
+        // is not a template — it is a plain expense.
+        isRecurring: _recurrence != null && nextDue != null,
+        recurrence: _recurrence,
+        nextDueDate: nextDue,
+        recurrenceEndDate: _recurrenceEndDate,
         tagId: _tagId,
+        accountId: _accountId,
         fxCurrency: resolved.fxCurrency,
         fxAmount: resolved.fxAmount,
       );
     }
+    // set(id, null) when nothing was ever attached is a harmless no-op
+    // delete, so this runs unconditionally rather than tracking a second
+    // dirty flag just for the photo.
+    await ref
+        .read(receiptRepositoryProvider)
+        .set(expenseId, _receiptBytes);
     // Fire budget-threshold alerts for the affected category + overall (FR-25).
     // Only the delta counts toward the "before → after" crossing so an edit
     // that keeps the same category alerts on its net change.
@@ -1106,12 +1655,14 @@ class _CategoryTile extends StatelessWidget {
 Future<void> openQuickAddScreen(
   BuildContext context, {
   ExpenseRow? editing,
+  ExpenseRow? duplicateOf,
   int? initialCategoryId,
 }) async {
   final confirmation = await Navigator.of(context).push<String>(
     MaterialPageRoute(
       builder: (_) => QuickAddScreen(
         editing: editing,
+        duplicateOf: duplicateOf,
         initialCategoryId: initialCategoryId,
       ),
     ),

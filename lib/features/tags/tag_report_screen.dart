@@ -10,8 +10,10 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../accounts/account_repository.dart';
 import '../expenses/all_transactions_screen.dart' show groupExpensesByDay;
 import '../expenses/expense_repository.dart';
+import '../expenses/receipt_repository.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
@@ -156,6 +158,8 @@ class TagDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(tagReportProvider(tag.id));
     final byId = ref.watch(categoriesByIdProvider);
+    final accountById = ref.watch(accountsByIdProvider);
+    final withReceipt = ref.watch(expenseIdsWithReceiptProvider).value ?? const {};
     final profile = ref.watch(profileProvider).value;
     final df = DateFormat('MMM d, yyyy');
 
@@ -203,6 +207,11 @@ class TagDetailScreen extends ConsumerWidget {
                         '${tag.name} (${df.format(data.start)} - '
                         '${df.format(data.end.subtract(const Duration(days: 1)))})',
                     profile: profile,
+                    // No tagById: every row here already belongs to this one
+                    // trip, so a per-row Trip column would just repeat the
+                    // same name on every line rather than add information.
+                    accountById: accountById,
+                    expenseIdsWithReceipt: withReceipt,
                   ),
                   const SizedBox(height: AppSpacing.lg),
                 ],

@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
+import 'core/db/providers.dart';
 import 'core/notify/notifications.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/async_state_views.dart';
 import 'features/backup/backup_providers.dart';
 import 'features/budgets/budget_nudge_provider.dart';
 import 'features/expenses/quick_add_screen.dart';
-import 'features/home/home_screen.dart';
+import 'features/expenses/recurring_repository.dart';
+import 'features/home/app_shell.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/profile/profile_provider.dart';
 import 'features/recap/recap_providers.dart';
+import 'features/security/app_lock_provider.dart';
+import 'features/security/lock_screen.dart';
 import 'features/settings/theme_mode_provider.dart';
 import 'features/widgets/widget_refresh.dart';
 import 'features/widgets/widget_snapshot.dart' show widgetAppGroupId;
@@ -44,6 +48,9 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(refreshWidgetsActionProvider)();
       _initNotifications();
+      // Cold-start only, not on resume — see AppDatabase.pruneOrphanedReceipts
+      // for why a resume during the undo-delete window must never run this.
+      ref.read(databaseProvider).pruneOrphanedReceipts();
     });
   }
 
@@ -68,7 +75,15 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       ref.invalidate(autoBackupCheckProvider);
       ref.invalidate(monthlyRecapCheckProvider);
       ref.invalidate(budgetNudgeCheckProvider);
+      ref.invalidate(recurringReminderCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
+    }
+    // Re-lock on backgrounding, not just cold start — otherwise App Lock
+    // would only ever gate the very first launch, and anyone could resume
+    // the app from the app switcher with nothing to unlock.
+    if (state == AppLifecycleState.paused &&
+        (ref.read(appLockEnabledProvider).value ?? false)) {
+      ref.read(appUnlockedProvider.notifier).set(false);
     }
   }
 
@@ -90,9 +105,18 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     ref.watch(
       budgetNudgeCheckProvider,
     ); // fires the once-per-month budget nudge check
+    // Re-arms recurring due-date reminders; no background job exists, so the
+    // schedule is rebuilt while the app is open.
+    ref.watch(recurringReminderCheckProvider);
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);
+    // Falls back to "not locked" while the persisted value loads, same as
+    // every other settings-backed toggle in this app — a locked-by-default
+    // flash on every cold start would be worse than the one-frame gap this
+    // avoids being theoretically lockable.
+    final lockEnabled = ref.watch(appLockEnabledProvider).value ?? false;
+    final unlocked = ref.watch(appUnlockedProvider);
 
     return MaterialApp(
       title: 'Spendly',
@@ -111,17 +135,20 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
         curve: Curves.ease,
         child: child!,
       ),
-      home: profileAsync.when(
-        loading: () => const Scaffold(body: LoadingView()),
-        error: (e, _) => Scaffold(
-          body: ErrorView(
-            message: "Couldn't load your profile.",
-            onRetry: () => ref.invalidate(profileProvider),
-          ),
-        ),
-        data: (profile) =>
-            profile.name.isEmpty ? const WelcomeScreen() : const HomeScreen(),
-      ),
+      home: (lockEnabled && !unlocked)
+          ? const AppLockScreen()
+          : profileAsync.when(
+              loading: () => const Scaffold(body: LoadingView()),
+              error: (e, _) => Scaffold(
+                body: ErrorView(
+                  message: "Couldn't load your profile.",
+                  onRetry: () => ref.invalidate(profileProvider),
+                ),
+              ),
+              data: (profile) => profile.name.isEmpty
+                  ? const WelcomeScreen()
+                  : const AppShell(),
+            ),
     );
   }
 }

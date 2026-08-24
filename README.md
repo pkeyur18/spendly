@@ -8,10 +8,11 @@ own a full versioned backup so your data is never truly lost.
 Single codebase (Flutter), no account, no server. Money is stored as integer minor units
 (paise) — never float. Currency is INR (₹) with device-locale formatting.
 
-> **Status:** built through the ad-hoc Sprint 12 (ignore-category-for-budget toggle), plus
-> a post-Sprint-12 Monthly Recap feature. Drift schema v7, backup format v3, 190 passing
-> tests (37 test files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are
-> not started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
+> **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
+> recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
+> Recap feature. Drift schema v17, backup format v10, 483 passing tests (57 test
+> files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
+> started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
 
 ---
@@ -34,21 +35,78 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   math, top categories, and top expenses, while still tracked on its own budget card and
   still visible in All Transactions and exports.
 - **Trips (Tags)** — group any expenses into a trip (holiday, wedding, project) independent
-  of category, with a per-trip report and CSV/PDF export.
+  of category, with a per-trip report and Excel/PDF export.
 - **Reports** — auto-generated end-of-month report (scheduled local notification), on-demand
   custom-range reports, top-5 expenses, previous-period comparison, daily average; export as
-  PDF or CSV and share via the OS share sheet.
+  a PDF summary or an Excel workbook (Summary + Transactions sheets) and share via the OS
+  share sheet. The Transactions sheet carries every attribute an expense can have: date,
+  category, note, amount, trip, account, payment method, recurring frequency, whether a
+  receipt is attached, and the foreign-currency amount for a trip expense paid abroad.
 - **Monthly Recap** — a full-screen "hero" takeover auto-shown once per new month on app
   launch/resume (skipped on fresh installs with no prior-month expenses; gated by a
   persisted last-shown-month flag): a gradient hero card ("you saved this month" with a
   falling-emoji confetti overlay, "you went over budget" in amber, or a plain total if no
   budget is set) plus a top-3 spending categories card. Also reachable any time via a
   permanent "Monthly recap" row in Profile.
+- **Recurring expenses** — mark any expense daily/weekly/monthly with an optional end
+  date; the app reminds on the due date and the user confirms, never auto-logs (FR-7).
+  Occurrences missed while the app was closed are all recovered, each confirmed or
+  skipped on its own, and a month-end series stays pinned to its day instead of drifting
+  onto the 28th after February. A "payments to confirm" card appears on Home only when
+  something is due; a permanent "Recurring expenses" row in Profile manages every series.
+- **Receipt photos** — attach a photo (camera or library) to any expense from Quick Add;
+  view, replace, or remove it any time. Stored in its own table, separate from the
+  expense row itself, so browsing transactions never has to load photo bytes it isn't
+  showing. Travels in full-fidelity backups; a device restoring a backup gets every
+  attached photo back, correctly matched to its own expense.
+- **Accounts** — track cash, bank, card and wallet balances, grouped by type on the manage
+  screen; pick which account an expense was paid from in Quick Add, or let it default — one
+  account can be marked the default (the first one you add becomes it automatically),
+  prefilled on every fresh expense and still changeable per-entry. Tap an account under
+  Profile for this month's transaction history and total spent by default, with a
+  top-right toggle to switch to the full calendar year. Opening balance resets to zero
+  every month — the figure shown and used is only whatever was entered *this* month; the
+  user re-enters it monthly, nothing is deleted from history. Never hard-deleted —
+  archived like categories/tags, so history and exports stay intact (archiving the default
+  account clears the flag rather than silently picking a replacement). The free-text
+  `paymentMethod` field expenses already carried is migrated into real accounts
+  automatically on upgrade, preserved either way.
+- **Income & savings rate** — log income (amount, date, optional account, source label,
+  note) from a dedicated Income screen under Profile; swipe to delete with undo, same as
+  expenses. Kept in its own table, never mixed into `Expenses` — see
+  [docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md](docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md)'s
+  "separate ledger table" decision, which keeps every existing spend/budget query correct
+  by construction rather than by an opt-out guard someone could forget. Once any income is
+  logged for a month, Monthly Recap and the monthly/custom reports additionally show net
+  cashflow and savings rate — silent (unchanged) for the many users who never touch Income.
+- **Transfers & balances** — move money between two of your own accounts (never counted as
+  spend or income); each account's detail screen unions its expenses and ledger entries
+  (income landed in it, transfers either side of it) into one timeline, the only place those
+  two tables are ever combined. A derived balance — opening balance + income − expenses ±
+  transfers, this month only, matching opening balance's own monthly reset — shows on every
+  account and totals up into a dashboard card, both computed fresh on read, never stored.
+- **Insights** — pure derived math over existing history, no schema of its own: categories
+  whose current-month spend moved at least 30% against their trailing 3-month average
+  (filtered to a minimum absolute amount so a tiny category's swing isn't noise), plus the
+  monthly-equivalent total of every active recurring expense/subscription. Reachable from
+  Profile; needs a few months of history to have anything to say.
+- **Savings goals** — a target amount with a manually-adjusted running total ("Add money" /
+  "Withdraw") rather than anything derived from income/expense activity — tying a
+  multi-month goal to the monthly-resetting balance machinery would reset the goal right
+  along with it. Progress bar, tap to add/withdraw or edit; archived rather than deleted.
+- **App Lock** — optional biometric or device PIN/pattern unlock (`local_auth`) on cold
+  start and every resume from the background, off by default. The one setting excluded
+  from backup export — restoring a file on a new device must never lock you out of the app
+  you just installed it on. Disabled in Profile on a device with no biometric enrollment
+  and no PIN/pattern/passcode set, rather than offering a toggle that would strand you.
+- **Note autocomplete** — Quick Add suggests previously-used notes, ranked by how often
+  you've typed them, filtered live as you type; fills the space the keypad vacates while
+  the note field is focused rather than adding anything new to the screen's layout.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
 - **Backup & Restore** — full versioned JSON backup (expenses, categories, budgets, tags,
-  settings, profile), optional AES-256-GCM password protection, save-to-cloud via the OS
+  accounts, settings, profile), optional AES-256-GCM password protection, save-to-cloud via the OS
   share sheet, auto-backup (daily/weekly/monthly), and restore with a preview + Merge/Replace
   choice. See [docs/backup-schema.md](docs/backup-schema.md).
 - **Profile** — name/email/phone, avatar (uploaded photo or colored initials — never a blank
@@ -66,11 +124,12 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v7 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v17 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
-| Reports/export | `pdf`, hand-written RFC-4180 CSV, `share_plus` |
+| Reports/export | `pdf`, `excel`, `share_plus` |
 | Backup crypto | `cryptography` (AES-256-GCM + PBKDF2) |
+| App Lock | `local_auth` (biometric/PIN) |
 | Widgets bridge | `home_widget` → native Swift/WidgetKit (iOS) & Kotlin/Glance (Android) |
 | Media / files | `image_picker`, `file_picker`, `flutter_colorpicker`, `path_provider` |
 
@@ -99,6 +158,11 @@ lib/
     ├── onboarding/                 # welcome screen
     ├── home/                       # dashboard + charts + providers
     ├── expenses/                   # quick add, all-transactions, repository, recurrence
+    ├── accounts/                   # cash/bank/card/wallet accounts, manage screen
+    ├── ledger/                     # income entries, transfers, cashflow/balance math
+    ├── goals/                      # savings goals: manual add/withdraw, progress
+    ├── insights/                   # category trend + subscriptions math, feed screen
+    ├── security/                   # App Lock: local_auth wrapper, lock screen
     ├── categories/                 # manager, edit sheet (strip+popup), archived
     ├── budgets/                    # per-month budget setup + repository
     ├── reports/                    # monthly/custom reports, export (PDF/CSV)
@@ -161,5 +225,5 @@ seeded with 18 default categories. No configuration or account is required.
 - **Recurring expenses remind, never auto-log** — the user confirms on the due date.
 - **Backups are optionally password-protected** (AES-256-GCM + PBKDF2), per the user's choice.
 - **Auto-backup runs on app launch/resume** (no background service), default weekly.
-- **Categories and expenses carry a stable `externalId`** (schema v7), independent of the
+- **Categories and expenses carry a stable `externalId`** (since schema v7), independent of the
   local row ID, used to match records across devices during a backup Merge.

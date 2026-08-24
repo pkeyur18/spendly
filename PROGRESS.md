@@ -5,10 +5,25 @@
 
 ## Current status
 
-- **Sprint:** post-**Sprint 12 (Ad-Hoc) — Ignore category for budget** (see Sprint 12 section at the bottom). Sprints 0–7 + 10 shipped (Scaffold → Polish/Accessibility + Profile), Sprint 11 added Trips/All-Transactions/per-month budgets/picker UX, and Sprint 12 added a per-category **"ignore for budget"** toggle (fixed costs like rent/EMI excluded from daily totals, budget math, top categories, and top expenses, while staying visible in All Transactions and exports). Drift schema is now **v6**; backup format is still **v3** (no new persisted field needed backup changes — the flag lives on `categories`, already in the backup payload). Everything is **built + `flutter analyze`/`flutter test` green (162 tests)**, awaiting the same real-device manual verification called out in Sprints 6/7/10/11. Sprint 8/9 (Beta & Hardening, Store Submission) remain not started.
-- **Next:** Sprint 8 (Beta & Hardening) — TestFlight/Internal Testing builds, crash reporting + opt-in analytics, a week-long bug bash, edge cases (currency-locale mid-month, date/time changes, cross-version restore, 1000+ transactions).
-- **Docs:** `requirement_docs/spendly-requirements.md` (now **v2.1**) and `requirement_docs/spendly-prototype.html` updated for the ignore-for-budget toggle (new FR-77). `README.md` reflects schema v6 / 161 tests. `docs/backup-schema.md` already covers backup v1→v3 (unchanged by Sprint 12).
-- **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the app) rather than writing natively in-widget — see Sprint 6 section below for the full tradeoff.
+- **Phase:** UX-enhancement plan, phases 1-4 complete, plus a Phase 4 follow-up
+  (default account + account detail screen, schema v13) requested after Phase 4
+  shipped. See `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md` for the
+  full phased plan and the ledger architecture decision. Branch `feat/ux-enhancements`.
+  Sprints 0-7 + 10-12 and Monthly Recap shipped before this.
+  Plus an Excel-export completeness pass (trip/account/recurring/receipt/foreign-amount
+  columns) requested right after that follow-up shipped — no schema change, still v13.
+  **Drift schema is now v13; backup format v8.** `flutter analyze` clean,
+  `flutter test` **404 passing** (51 test files).
+- **Next:** Phase 5 (income, schema v14 — v13 is now taken by the default-account
+  follow-up) — the first phase to touch the new `LedgerEntries` table decision, then
+  phase 6 (transfers, derived balances) and phase 7 (insights, goals, app lock,
+  autocomplete). Sprint 8/9 (Beta & Hardening, Store Submission) still not started.
+- **Doc drift found and fixed:** README claimed schema v7 / backup v3 / 190 tests while
+  the code was already at schema v9 / backup v5 — FX spending and trip date-range
+  auto-tagging had shipped with no README or PROGRESS entry. Both files now match the
+  code. Check this before trusting a version number in any doc.
+- **Locked (Sprint 6):** tap-to-add from a widget deep-links into Quick Add (opens the
+  app) rather than writing natively in-widget — see Sprint 6 section below.
 
 ## Locked decisions (from PRD open questions)
 
@@ -565,3 +580,671 @@ dart run build_runner build      # after any Drift schema change
 flutter run                      # pick iOS simulator or Android emulator
 flutter analyze && flutter test
 ```
+
+## UX Phase 1 — done (daily-loop friction)
+
+Commits `a724b0c` (spec), `dbd72bb` (items 1-4), `63bb347` (item 5).
+
+- [x] **Pace-aware hero card** → `lib/features/budgets/budget_pace.dart` (pure) +
+      `_PaceLine` in `home_screen.dart`. A month total and "61% of budget" cannot be
+      acted on without knowing how much month is left. Three states, not two —
+      "spending too fast but still inside budget" needs a different reaction than
+      "budget gone". Per-day figure truncates so `daysLeft x perDayLeft` can never
+      exceed what remains.
+- [x] **Undo on delete** → `ExpenseRepository.restore`. Replaced the "can't be undone"
+      dialog. Restores the ORIGINAL id and `externalId` — a fresh `externalId` would
+      read as a different record to a backup Merge and fork the row across devices.
+      Safe to reuse the id because the table is `PRIMARY KEY AUTOINCREMENT`.
+- [x] **Duplicate a transaction** → `QuickAddScreen.duplicateOf` (a separate field from
+      `editing`, never a flag on it, so every edit-only path stays edit-only and a copy
+      structurally cannot overwrite its source) + a long-press actions sheet on
+      `ExpenseTile`. The sheet also gave Delete its first non-swipe path.
+- [x] **Transaction search** → `parseExpenseQuery` + a `search` clause on
+      `watchInRange`. Runs in SQL, not over the loaded page (the list pages at 100 rows,
+      so Dart-side filtering would silently miss unloaded rows). An active search
+      escapes the visible date range and searches all history.
+- [x] **Real tabs** → `lib/features/home/app_shell.dart`. Replaced push-per-tab, which
+      grew the back stack and lost scroll/filter state, and removed two "coming soon"
+      snackbars. Tabs build lazily — `IndexedStack` builds every child eagerly, which
+      would drag three more screens' Drift subscriptions onto the cold-start path.
+      Category Manager's FAB moved to an app-bar action so the shell owns the one FAB.
+
+## UX Phase 2 — done (recurring expenses, FR-7 finally shipped)
+
+FR-7 had a data model and tested date math since Sprint 1, but nothing wrote the
+columns and no reminder was ever scheduled.
+
+**Model:** a recurring expense is an ordinary expense row that also carries the
+schedule. Future occurrences are NOT materialised; the series is a single
+`nextDueDate` pointer, so occurrences that fell due while the app was closed are
+recovered by walking from the pointer to today.
+
+- [x] **Schema v10** → `expenses.nextDueDate`, `expenses.recurrenceEndDate`. Both
+      nullable, no backfill: pre-v10 rows flagged `is_recurring` have no due date to
+      reconstruct, and a guessed one would fire a reminder nobody asked for. They show
+      as "not scheduled" and get a real date when edited. `migration_test.dart` seeds
+      such a row.
+- [x] **Backup v6** → both fields on each expense. Without them a restore would keep
+      the recurring flag but lose the schedule, so the reminder would never fire again.
+      Pre-v6 files read the missing keys as null. `docs/backup-schema.md` updated.
+- [x] **Pure scheduling** → `recurring_schedule.dart`: `pendingOccurrences`,
+      `nextDueAfter`, `firstDueDate`, capped at 24 surfaced occurrences.
+- [x] **Month-end drift bug found and fixed here.** Chaining the pre-existing
+      `nextOccurrence` gives Jan 31 -> Feb 28 -> Mar 28 -> the 28th forever: rent on the
+      31st silently becomes rent on the 28th after one February. `_step` re-applies the
+      anchor day each step, clamping only where the month is genuinely short.
+      `nextOccurrence` itself is unchanged — the fix is in the caller that walks it.
+- [x] **`RecurringRepository`** → `confirm` (logs a real expense dated the occurrence,
+      inside a transaction, and advances the pointer), `skip` (advances without
+      logging), `cancel` (stops the schedule, keeps the expense — the money really was
+      spent). A confirmed copy is deliberately NOT itself recurring, or every
+      confirmation would fork the series into two advancing templates.
+- [x] **Quick Add repeat chip** → frequency picker + optional end date. An in-flight
+      schedule is preserved on save; only a changed frequency/end date, or a template
+      that never had a due date, earns a recomputed one. A duplicate never inherits the
+      recurrence.
+- [x] **`RecurringScreen`** (Profile row + Home card both route here). Missed
+      occurrences are listed in full but only the OLDEST is actionable: the series is a
+      single pointer, so resolving out of order would silently swallow the ones skipped
+      over. Each still gets its own confirm-or-skip decision.
+- [x] **Home "payments to confirm" card** — renders nothing when nothing is due.
+- [x] **Reminders** → `NotificationService.scheduleRecurringReminders`, re-armed by
+      `recurringReminderCheckProvider` on cold start and resume (no background
+      execution exists in this project by design). Ids are `500000 + expense id` so a
+      re-schedule replaces its own slot. Already-overdue occurrences are deliberately
+      not scheduled — a past timestamp fires instantly or is dropped, and the Home card
+      already surfaces them permanently.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **348 passed** (was 272 at the start of phase 1).
+- Not run on a device/simulator — manual verification still outstanding, same as
+  Sprints 6/7/10/11.
+
+### Deferred / notes
+- **No test covers `scheduleRecurringReminders` itself.** There is no notification test
+  harness anywhere in this repo and no fake plugin; the scheduling *inputs* are covered
+  through `recurringReminderCheckProvider`'s data, the `zonedSchedule` call is not.
+- Resolution is strictly oldest-first by design (single-pointer model). Out-of-order
+  resolution would need per-occurrence records — a child-row link plus a skip marker.
+
+## UX Phase 3 — done (receipt photos)
+
+**Deviated from the design spec's "one nullable column" plan** — the spec said "one
+nullable column; backup payload carries it the way the avatar already does." Building it
+surfaced why the profile-photo pattern doesn't transfer: `expenses` rows are read in full
+by nearly every query in the app (`watchInRange`, `watchMonth`, `listInRange`, every
+reactive list behind Home/All Transactions/Reports), including the lazily-paginated
+100-row transaction list. A blob column there would ride along on every one of those
+reads, for every expense, whether or not it has a photo — one profile photo in a k/v
+Settings table costs nothing extra to always load; a photo blob on the most heavily-read
+table in the app is a different order of problem entirely.
+
+- [x] **Schema v11** → new `expense_receipts` table (`AppDatabase.database.dart`), not a
+      column on `expenses`. `expenseId` unique-indexed (one receipt per expense).
+      `onDelete` deliberately NOT cascaded — see the next point.
+- [x] **`ReceiptRepository`** → `forExpense` (bytes, for the one screen that shows them),
+      `watchExpenseIdsWithReceipt` (existence only, for a lightweight indicator on
+      `ExpenseTile` without ever loading bytes for a list), `set` (upsert via
+      `INSERT OR REPLACE`, honoring the unique index).
+- [x] **Undo-on-delete gets the photo back for free, by design, not by extra code.**
+      `ExpenseRepository.delete` deliberately leaves a deleted expense's receipt row in
+      place. Because undo (`restore`, from Phase 1) reuses the expense's ORIGINAL id
+      (never recycled — `PRIMARY KEY AUTOINCREMENT`), an untouched receipt row
+      re-attaches itself with zero extra bookkeeping the moment the expense comes back.
+      Handling this at delete time instead would mean re-teaching the undo path to fetch,
+      hold, and re-insert photo bytes too — exactly the complexity this design avoids.
+- [x] **`AppDatabase.pruneOrphanedReceipts()`** — sweeps receipts whose expense is
+      permanently gone. Runs on cold start only (`app.dart`), never on resume: a resume
+      can land mid-undo-window, and sweeping then would delete a photo the user is about
+      to bring back. A full process restart cannot land inside that window (the undo
+      snackbar and its closure don't survive the app closing), so cold-start-only is the
+      point past which "orphaned" is actually permanent.
+- [x] **`resetToDefaults` fixed** — it deleted every expense but, before this phase,
+      never touched receipts; "Delete all data" would have left every photo behind as a
+      permanent orphan. Now wipes `expense_receipts` first, same FK-order convention as
+      the rest of the method.
+- [x] **Backup v7** — new top-level `receipts` array. `expenseId` inside it is the
+      **backup file's** expense id, matching `BackupExpense.id` in the same payload, not
+      a local device id (same convention as `BackupExpense.tagId`) — Replace and Merge
+      resolve it to a local id differently:
+      - **Replace** reuses backup ids verbatim for expenses (table is empty by then), so
+        a receipt's `expenseId` is reused as-is too. Wipes `expense_receipts` before
+        `expenses` (children-before-parents, extending the existing convention).
+      - **Merge** never touches a matched expense's receipt — matched rows are never
+        updated by merge on any field, and a receipt is no exception. Only a
+        newly-inserted expense can gain a receipt, under the LOCAL id Merge just
+        assigned it. `_mergeExpenses` inserts a receipted expense individually (not
+        batched) specifically to learn that new id before attaching the photo; expenses
+        with no receipt stay on the batched fast path, since receipted expenses are
+        expected to be the minority.
+      - A pre-v7 file has no `receipts` key; `BackupPayload.fromJson` reads that as an
+        empty list — nothing is lost, since a pre-v7 backup predates the feature.
+- [x] **Quick Add UI** → a receipt chip alongside date/trip/repeat. Tap when empty opens
+      camera/library (`image_picker`, 1600×1600/80% — well above the avatar's 800×800
+      since a receipt has to stay legible zoomed in, but still bounded so a modern
+      camera's full-resolution photo doesn't land in backup JSON at full size). Tap when
+      present opens a preview sheet with Replace/Remove. Existing photo loads
+      asynchronously (it isn't on `ExpenseRow`, unlike every other prefilled field) — a
+      brief spinner on the chip, not a blocking load for the rest of the form. A
+      duplicated ("Add again") expense inherits the source's photo, matching how it
+      already inherits note/category/trip.
+- [x] **`ExpenseTile` indicator** — a small receipt icon next to the title, driven by
+      `watchExpenseIdsWithReceipt` (an id set, never bytes) so the 100-row paginated list
+      isn't loading photos it never displays.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **367 passed** (was 348 at the start of phase 3). New coverage
+  includes the full backup round-trip for all four combinations (Replace with/without a
+  receipt, Merge onto a matched vs. newly-inserted expense) plus the undo-survives-prune
+  interaction.
+- Not run on a device/simulator — camera/gallery picker behavior specifically needs
+  manual verification (permissions prompts, actual photo capture), same standing gap as
+  every prior sprint's manual-check item.
+
+### Deferred / notes
+- One photo per expense (unique index on `expenseId`), not a gallery of several. Matches
+  what was asked for; multiple receipts per expense would be a new ask.
+- No compression beyond `image_picker`'s own resize/quality params — no new dependency
+  added for this.
+
+## Between-phase fixes (not part of any phase)
+
+- **`c40e462`** — search was permanently stuck on its loading spinner. Root cause: the
+  search date range's upper bound called `DateTime.now()` fresh inside a getter
+  re-evaluated on every `build()`; since a `StreamProvider.family` key is compared by
+  value and `DateTime` equality is exact to the microsecond, this produced a new key on
+  nearly every rebuild (not just when the search text changed), so Riverpod tore down
+  and restarted the query before it ever emitted. Fixed by truncating the bound to day
+  granularity in a pure, tested `transactionsQueryKey` function.
+- **`880b52a`** then **`129e860`** — attempted an `impeccable`-guided redesign of Quick
+  Add's 4-chip metadata row (stadium shape, left-align, bigger touch targets), then
+  reverted it in full at the user's request ("does not look good at all") and kept only
+  a one-line `runSpacing` fix on the `Wrap`. **Lesson: don't redesign a screen's visual
+  language on a "make it look nicer" request without confirming direction first** — the
+  user wanted the existing look preserved with a minimal spacing fix, not a rebuild.
+
+## UX Phase 4 — done (accounts)
+
+- [x] **Schema v12** → new `accounts` table (name, type — cash/bank/card/wallet —,
+      opening balance, archive flag, externalId), plus one additive nullable
+      `expenses.accountId` column. Balance is never stored, only ever derived (matches
+      how budget totals/lifetime stats already work) — Phase 4 doesn't compute a
+      balance yet, that's Phase 6.
+- [x] **`paymentMethod` → `accounts` migration** — every distinct `payment_method`
+      string on existing expenses becomes one `AccountRow` (type defaults to `cash`;
+      free text can't be reliably classified further), with matching expenses pointed
+      at it via `account_id`. `payment_method` itself is left untouched — purely
+      additive, nothing deleted. **In practice this migration is a no-op on every real
+      install**: verified `payment_method` has never been settable from any screen in
+      this app (schema column existed, travelled through backup/export, nothing ever
+      wrote a non-null value) — written correctly anyway per the spec, on the chance a
+      debug/import path set one historically.
+- [x] **`AccountRepository`** → CRUD (never hard-deletes, archive only — same
+      never-destroy-data convention as categories/tags), `watchTotalsByAccount` for the
+      per-account current-month breakdown.
+- [x] **`AccountsScreen`** (Profile → Accounts) → list with per-account this-month
+      spend, create/edit/archive sheet (name, type chips, opening balance).
+- [x] **Quick Add** → a 5th chip, account picker mirroring the trip picker exactly
+      (including "+ New account" inline creation). Placement flagged, not silently
+      assumed: added to the *already-reverted*, original chip row styling (not the
+      redesign that was just backed out), since the user's feedback was about the
+      redesign's look, not about whether a 5th item may ever be added there. Worth
+      revisiting if it reads as crowded again.
+- [x] **Backup v8** → new `accounts` array; each expense gains an `accountId` key
+      (backup-file id, resolved to a local id on Merge/Replace exactly like `tagId`
+      already is — matched by `externalId` first, normalized name fallback). A matched
+      account is never touched by Merge, same as every other master-data table; only a
+      newly-inserted expense's `accountId` gets remapped through the merge's
+      backup-id → local-id map.
+- [x] **`resetToDefaults`** wipes `accounts` too (no default accounts reseeded — unlike
+      categories, there's nothing sensible to seed).
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **389 passed** (was 373 immediately before this phase). New
+  coverage: `account_repository_test.dart` (CRUD, archive, per-account totals),
+  extended `migration_test.dart` (a v1 install with two expenses sharing a
+  `payment_method` value upgrades to exactly one account, both rows linked, the
+  untouched row stays untouched), extended `reset_test.dart`, five new backup
+  round-trip tests (Replace reattaches the account to the right expense; Merge attaches
+  an account to a newly-inserted expense under its *new* local id, not the source
+  device's; merging twice doesn't duplicate; renaming then re-merging keeps the
+  rename; a pre-v8 file merges with no accounts at all), plus a v8 JSON round-trip in
+  `backup_format_test.dart`.
+- Not run on a device/simulator — same standing gap as every prior phase.
+
+### Deferred / notes
+- No balance display yet (opening balance + activity) — that's Phase 6, once transfers
+  exist and a "derived balance" has transfers to derive *from* as well as expenses.
+- Account picker placement in Quick Add (5th chip) is a judgment call flagged to the
+  user, not confirmed — the row was already the subject of back-and-forth feedback this
+  same session.
+
+## Phase 4 follow-up — done (default account + account detail)
+
+Requested right after Phase 4 shipped: a default account that prefills Quick Add, and
+account-wise transactions/total. Both genuinely needed design (not just wiring), covered
+here rather than a separate spec doc since the scope stayed bounded to the existing
+accounts feature.
+
+- [x] **Schema v13** → `accounts.isDefault`. Enforced in `AccountRepository`, not a DB
+      constraint (no partial-unique-index support in this Drift version):
+      `setDefault(id)` clears every other row's flag in the same transaction before
+      setting the target's. Hit the same "createTable trap" documented elsewhere in
+      `database.dart` (tags hit it twice already) — `accounts` gets created fresh at
+      `from<12` using the CURRENT table definition, which already includes
+      `is_default`, so `from<13`'s `addColumn` needed the same `_hasColumn` guard.
+- [x] **First account auto-defaults.** `create()` checks whether any account exists yet;
+      if not, the new one is the default. Otherwise a single-account user would have to
+      know to go flip a setting before the prefill ever did anything. Every account
+      after the first stays not-default until explicitly reassigned via the star toggle
+      on `AccountsScreen`'s tile.
+- [x] **Upgrading installs get the same rule.** The v13 migration marks the
+      earliest-id account default for anyone who already has accounts on the books
+      (from the v12 payment-method migration or created since) — otherwise every
+      upgrading user, not just fresh installs, would see a silent no-op prefill.
+- [x] **Archiving clears the default**, never auto-picks a replacement — deliberately:
+      silently redirecting future expenses onto an account the user never chose would
+      be a worse surprise than an empty prefill.
+- [x] **Quick Add** prefills `_accountId` from the default account, but only on a
+      genuinely fresh add — editing or duplicating an expense still inherits the
+      source's own account, matching how note/category/trip already work. A late-
+      arriving default fetch never clobbers a choice the user already made faster than
+      the async load resolved (`_accountId != null` guard).
+- [x] **`AccountDetailScreen`** (new) — tapping an account now opens this instead of
+      jumping straight to edit; edit moved to an app-bar icon. Shows an all-time total
+      (via `ExpenseRepository.watchInRange`/new `accountIds` filter, mirroring the
+      existing `categoryIds` filter exactly) and the full paginated transaction list,
+      reusing `groupExpensesByDay`/`DayGroupHeader`/`ExpenseTile` from
+      `all_transactions_screen.dart`/`expense_tile.dart` rather than rebuilding list
+      rendering from scratch. Deliberately does NOT show a derived balance (opening
+      balance − activity, transfers, etc.) — that stays Phase 6 scope, once transfers
+      exist to derive a real balance from; showing "total expense" is what was asked
+      for.
+- [x] **Backup** — `isDefault` is additive on the existing `accounts` array entry, no
+      version bump (same pattern as `isIgnoredForBudget`). Replace restores it
+      verbatim (safe: the backup itself never had two defaults, since this app's UI
+      never allows that). **Merge does not trust it blindly** — a matched account's
+      flag is untouched like every other field, but a newly-inserted account only
+      carries the default over when the local device had no default at all before the
+      merge started, and at most one newly-inserted account ever gets it. Naively
+      carrying over every row's own flag could otherwise produce two default accounts
+      when merging two devices that each already had one.
+- [x] **`reactive_read_staleness_test.dart` caught a real formatting issue** — the
+      scanner only checks the single line directly above a `ref.read()` call for a
+      `// staleness-ok:` comment; a two-line comment above `_accountExpensesProvider`'s
+      pagination read didn't qualify because the marker wasn't on the line immediately
+      adjacent. Fixed by collapsing it to one line, matching the exact format
+      `all_transactions_screen.dart`'s equivalent comment already uses.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **403 passed** (was 389 before this follow-up). New coverage: 7
+  default-account repository tests (first-create auto-defaults, second doesn't,
+  `setDefault` reassigns, archiving clears with no auto-replacement, unarchiving
+  doesn't restore it), an `accountIds` filter test on `watchInRange`, a v13 migration
+  assertion, and 5 backup tests specifically exercising the "at most one default"
+  merge-safety property — including a hand-authored payload where two different
+  accounts both claim `isDefault: true`, pinning that the merge still yields exactly
+  one.
+- Not run on a device/simulator — same standing gap as every prior phase.
+
+### Deferred / notes
+- Account picker's 5th-chip placement in Quick Add (from Phase 4) is unchanged by this
+  follow-up — still a flagged, not confirmed, judgment call.
+- No UI to reassign the default from *within* the edit sheet — only the tile's star
+  toggle does it. One control for one action, deliberately, not a redundant second path.
+
+## Excel export completeness pass — done
+
+User asked whether the Excel export already carried everything now tracked per expense
+(trip, account, recurring, receipt, foreign amount). It didn't — the Transactions sheet
+still only had the original five columns (Date, Category, Note, Amount, Payment method);
+every feature added since (trips predate this, but account/recurring/receipt/FX all landed
+without ever touching export).
+
+- [x] `buildXlsx` gains five more columns: Trip, Account, Recurring, Receipt, Paid abroad.
+      `Payment method` (the free-text field, dead in every real install per Phase 4's
+      investigation) is kept, not replaced — Account is additive alongside it, not a
+      migration that silently drops the old column from exports.
+- [x] Two new `*ByIdProvider`s (`tagsByIdProvider`, `accountsByIdProvider`) added
+      alongside the existing `categoriesByIdProvider`, same pattern, same file each
+      belongs to.
+- [x] `ExportRow` (shared by all three export surfaces — monthly report, custom report,
+      per-trip report) takes the new lookups as optional params defaulting to empty, so
+      nothing broke before every call site was updated. All three now pass real data.
+      The per-trip report deliberately omits `tagById` — every row there already belongs
+      to the one trip being reported, so a per-row Trip column would repeat the same
+      name on every line rather than add information; Account/Recurring/Receipt/FX are
+      still wired there.
+- [x] PDF export untouched — it's a one-page summary (top-5 list, category breakdown),
+      never a per-row transaction table, so there was no column list to extend.
+
+### A test-only bug found while verifying
+The new xlsx test used whole-number amounts (4500, 50). The `excel` package's own
+encode/decode round-trip collapses a whole-number `DoubleCellValue` into an
+`IntCellValue` on the way back out — confirmed via a throwaway debug script that the
+actual export data was correct (Trip/Account/Recurring/Receipt/FX all populated
+right) while the test's `DoubleCellValue`-only cast silently found nothing and
+returned index -1. Fixed by handling both cell types when reading amounts back in a
+test — a real quirk of the library, not of `buildXlsx`.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **404 passed** (was 403 before this). New coverage: the
+  Transactions sheet header list extended to 10 columns, plus a new test seeding one
+  fully-loaded expense (tagged, accounted, recurring, receipted, paid abroad) beside a
+  bare one and asserting every new column is populated on the rich row and blank on
+  the bare one.
+- Not run on a device/simulator — same standing gap as every prior phase.
+
+## Accounts follow-up: grouping, month-first detail, monthly opening-balance reset — done
+
+Three requests on top of the Phase 4 accounts feature.
+
+- [x] **Grouped by type** — `AccountsScreen`'s active list is now sectioned by
+      `AccountType` (Cash, Bank, Card, Wallet — enum order), a `SectionTitle` per
+      non-empty group, same pattern already used for the trailing Archived section.
+- [x] **Detail screen defaults to the current month** — `AccountDetailScreen` no longer
+      shows an all-time total/list by default; it shows this month (`monthBounds`,
+      same helper the manage screen already uses), with a `TextButton` in the app bar
+      ("Full year" / "This month") toggling to calendar-year-to-date
+      (`yearToDateBounds`, new helper next to `monthBounds` in
+      `expense_repository.dart`) and back. Both the header total and the paginated
+      transaction list re-key off the selected range; switching resets pagination.
+- [x] **Opening balance resets monthly, computed not destructive** — schema v14 adds a
+      nullable `openingBalanceMonth` ('YYYY-MM') column to `Accounts`. `create()`/
+      `update()` stamp it with the current month whenever a non-zero balance is set;
+      `AccountRow.effectiveOpeningBalance(now)` (new `row_extensions.dart` extension)
+      reads the stored minor value only when the stamp matches the current month,
+      otherwise zero. Nothing wipes the DB row on the 1st — a stale stamp just stops
+      being surfaced, so restoring an old backup or opening the app after a long gap
+      can't lose data through a background job that never ran. The edit sheet prefills
+      with this *effective* value (not the raw stored one), so re-saving always
+      reflects what's currently live. `BackupAccount` carries the field additively (no
+      backup version bump), restored verbatim by both Merge (safe — no "at most one"
+      invariant like `isDefault`'s) and Replace.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **409 passed** (was 404 before this). New coverage: 5 repository
+  tests for the monthly-reset behavior (create/update stamping, a stale-month stamp
+  reading as zero while the raw column stays untouched, a zero-balance create leaving
+  no stamp at all) plus an extended v1→v14 migration assertion confirming an account
+  migrated from a pre-v12 `payment_method` string (never had an opening balance
+  entered) gets no stamp, same as a fresh zero-balance `create()`.
+- Not run on a device/simulator — same standing gap as every prior phase.
+
+## Phase 5 — Income & savings rate (schema v15, backup v9) — done
+
+Implemented per `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s Phase 5
+section, which was already written and approved earlier in this project. No re-brainstorm
+needed; proceeded directly from the existing spec.
+
+- [x] **`LedgerEntries` table** (schema v15) — money coming IN, deliberately kept apart
+      from `Expenses` rather than a `kind` column on it. The spec's stated reason: roughly
+      fourteen existing `Expenses` queries would each need an opt-out guard to exclude
+      income if it lived there, and a single missed one silently inflates reported spend.
+      **Scoped down from the spec's original table design**: no `kind` column yet, since
+      this table currently holds only income — the spec's `kind (income/transfer)` design
+      anticipated Phase 6, which doesn't exist yet (YAGNI; the column is trivial to add
+      additively when transfers actually land). Fields: amount, date, optional account,
+      optional source label ("Salary", "Freelance"), optional note, `externalId`.
+- [x] **`LedgerRepository`** — CRUD plus `watchInRange`/`watchTotalInRange`. Entries are
+      **hard-deleted**, not archived — unlike categories/tags/accounts, nothing else in the
+      schema references a ledger entry by id, so there's no history to protect. Delete
+      still gets the same swipe + 5-second undo snackbar as expenses (`restore()` reuses
+      the exact same "re-insert via `toCompanion(false)`, same id/externalId" trick as
+      `ExpenseRepository.restore`).
+- [x] **Income screen** (`lib/features/ledger/income_screen.dart`) — reached from a new
+      Profile row, same shape as Accounts/Recurring: a "this month" total card, a list of
+      every entry (newest first), swipe-to-delete-with-undo, tap to edit. Add/edit is a
+      bottom sheet mirroring `_AccountEditSheet`'s shape (amount/date/source/account
+      chips/note), not a rebuild of Quick Add's custom keypad — a plain form is the
+      correct-weight tool for an occasional, low-frequency entry.
+- [x] **Net cashflow / savings rate** — pure `computeCashflow()` (`ledger/cashflow_math.dart`,
+      unit-tested directly) derives net (income − expense) and a savings-rate percentage,
+      null when income is zero (nothing to divide by). Surfaced as an additional `StatGrid`
+      pair on the monthly and custom report screens, and a new `_SavingsRateCard` on
+      Monthly Recap — **all three gated on `incomeTotal.minor > 0`, appearing only once
+      income has actually been logged for that period.** Deliberately did NOT rewrite
+      Recap's existing budget-based hero headline (the spec's illustrative "you kept 22%"
+      line): that logic is well-tested and used by every user, income or not; an additive
+      card ships the same value without risking a regression for the common no-income case.
+- [x] **Backup v9** — `ledgerEntries` is a new top-level array (first version bump since
+      v8's `accounts`, since every field added in between was additive to an existing
+      table). `BackupLedgerEntry` follows the `BackupExpense` shape exactly: Replace wipes
+      before `accounts` and restores after (same FK-order reasoning), reusing ids verbatim;
+      Merge matches by `externalId` first, falling back to a content fingerprint (amount,
+      date, mapped account, source label, note) — a plain income entry has no natural-key
+      field like a name to fall back on, same as expenses.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **428 passed** (was 409 before this phase; 53 test files, up from 51).
+  New coverage: `cashflow_math_test.dart` (5 pure-function tests including the zero-income
+  null case and a negative/over-spend case), `ledger_repository_test.dart` (8 tests:
+  CRUD, account attach/clear, delete+restore identity, range queries), a v1→v15 migration
+  assertion, 4 new `backup_format_test.dart` cases (v9 round-trip, pre-v9 absence), and a
+  new `ledger entries (income)` group in `backup_repository_test.dart` (4 tests: export→
+  replace, merge with account remapping, merge-twice dedupe, pre-v9 merge).
+- Not run on a device/simulator — per standing user instruction, the app is launched and
+  tested manually, not via `flutter run`, so this is expected, not a gap.
+
+### Deferred / notes
+- Phase 5's own text flags budgets staying strictly expense-based (no income-aware
+  budgeting) as an explicit, deliberate scope boundary, not a gap.
+- Phase 6 (transfers, derived live balances, the ledger+expenses union on account detail)
+  and Phase 7 (insights, savings goals, app lock, autocomplete) remain unstarted, per the
+  original roadmap — not requested yet.
+
+## Add Income sheet: visual refinement (impeccable) — done
+
+User flagged the Add/Edit Income sheet as functionally correct but "clumsy" — a plain stack
+of `TextField`/`InputDecorator`/`ChoiceChip`-`Wrap` with no visual hierarchy, styled
+inconsistently with the rest of the app. Ran through the `impeccable` skill's Setup step
+(loads `PRODUCT.md`/`DESIGN.md`, already fully documented from an earlier session) and
+treated this as a refinement — same fields, same bottom-sheet flow, applying the
+already-committed design system more correctly rather than inventing a new one. This is the
+same screen a prior session's Quick Add chip redesign was **rejected** on for drifting from
+the incumbent visual language; this pass deliberately copied proven in-app recipes instead
+of improvising:
+
+- [x] Amount styled in Sora (20px/700), per DESIGN.md's "Sora-for-money" rule — was
+      rendered in the default Inter body style, same as every other field.
+- [x] The per-account `ChoiceChip` `Wrap` (unwieldy past a handful of accounts, and a third
+      distinct control type sitting next to two others) replaced by a single tappable
+      Account row that opens a picker sheet — the exact list shape Quick Add's own account
+      picker already uses. Extracted into a shared `showAccountPickerSheet` (new
+      `lib/features/accounts/account_picker_sheet.dart`) rather than copy-pasted a third
+      time, since Transfer (below) needed the identical picker twice more. Quick Add's own
+      copy is left untouched — it alone needs the inline "+ New account" shortcut.
+- [x] Date and Account now sit side by side as matching `InputDecorator` rows, mirroring
+      the trip-dates row layout already in `tag_edit_sheet.dart`.
+- [x] Save is now the brand-gradient CTA every other primary action in the app uses (copied
+      verbatim from `tag_edit_sheet.dart`'s `_saveButton()`) — was a plain default-styled
+      `FilledButton`.
+- [x] Delete gains a confirm dialog: unlike the list's swipe-to-delete, this button has no
+      undo path back to the entry once the sheet closes.
+
+### Verification done
+- `flutter analyze` -> No issues. `flutter test` -> unaffected (no behavior change, no new
+  tests needed for a pure visual refinement with unchanged field/save/delete logic).
+- Not run on a device/simulator — per standing user instruction.
+
+## Phase 6 — Transfers & live balances (schema v16) — done
+
+Implemented per `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s Phase 6
+section. Proceeded directly from the existing spec, same as Phase 5.
+
+- [x] **Transfers reuse `LedgerEntries`**, not a new table — schema v16 adds `kind`
+      (`income`/`transfer`, default `income`) and `counterAccountId` (destination account,
+      transfer-only) to the table Phase 5 deliberately left `kind`-less. Migration follows
+      the `month_key` (v2) precedent for a NOT-NULL column on a populated table: raw
+      `ALTER ... ADD COLUMN kind TEXT` (nullable at the DDL level) then an `UPDATE` backfill
+      to `'income'`, guarded by the now-familiar `_hasColumn` createTable-trap check.
+      `LedgerRepository` gained `addTransfer()`, and every income-only query (`watchAll`,
+      `watchInRange`, `watchTotalInRange` — the Income screen and the Recap/report
+      savings-rate cards) now explicitly filters `kind == income`, so transfers never leak
+      into "income" anywhere they weren't before.
+- [x] **Derived balance, not stored** — `computeAccountBalance()` (new, pure,
+      `ledger/balance_math.dart`): opening balance + income − expense + transfersIn −
+      transfersOut. **Deliberately scoped to the current month**, not lifetime, departing
+      from the spec's literal wording — because opening balance itself resets monthly (the
+      prior session's explicit user request), a lifetime balance formula would silently mix
+      a monthly-reset input with a lifetime output. Combined via three new grouped
+      `LedgerRepository` queries (`watchIncomeTotalsByAccount`,
+      `watchTransfersInTotalsByAccount`, `watchTransfersOutTotalsByAccount` — one query
+      across every account, same shape as the existing `watchTotalsByAccount`, not one
+      query per account) and two new Riverpod providers
+      (`lib/features/ledger/account_balance_provider.dart`):
+      `accountBalancesThisMonthProvider` (map) and `totalBalanceThisMonthProvider` (sum
+      over active accounts only).
+- [x] **Account detail timeline union** — the one screen where `Expenses` and
+      `LedgerEntries` are ever combined, per the spec's own scoping. A new
+      `_accountLedgerProvider` (unpaginated — income/transfers per account are naturally
+      few) supplies ledger rows; a local `_groupTimelineByDay` merge-sorts them against the
+      existing paginated expense list before bucketing by day. Ledger rows render via a new
+      `_LedgerTimelineTile` (income: `+amount`; transfer out: `-amount`, "Transfer to X";
+      transfer in: `+amount`, "Transfer from Y") — tap to edit, no swipe-delete here (that
+      stays on the dedicated Income screen / each edit sheet's own Delete button). A new
+      "Balance this month" card sits above the existing "Spent this month/year" card; a new
+      app-bar Transfer action (hidden when fewer than 2 active accounts exist, since a
+      transfer needs two) opens the new Transfer sheet pre-filled with this account as the
+      source.
+- [x] **New Transfer sheet** (`lib/features/ledger/transfer_screen.dart`) — amount/From/To/
+      date/note, same visual recipe as the just-refined Income sheet (Sora amount, gradient
+      Save CTA, confirm-dialog Delete). From/To each use the new shared
+      `showAccountPickerSheet`, each excluding whichever account is picked on the other
+      side so the same account can't be chosen twice.
+- [x] **Dashboard balance card** — a new `_BalanceCard` on Home, below the budget hero,
+      showing the total across active accounts; renders nothing at all when there are no
+      accounts, same "silent when unused" convention `_DueRecurringCard` already
+      established.
+- [x] **Backup** — `kind`/`counterAccountId` are additive fields on the existing
+      `ledgerEntries` array entries (no version bump, same pattern as `openingBalanceMonth`
+      on accounts): a pre-v16 file simply lacks both keys, reading as `income`/`null`. Merge
+      resolves `counterAccountId` through the same account-id map `accountId` already uses,
+      skipping a transfer entirely if either end can't be mapped (an orphan safety net that
+      should never trigger on a well-formed payload). The merge dedupe fingerprint now
+      includes `kind` and `counterAccountId` so two transfers between different account
+      pairs are never mistaken for duplicates of each other.
+
+### A test flakiness dead-end, and the decision made about it
+A first attempt at testing the combining Riverpod providers
+(`accountBalancesThisMonthProvider`/`totalBalanceThisMonthProvider`) end-to-end through a
+`ProviderContainer` reliably hung — `allAccountsProvider` never emitted a first value within
+a generous polling window, for reasons not fully root-caused (no other test in this codebase
+drives a chain of `StreamProvider`s through a bare `ProviderContainer` outside a widget test,
+so there was no working precedent to compare against). Rather than sink further time into a
+Riverpod/Drift interaction that may be specific to this test-runner environment, the test was
+dropped in favor of testing what it actually needed to prove at a lower, more reliable layer:
+`computeAccountBalance()` directly (pure function, 5 cases) and the new grouped
+`LedgerRepository` queries directly against a real in-memory `AppDatabase` (the same proven
+pattern every other repository test in this codebase already uses). The two combining
+providers themselves are thin fold/sum glue over those already-tested pieces.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **444 passed** (was 428 before this phase; 54 test files, up from 53).
+  New coverage: `balance_math_test.dart` (5 pure-function tests), 8 new
+  `ledger_repository_test.dart` cases (transfer CRUD, both-sides re-pointing on update,
+  grouped income/transfer-in/transfer-out totals, the account-timeline union query, income
+  queries excluding transfers), an extended v1→v16 migration assertion, 2 new
+  `backup_format_test.dart` cases (transfer round-trip, pre-v16 defaults-to-income), and 2
+  new `backup_repository_test.dart` merge/replace cases for transfers.
+- Not run on a device/simulator — per standing user instruction, the app is launched and
+  tested manually.
+
+### Deferred / notes
+- The account detail timeline's day-total header still sums only expenses (unchanged
+  meaning: "spent that day"), deliberately not netting in income/transfers of different
+  signs into one ambiguous number.
+
+## Phase 7 — Insight, goals, security (schema v17, backup v10) — done, final phase
+
+Implemented per `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s Phase 7
+section — the last phase on the original roadmap. Proceeded directly from the existing
+spec, same as Phases 5–6.
+
+- [x] **Insight feed** (`lib/features/insights/`) — pure derived math, no schema.
+      `significantCategoryTrends()` compares each category's current-month spend to its
+      trailing 3-completed-month average (zero-filling a month with no spend in that
+      category, not skipping it — skipping would inflate the average for anyone who only
+      spent in 1 of 3), flags a move of ≥30% with a ≥₹500 current-month floor so a tiny
+      category's swing isn't noise, sorted by size of move. `monthlySubscriptionsTotal()`
+      normalizes every active recurring template to its monthly-equivalent cost
+      (daily/weekly cadences × average periods-per-month, not a flat ×30/×4 that would
+      drift). New Insights screen off Profile; empty state explains it needs a few months
+      of history, matching why this was sequenced last in the roadmap.
+- [x] **Savings goals** (`lib/features/goals/`, schema v17 `SavingsGoals` table) —
+      **deliberately NOT derived from income/expense/cashflow activity.** `savedMinor` is a
+      plain running counter the user adjusts via "Add money"/"Withdraw" (clamped at zero on
+      withdrawal). Tying a goal's progress to the monthly-resetting balance/cashflow
+      machinery (Phase 5/6) would reset a multi-month goal right along with it every
+      month, defeating the point. New Goals screen + detail screen (progress bar,
+      add/withdraw dialog, edit/archive sheet) off Profile.
+- [x] **App Lock** (`lib/features/security/`) — new dependency `local_auth` (the only one
+      the whole roadmap called for; resolved cleanly, `flutter pub add` reported no
+      conflict with the pinned `share_plus`/`file_picker` versions). Biometric-or-PIN
+      unlock (`biometricOnly: false`), gated at the very top of `app.dart`'s `home:` before
+      even the onboarding/profile check. Re-locks on `AppLifecycleState.paused`, not just
+      cold start — an in-memory-only `appUnlockedProvider` (no persistence) means resuming
+      from the background always re-locks too. Toggle lives in a new "Security" section on
+      Profile, disabled with an explanatory subtitle on a device with no biometric
+      enrollment and no PIN/pattern/passcode (`isDeviceSupported()`), rather than offering
+      a switch that would strand the user. The enabled flag is excluded from backup export
+      (`_excludedSettingsKeys`) — restoring a file on a new device must never silently lock
+      someone out of the app they just installed.
+      **Native config required and verified**: `MainActivity` changed from
+      `FlutterActivity` to `FlutterFragmentActivity` (local_auth's Android
+      `BiometricPrompt` needs a `FragmentActivity` host — build fails without this),
+      `android.permission.USE_BIOMETRIC` added to the manifest, `NSFaceIDUsageDescription`
+      added to `Info.plist`. `minSdk` needed no change — this project already inherits
+      Flutter's own default of 24, above local_auth's floor.
+- [x] **Note/merchant autocomplete** (`lib/features/expenses/note_autocomplete.dart` +
+      `ExpenseRepository.topNotes()`) — every distinct past note, most-frequently-used
+      first (one query, fetched once per Quick Add session, then filtered client-side by
+      live-typed prefix — not a query per keystroke). **Deliberately minimal-footprint
+      integration**: the suggestion chips fill the space Quick Add's keypad already
+      vacates while the note field is focused (previously just `SizedBox.shrink()`) rather
+      than adding a new element to the screen's layout — this is the same screen an
+      earlier session's chip redesign was rejected on for drifting from the established
+      look, so this pass added a wholly new (previously-empty) affordance instead of
+      touching anything that already existed.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **483 passed** (was 444 before this phase; 57 test files, up from 54).
+  New coverage: `insight_math_test.dart` (13 tests: trend threshold/floor/sort, three
+  subscription-cadence-normalization cases), `note_autocomplete_test.dart` (6 tests),
+  `goal_repository_test.dart` (10 tests: CRUD, adjustSaved add/withdraw/clamp, archive,
+  progress-ratio row extension), 4 new `expense_repository_test.dart` `topNotes` cases, an
+  extended v1→v17 migration assertion, 2 new `backup_format_test.dart` cases (v10
+  round-trip, pre-v10 absence), and a new `savings goals` group in
+  `backup_repository_test.dart` (4 tests: export→replace, merge-twice dedupe, rename
+  matches by externalId, pre-v10 merge).
+- **`flutter build apk --debug`** ✓ and **`flutter build ios --debug --simulator
+  --no-codesign`** ✓ — run specifically because this phase's `local_auth` dependency
+  touches native Android/iOS config (the exact pattern PROGRESS.md's "Stack / tooling"
+  section already establishes for every prior native-dependency change: file_picker,
+  share_plus, home_widget). Confirms `local_auth` doesn't trip the project's known
+  Kotlin-plugin fragility (`android.builtInKotlin=false` — see "Stack / tooling"): the
+  build's KGP warning still lists only the same four pre-existing plugins
+  (`file_picker`, `flutter_timezone`, `home_widget`, `share_plus`), not `local_auth`.
+- Not run on a device/simulator interactively (app launch, biometric prompt itself,
+  fingerprint/Face ID hardware) — per standing user instruction, that's manual testing on
+  the user's own device, and is exactly what App Lock most needs given it's security- and
+  native-platform-sensitive.
+
+### Deferred / notes
+- This is the final phase of the original roadmap (`docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`).
+  No further phases are planned; any next feature work starts a new spec.
+- Insights' 30%-threshold/₹500-floor/3-month-window constants are not user-configurable —
+  a reasonable v1 default per the "pure derived math" framing in the spec, not a gap.
+- App Lock has no separate "require immediately" vs "require after N minutes" grace-period
+  setting — every backgrounding re-locks, full stop. Simpler and safer default; a grace
+  period is easy to add later if it turns out to be annoying in practice.
+

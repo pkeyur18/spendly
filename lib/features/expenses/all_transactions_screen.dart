@@ -28,6 +28,44 @@ bool _isCalendarMonth((DateTime, DateTime) range) {
   return bounds.$1 == range.$1 && bounds.$2 == range.$2;
 }
 
+/// The `(start, end, limit, categoryKey, search)` key that drives
+/// [expensesInRangeProvider]. Pulled out as a free function, same reason as
+/// [backdatePickerBounds] — and specifically so its stability can be
+/// unit-tested, after a real bug where it wasn't stable.
+///
+/// A search escapes [range] and looks across all history — see
+/// [AllTransactionsScreen]'s search chip. The upper bound for that is derived
+/// from [now] truncated to the DAY, never a raw `DateTime.now()` evaluated on
+/// the fly: a `StreamProvider.family` key is compared by value, and
+/// `DateTime` equality is exact to the microsecond, so a fresh
+/// `DateTime.now()` produces a NEW key on every rebuild — not just when the
+/// search text changes, but on cursor blinks, focus changes, anything that
+/// triggers `build()`. Riverpod then tears down whatever query was in flight
+/// for the previous key and restarts a brand-new one from scratch, which
+/// starved every query of the time it needed to ever deliver a result: the
+/// search box got stuck on a permanent loading spinner. Truncating to the day
+/// means the key is stable for an entire session — today's date can't be
+/// earlier than any possible expense, since Quick Add never allows a
+/// future-dated one.
+(DateTime, DateTime, int, String, String) transactionsQueryKey({
+  required bool searching,
+  required String search,
+  required (DateTime, DateTime) range,
+  required int limit,
+  required String categoryKey,
+  required DateTime now,
+}) {
+  final effectiveRange = searching
+      ? (
+          // Comfortably before any possible expense: entry is capped at 90
+          // days of backdating and the app has no pre-2000 history to import.
+          DateTime(2000),
+          DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
+        )
+      : range;
+  return (effectiveRange.$1, effectiveRange.$2, limit, categoryKey, search);
+}
+
 /// Caps the selected-category chip row to [max] entries unless [expanded].
 List<CategoryRow> visibleCategoryChips(
   List<CategoryRow> selected,
@@ -65,8 +103,24 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   Set<int> _selectedCategoryIds = {};
   bool _categoryChipsExpanded = false;
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _searching = false;
+  String _search = '';
 
   String get _categoryKey => (_selectedCategoryIds.toList()..sort()).join(',');
+
+  bool get _isSearching => _search.trim().isNotEmpty;
+
+  (DateTime, DateTime, int, String, String) _key(DateTime now) =>
+      transactionsQueryKey(
+        searching: _isSearching,
+        search: _search,
+        range: _range,
+        limit: _limit,
+        categoryKey: _categoryKey,
+        now: now,
+      );
 
   @override
   void initState() {
@@ -77,7 +131,30 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    // Back to page one: results the user hasn't seen shouldn't inherit a
+    // scroll-grown limit from the previous query.
+    setState(() {
+      _search = value;
+      _limit = _pageSize;
+    });
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) {
+        _searchController.clear();
+        _search = '';
+        _limit = _pageSize;
+      }
+    });
+    if (_searching) _searchFocusNode.requestFocus();
   }
 
   /// Grow the limit when the user nears the bottom and the current page is full
@@ -87,9 +164,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
     if (pos.pixels < pos.maxScrollExtent - 400) return;
     // staleness-ok: reads the same page build() already watches, for pagination bookkeeping.
     final loaded = ref
-        .read(
-          expensesInRangeProvider((_range.$1, _range.$2, _limit, _categoryKey)),
-        )
+        .read(expensesInRangeProvider(_key(DateTime.now())))
         .asData
         ?.value
         .length;
@@ -170,7 +245,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final key = (_range.$1, _range.$2, _limit, _categoryKey);
+    final key = _key(DateTime.now());
     final async = ref.watch(expensesInRangeProvider(key));
     final byId = ref.watch(categoriesByIdProvider);
     final categoryChips =
@@ -194,8 +269,28 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title),
+        title: _searching
+            ? TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: _onSearchChanged,
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Search note, category or amount',
+                ),
+              )
+            : Text(_title),
         actions: [
+          IconButton(
+            tooltip: _searching ? 'Close search' : 'Search transactions',
+            icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
+            onPressed: _toggleSearch,
+          ),
+          // The month/range controls are hidden while searching: the search
+          // box has already taken the title's space, and a search is usually
+          // "find that one thing", not "browse this month".
+          if (!_searching) ...[
           if (monthMode) ...[
             IconButton(
               tooltip: 'Previous month',
@@ -225,6 +320,7 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
                 ? null
                 : () => _openCategoryFilterSheet(categoryChips),
           ),
+          ],
         ],
       ),
       body: Column(
@@ -308,9 +404,13 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
               ),
               data: (expenses) {
                 if (expenses.isEmpty) {
-                  return const EmptyView(
-                    icon: Icons.receipt_long_outlined,
-                    message: 'No transactions in this range.',
+                  return EmptyView(
+                    icon: _isSearching
+                        ? Icons.search_off_rounded
+                        : Icons.receipt_long_outlined,
+                    message: _isSearching
+                        ? 'Nothing matches "${_search.trim()}".'
+                        : 'No transactions in this range.',
                   );
                 }
                 // Flatten day-groups into a single list (DateTime = header,

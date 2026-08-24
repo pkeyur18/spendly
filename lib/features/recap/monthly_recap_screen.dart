@@ -12,6 +12,8 @@ import '../budgets/budget_repository.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
 import '../home/dashboard_providers.dart'
     show CategorySlice, categoriesByIdProvider, ignoredCategoryIds;
+import '../ledger/cashflow_math.dart';
+import '../ledger/ledger_repository.dart';
 import '../profile/profile_provider.dart';
 import '../reports/report_providers.dart';
 import 'recap_summary.dart';
@@ -37,6 +39,8 @@ class MonthlyRecapScreen extends ConsumerWidget {
     );
     final profile = ref.watch(profileProvider).value;
     final monthLabel = DateFormat('MMMM').format(month);
+    final incomeTotal =
+        ref.watch(incomeTotalByRangeProvider((start, end))).value ?? Money.zero;
 
     return Scaffold(
       bottomNavigationBar: async.maybeWhen(
@@ -118,6 +122,14 @@ class MonthlyRecapScreen extends ConsumerWidget {
                       summary: summary,
                       monthLabel: monthLabel,
                     ),
+                    // Only shown once income has actually been logged for
+                    // this month — most users never touch Income, and this
+                    // stays silent for them rather than showing a 0% row.
+                    if (incomeTotal.minor > 0)
+                      _SavingsRateCard(
+                        income: incomeTotal,
+                        expense: report.total,
+                      ),
                     const SectionTitle('Top categories'),
                     if (top3.isEmpty)
                       AppCard(
@@ -248,6 +260,59 @@ class _RecapHero extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "You kept 22% this month" — separate from [_RecapHero] deliberately: the
+/// hero's budget-based headline is well-tested and stays untouched for the
+/// (much more common, since income is optional) case where no income was
+/// logged. This card only appears additively once it has.
+class _SavingsRateCard extends StatelessWidget {
+  const _SavingsRateCard({required this.income, required this.expense});
+
+  final Money income;
+  final Money expense;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final cashflow = computeCashflow(income: income, expense: expense);
+    final kept = cashflow.savingsRatePercent!;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: AppCard(
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    kept >= 0 ? 'You kept $kept% this month' : 'You spent more than you earned',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${income.format(locale: 'en_IN')} in, '
+                    '${expense.format(locale: 'en_IN')} out',
+                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              cashflow.net.format(locale: 'en_IN'),
+              style: TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: cashflow.net.minor >= 0 ? AppColors.primary : AppColors.accent,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

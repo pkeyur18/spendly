@@ -197,12 +197,18 @@ class ExportRow extends StatefulWidget {
     required this.byId,
     required this.title,
     this.profile,
+    this.tagById = const {},
+    this.accountById = const {},
+    this.expenseIdsWithReceipt = const {},
   });
 
   final ReportData data;
   final Map<int, CategoryRow> byId;
   final String title;
   final Profile? profile;
+  final Map<int, TagRow> tagById;
+  final Map<int, AccountRow> accountById;
+  final Set<int> expenseIdsWithReceipt;
 
   @override
   State<ExportRow> createState() => _ExportRowState();
@@ -231,6 +237,9 @@ class _ExportRowState extends State<ExportRow> {
           widget.byId,
           title: widget.title,
           profile: widget.profile,
+          tagById: widget.tagById,
+          accountById: widget.accountById,
+          expenseIdsWithReceipt: widget.expenseIdsWithReceipt,
         );
         await shareReportFile(bytes: bytes, filename: '$safe.xlsx');
       }

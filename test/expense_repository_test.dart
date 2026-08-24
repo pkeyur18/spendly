@@ -180,6 +180,35 @@ void main() {
     expect(rows.map((e) => e.categoryId).toSet(), {1, 3});
   });
 
+  test('watchInRange with accountIds returns only matching rows', () async {
+    await repo.add(
+      amount: Money.parse('10'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 1),
+      accountId: 1,
+    );
+    await repo.add(
+      amount: Money.parse('20'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 2),
+      accountId: 2,
+    );
+    await repo.add(
+      // No account at all — must not match either filter.
+      amount: Money.parse('30'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 3),
+    );
+    final rows = await repo
+        .watchInRange(
+          DateTime(2026, 3, 1),
+          DateTime(2026, 4, 1),
+          accountIds: {1},
+        )
+        .first;
+    expect(rows.map((e) => e.amountMinor), [Money.parse('10').minor]);
+  });
+
   test(
     'distinctCategoryIdsInRange returns only categories actually used',
     () async {
@@ -394,5 +423,120 @@ void main() {
     );
 
     expect(await repo.earliestExpenseDate(), DateTime(2026, 1, 5));
+  });
+
+  group('restore (undo a delete)', () {
+    Future<ExpenseRow> seed() async {
+      final id = await repo.add(
+        amount: Money.parse('24.35'),
+        categoryId: 2,
+        date: DateTime(2026, 3, 10),
+        note: 'lunch',
+        paymentMethod: 'UPI',
+        fxCurrency: 'THB',
+        fxAmount: Money.parse('100'),
+      );
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      return rows.firstWhere((e) => e.id == id);
+    }
+
+    test('brings the row back byte-for-byte', () async {
+      final original = await seed();
+      await repo.delete(original.id);
+      expect(await repo.watchMonth(DateTime(2026, 3, 1)).first, isEmpty);
+
+      await repo.restore(original);
+
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      expect(rows, hasLength(1));
+      // Every field, not just the amount — an undo that quietly drops the note
+      // or the FX receipt is a data-loss bug wearing an undo button.
+      expect(rows.single, original);
+    });
+
+    test('keeps the same externalId so backup Merge identity survives',
+        () async {
+      final original = await seed();
+      await repo.delete(original.id);
+      await repo.restore(original);
+
+      final restored =
+          (await repo.watchMonth(DateTime(2026, 3, 1)).first).single;
+      expect(restored.externalId, original.externalId);
+      expect(restored.externalId, isNotNull);
+    });
+
+    test('keeps its original id, so ids never silently shuffle', () async {
+      final original = await seed();
+      await repo.delete(original.id);
+      // A row added during the undo window must not be able to take the id
+      // back (SQLite AUTOINCREMENT guarantees this — asserted, not assumed).
+      await repo.add(
+        amount: Money.parse('5'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 11),
+      );
+
+      await repo.restore(original);
+
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      expect(rows.map((e) => e.id), containsAll([original.id]));
+      expect(rows, hasLength(2));
+    });
+  });
+
+  group('topNotes', () {
+    test('most-frequently-used note comes first', () async {
+      for (var i = 0; i < 3; i++) {
+        await repo.add(
+          amount: Money.parse('10'),
+          categoryId: 1,
+          date: DateTime(2026, 3, i + 1),
+          note: 'Coffee',
+        );
+      }
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 10),
+        note: 'Gas',
+      );
+      final notes = await repo.topNotes();
+      expect(notes.first, 'Coffee');
+      expect(notes, contains('Gas'));
+    });
+
+    test('a note used on multiple expenses appears only once', () async {
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 1),
+        note: 'Coffee',
+      );
+      await repo.add(
+        amount: Money.parse('10'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 2),
+        note: 'Coffee',
+      );
+      expect(await repo.topNotes(), ['Coffee']);
+    });
+
+    test('expenses with no note are excluded', () async {
+      await repo.add(amount: Money.parse('10'), categoryId: 1, date: DateTime(2026, 3, 1));
+      expect(await repo.topNotes(), isEmpty);
+    });
+
+    test('respects the limit', () async {
+      for (final note in ['A', 'B', 'C']) {
+        await repo.add(
+          amount: Money.parse('10'),
+          categoryId: 1,
+          date: DateTime(2026, 3, 1),
+          note: note,
+        );
+      }
+      expect(await repo.topNotes(limit: 2), hasLength(2));
+    });
   });
 }

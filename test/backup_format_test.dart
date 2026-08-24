@@ -30,7 +30,10 @@ BackupPayload _samplePayload() => BackupPayload(
       paymentMethod: 'UPI',
       isRecurring: false,
       recurrence: null,
+      nextDueDate: null,
+      recurrenceEndDate: null,
       tagId: 1,
+      accountId: null,
       createdAt: DateTime(2026, 7, 1, 9, 3),
       updatedAt: DateTime(2026, 7, 1, 9, 3),
       externalId: null,
@@ -259,6 +262,320 @@ void main() {
       expect(tag.fxCurrency, 'JPY');
     },
   );
+
+  test('a v8 account round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        accounts: const [
+          BackupAccount(
+            id: 1,
+            name: 'HDFC Bank',
+            type: AccountType.bank,
+            openingBalanceMinor: 500000,
+            isArchived: false,
+            externalId: 'acc-1',
+            isDefault: true,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).accounts.single;
+    expect(decoded.name, 'HDFC Bank');
+    expect(decoded.type, AccountType.bank);
+    expect(decoded.openingBalanceMinor, 500000);
+    expect(decoded.isArchived, isFalse);
+    expect(decoded.externalId, 'acc-1');
+    expect(decoded.isDefault, isTrue);
+  });
+
+  test('a pre-v13 account (no isDefault key) decodes as not default',
+      () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['accounts'] = [
+          {
+            'id': 1,
+            'name': 'Cash',
+            'type': 'cash',
+            'openingBalanceMinor': 0,
+            'isArchived': false,
+            'externalId': null,
+            // No "isDefault" key at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v8Json)).accounts.single;
+    expect(decoded.isDefault, isFalse);
+  });
+
+  test('a pre-v8 file (no accounts key) decodes with no accounts at all',
+      () async {
+    final v7Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 7,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('accounts'),
+    });
+
+    final decoded = await decodePayload(v7Json);
+    expect(decoded.accounts, isEmpty);
+  });
+
+  test('a v9 ledger entry round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            amountMinor: 5000000,
+            date: DateTime(2026, 7, 1),
+            accountId: 1,
+            sourceLabel: 'Salary',
+            note: 'July payout',
+            externalId: 'inc-1',
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).ledgerEntries.single;
+    expect(decoded.amountMinor, 5000000);
+    expect(decoded.accountId, 1);
+    expect(decoded.sourceLabel, 'Salary');
+    expect(decoded.note, 'July payout');
+    expect(decoded.externalId, 'inc-1');
+    expect(decoded.kind, LedgerEntryKind.income);
+    expect(decoded.counterAccountId, isNull);
+  });
+
+  test('a transfer ledger entry (schema v16) round-trips kind and '
+      'counterAccountId', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            amountMinor: 30000,
+            date: DateTime(2026, 7, 15),
+            accountId: 1,
+            sourceLabel: null,
+            note: 'Move to savings',
+            externalId: 'xfer-1',
+            kind: LedgerEntryKind.transfer,
+            counterAccountId: 2,
+          ),
+        ],
+      ),
+    );
+    final decoded = (await decodePayload(envelope)).ledgerEntries.single;
+    expect(decoded.kind, LedgerEntryKind.transfer);
+    expect(decoded.accountId, 1);
+    expect(decoded.counterAccountId, 2);
+  });
+
+  test('a pre-v16 ledger entry (no "kind" key) decodes as income', () async {
+    final v9Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 9,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['ledgerEntries'] = [
+          {
+            'id': 1,
+            'amountMinor': 50000,
+            'date': DateTime(2026, 7, 1).toIso8601String(),
+            'accountId': null,
+            'sourceLabel': 'Salary',
+            'note': null,
+            'externalId': 'inc-1',
+            // No "kind" or "counterAccountId" key at all.
+          },
+        ],
+    });
+    final decoded = (await decodePayload(v9Json)).ledgerEntries.single;
+    expect(decoded.kind, LedgerEntryKind.income);
+    expect(decoded.counterAccountId, isNull);
+  });
+
+  test('a pre-v9 file (no ledgerEntries key) decodes with no ledger entries '
+      'at all', () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('ledgerEntries'),
+    });
+
+    final decoded = await decodePayload(v8Json);
+    expect(decoded.ledgerEntries, isEmpty);
+  });
+
+  test('a v10 savings goal round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        savingsGoals: const [
+          BackupGoal(
+            id: 1,
+            name: 'New laptop',
+            targetMinor: 8000000,
+            savedMinor: 2000000,
+            isArchived: false,
+            externalId: 'goal-1',
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).savingsGoals.single;
+    expect(decoded.name, 'New laptop');
+    expect(decoded.targetMinor, 8000000);
+    expect(decoded.savedMinor, 2000000);
+    expect(decoded.externalId, 'goal-1');
+  });
+
+  test('a pre-v10 file (no savingsGoals key) decodes with no goals at all',
+      () async {
+    final v9Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 9,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('savingsGoals'),
+    });
+
+    final decoded = await decodePayload(v9Json);
+    expect(decoded.savingsGoals, isEmpty);
+  });
+
+  test('a v7 receipt round-trips as base64', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        receipts: [
+          BackupReceipt(
+            expenseId: payload.expenses.single.id,
+            photoBase64: base64Encode([9, 8, 7]),
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).receipts.single;
+    expect(decoded.expenseId, payload.expenses.single.id);
+    expect(base64Decode(decoded.photoBase64), [9, 8, 7]);
+  });
+
+  test('a pre-v7 file (no receipts key) decodes with no receipts at all',
+      () async {
+    final v6Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 6,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('receipts'),
+    });
+
+    final decoded = await decodePayload(v6Json);
+    expect(decoded.receipts, isEmpty);
+  });
+
+  test('a v6 recurring schedule round-trips', () async {
+    final payload = _samplePayload();
+    final scheduled = BackupExpense(
+      id: payload.expenses.single.id,
+      amountMinor: payload.expenses.single.amountMinor,
+      categoryId: payload.expenses.single.categoryId,
+      date: payload.expenses.single.date,
+      note: payload.expenses.single.note,
+      paymentMethod: payload.expenses.single.paymentMethod,
+      isRecurring: true,
+      recurrence: Recurrence.monthly,
+      nextDueDate: DateTime(2026, 8, 1),
+      recurrenceEndDate: DateTime(2027, 1, 1),
+      tagId: payload.expenses.single.tagId,
+      accountId: payload.expenses.single.accountId,
+      createdAt: payload.expenses.single.createdAt,
+      updatedAt: payload.expenses.single.updatedAt,
+      externalId: payload.expenses.single.externalId,
+      fxCurrency: payload.expenses.single.fxCurrency,
+      fxAmountMinor: payload.expenses.single.fxAmountMinor,
+    );
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: [scheduled],
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).expenses.single;
+    // Without these two, a restore would keep the recurring flag but lose the
+    // schedule — the reminder would never fire again.
+    expect(decoded.isRecurring, isTrue);
+    expect(decoded.recurrence, Recurrence.monthly);
+    expect(decoded.nextDueDate, DateTime(2026, 8, 1));
+    expect(decoded.recurrenceEndDate, DateTime(2027, 1, 1));
+  });
+
+  test('a pre-v6 file (no schedule keys) decodes as nothing scheduled', () async {
+    final v5Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 5,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['expenses'] = [
+          _samplePayload().expenses.single.toJson()
+            ..remove('nextDueDate')
+            ..remove('recurrenceEndDate'),
+        ],
+    });
+
+    final decoded = (await decodePayload(v5Json)).expenses.single;
+    expect(decoded.nextDueDate, isNull);
+    expect(decoded.recurrenceEndDate, isNull);
+    // The v4 fx pair is untouched by the missing v6 keys.
+    expect(decoded.fxCurrency, 'JPY');
+  });
 
   test('a v5 trip date range round-trips', () async {
     final envelope = await encodeEnvelope(_samplePayload());

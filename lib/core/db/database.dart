@@ -16,6 +16,10 @@ enum Recurrence { daily, weekly, monthly }
 /// Budget window. v1 is monthly-only but stored so v2 can add others.
 enum BudgetPeriod { monthly }
 
+/// How an account is held. Purely descriptive (an icon/grouping hint) — none
+/// of the money math treats one type differently from another.
+enum AccountType { cash, bank, card, wallet }
+
 /// 'YYYY-MM' key a budget row is scoped to (also the family key for budget
 /// providers — a String avoids DateTime equality footguns across rebuilds).
 String monthKeyFor(DateTime month) =>
@@ -61,6 +65,46 @@ class Categories extends Table {
       text().nullable().clientDefault(generateExternalId)();
 }
 
+/// Where money is held or spent from — cash, a bank account, a card, a
+/// wallet (schema v12). Balance is never stored: it is always derived as
+/// opening balance plus whatever ledger activity references this account,
+/// matching the app's existing preference for computed over persisted state
+/// (e.g. budget totals, lifetime stats).
+@DataClassName('AccountRow')
+class Accounts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 40)();
+  TextColumn get type => textEnum<AccountType>()();
+
+  /// In minor units, like every other amount in this schema. Never zero-ed
+  /// out or hidden — an account is never hard-deleted (see [isArchived]), so
+  /// this stays the one fixed point every later balance calculation starts
+  /// from.
+  IntColumn get openingBalanceMinor =>
+      integer().withDefault(const Constant(0))();
+
+  /// 'YYYY-MM' stamp of the month [openingBalanceMinor] was last set
+  /// (schema v14). Null on accounts created before this column existed.
+  /// Opening balance is a monthly concept — read it through
+  /// `AccountRow.effectiveOpeningBalanceMinor`, never this raw column
+  /// directly: a stamp from an earlier month means the balance has rolled
+  /// over to zero for display purposes even though the row itself is left
+  /// untouched (no background job zeroes it out on the 1st).
+  TextColumn get openingBalanceMonth => text().nullable()();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+
+  /// At most one account is default at a time (enforced in
+  /// [AccountRepository], not by a DB constraint — SQLite has no partial
+  /// unique index in this Drift version). Quick Add prefills a fresh expense
+  /// with this account, still changeable per-expense. Never true on an
+  /// archived account — archiving clears it (schema v13).
+  BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
+}
+
 @DataClassName('ExpenseRow')
 @TableIndex(name: 'idx_expenses_date', columns: {#date})
 @TableIndex(name: 'idx_expenses_category', columns: {#categoryId})
@@ -74,8 +118,28 @@ class Expenses extends Table {
   DateTimeColumn get date => dateTime()();
   TextColumn get note => text().nullable()();
   TextColumn get paymentMethod => text().nullable()();
+
+  /// Which account this was paid from, or null (not every expense has one
+  /// assigned — this is additive, not a replacement for [paymentMethod]).
+  IntColumn get accountId =>
+      integer().nullable().references(Accounts, #id)();
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
   TextColumn get recurrence => textEnum<Recurrence>().nullable()();
+
+  /// When the next occurrence of this recurring expense falls due, or null if
+  /// it doesn't recur or the series has finished.
+  ///
+  /// The series is tracked by this single pointer rather than by
+  /// materialising future rows: occurrences that fell due while the app was
+  /// closed are recovered by walking from here to today (see
+  /// `recurring_schedule.dart`), so nothing is missed and nothing is logged
+  /// without the user confirming it (the locked FR-7 decision — remind, never
+  /// auto-log).
+  DateTimeColumn get nextDueDate => dateTime().nullable()();
+
+  /// Optional last date the series may produce an occurrence on — for a lease
+  /// or a fixed-term EMI. Null = repeats until switched off.
+  DateTimeColumn get recurrenceEndDate => dateTime().nullable()();
 
   /// Optional grouping across categories (e.g. a vacation trip) — orthogonal
   /// to [categoryId], which an expense keeps regardless of its tag.
@@ -152,6 +216,34 @@ class Budgets extends Table {
       text().nullable().clientDefault(generateExternalId)();
 }
 
+/// A photo of the receipt for one expense (schema v11) — a separate table
+/// rather than a column on [Expenses], deliberately.
+///
+/// [Expenses] rows are read in full by nearly every query in this app
+/// (`watchInRange`, `watchMonth`, `listInRange`, the reactive lists behind
+/// Home/All Transactions/Reports) — most of them never display a photo. A
+/// blob column there would ride along on every one of those reads, including
+/// the lazily-paginated 100-row list, even for expenses with no receipt.
+/// Keeping receipts in their own table means only the one screen that
+/// actually shows a photo ever loads its bytes.
+@DataClassName('ExpenseReceiptRow')
+@TableIndex(
+  name: 'idx_expense_receipts_expense',
+  columns: {#expenseId},
+  unique: true,
+)
+class ExpenseReceipts extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// No `onDelete` cascade: like every other FK relationship in this schema
+  /// (categories, tags, budgets), cleanup is explicit application code, not a
+  /// DB-level trigger. Deleting the parent expense deliberately leaves this
+  /// row in place rather than deleting it — see [AppDatabase.pruneOrphanedReceipts].
+  IntColumn get expenseId => integer().references(Expenses, #id)();
+  BlobColumn get photoBytes => blob()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 /// Typed key/value app settings: theme mode, currency locale, auto-backup
 /// frequency, last-backup timestamp/size. One row per key.
 @DataClassName('SettingRow')
@@ -163,7 +255,83 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Categories, Expenses, Budgets, Settings, Tags])
+/// Non-expense money movement (schema v15, `kind` added v16) — income AND
+/// transfers, deliberately a separate table rather than a `kind` column on
+/// [Expenses] itself. See
+/// `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s "separate
+/// ledger table" decision: roughly fourteen existing queries over `Expenses`
+/// would each need an opt-out guard to exclude this if it lived there — a
+/// single missed one silently inflates spend. Keeping it structurally apart
+/// means every one of those queries is correct by construction.
+enum LedgerEntryKind { income, transfer }
+
+@DataClassName('LedgerEntryRow')
+@TableIndex(name: 'idx_ledger_entries_date', columns: {#date})
+class LedgerEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get amountMinor => integer()();
+  DateTimeColumn get date => dateTime()();
+
+  /// Where the money landed (income) or left FROM (transfer). Nullable only
+  /// for an unassigned income entry — always set for a transfer.
+  IntColumn get accountId => integer().nullable().references(Accounts, #id)();
+
+  /// income or transfer (schema v16). Existing pre-v16 rows are all income
+  /// (backfilled by the v16 migration) — this table held nothing else until
+  /// transfers existed to put in it.
+  TextColumn get kind =>
+      textEnum<LedgerEntryKind>().withDefault(const Constant('income'))();
+
+  /// Destination account for a transfer — money leaves [accountId] and lands
+  /// here. Null for an income entry; always set together with
+  /// `kind == transfer`.
+  IntColumn get counterAccountId =>
+      integer().nullable().references(Accounts, #id)();
+
+  /// Free text, e.g. "Salary", "Freelance" — purely descriptive, income only.
+  TextColumn get sourceLabel => text().nullable()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
+}
+
+/// A savings target the user is putting money aside for (Phase 7, schema
+/// v17) — "New laptop", "Emergency fund". Deliberately simple: [savedMinor]
+/// is a plain running counter the user adjusts directly (add/withdraw), not
+/// derived from income/expense activity or a logged contribution history.
+/// Tying goal progress to the monthly-resetting balance/cashflow machinery
+/// would make a multi-month goal reset with it every month, which defeats
+/// the point of a goal; a manual counter has no such coupling.
+@DataClassName('SavingsGoalRow')
+class SavingsGoals extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 60)();
+  IntColumn get targetMinor => integer()();
+  IntColumn get savedMinor => integer().withDefault(const Constant(0))();
+  BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
+}
+
+@DriftDatabase(
+  tables: [
+    Categories,
+    Expenses,
+    Budgets,
+    Settings,
+    Tags,
+    ExpenseReceipts,
+    Accounts,
+    LedgerEntries,
+    SavingsGoals,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
@@ -179,7 +347,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -282,8 +450,127 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(tags, tags.tripEndDate);
         }
       }
+      if (from < 10) {
+        // Recurring-expense scheduling (FR-7). Both nullable with no default,
+        // so ADD COLUMN is safe on a populated table.
+        //
+        // No backfill for rows that already have is_recurring = 1: those were
+        // written when nothing could set a recurrence or schedule a reminder,
+        // so there is no due date to reconstruct. They surface in the manage
+        // list as "not scheduled" and get a due date the moment the user
+        // edits them, rather than having one invented here.
+        await m.addColumn(expenses, expenses.nextDueDate);
+        await m.addColumn(expenses, expenses.recurrenceEndDate);
+      }
+      if (from < 11) {
+        // Receipt photos — a whole new table, so no populated-table hazards
+        // like the ones documented on the blocks above.
+        await m.createTable(expenseReceipts);
+      }
+      if (from < 12) {
+        // Accounts — a whole new table, then one additive nullable column on
+        // the populated expenses table (safe, no default/backfill needed).
+        await m.createTable(accounts);
+        await m.addColumn(expenses, expenses.accountId);
+        await _migratePaymentMethodsToAccounts(this);
+      }
+      if (from < 13) {
+        // Same createTable trap as tags hit twice before (see _hasColumn's
+        // doc comment): an install upgrading from below v12 in this same
+        // pass just created `accounts` via m.createTable at from<12, which
+        // always emits the CURRENT table definition — already including
+        // is_default — so adding it again here would be a duplicate-column
+        // error for that path specifically (a v12-then-v13 two-step upgrade
+        // never hits this, only a v11-or-below-to-v13 one-pass upgrade does).
+        if (!await _hasColumn('accounts', 'is_default')) {
+          await m.addColumn(accounts, accounts.isDefault);
+        }
+        // Existing installs upgrading with accounts already on the books
+        // (from the v12 payment-method migration, or created since) get the
+        // same "first account is default" rule a fresh create() applies —
+        // otherwise Quick Add's prefill would stay silent for everyone who
+        // upgraded, not just new installs. Earliest id = oldest account,
+        // the same tie-break a fresh install's first create() would produce.
+        await customStatement(
+          'UPDATE accounts SET is_default = 1 WHERE id = '
+          '(SELECT MIN(id) FROM accounts)',
+        );
+      }
+      if (from < 14) {
+        // Same createTable trap as is_default hit above.
+        if (!await _hasColumn('accounts', 'opening_balance_month')) {
+          await m.addColumn(accounts, accounts.openingBalanceMonth);
+        }
+      }
+      if (from < 15) {
+        // Whole new table — no populated-table hazard, same as
+        // expenseReceipts/accounts were at their own introduction.
+        await m.createTable(ledgerEntries);
+      }
+      if (from < 16) {
+        // Same createTable trap as every prior column added to a table also
+        // created in this same onUpgrade pass: an install jumping from below
+        // v15 already created ledger_entries via m.createTable at from<15,
+        // which emits the CURRENT (later) definition — already including
+        // kind/counter_account_id — so both additions below must guard.
+        if (!await _hasColumn('ledger_entries', 'kind')) {
+          // Raw ALTER, not m.addColumn: same NOT-NULL-on-a-populated-table
+          // restriction as month_key (from<2) hit first — nullable at the
+          // DDL level, immediately backfilled to the only kind that existed
+          // before this migration.
+          await customStatement('ALTER TABLE ledger_entries ADD COLUMN kind TEXT');
+          await customStatement(
+            "UPDATE ledger_entries SET kind = 'income' WHERE kind IS NULL",
+          );
+        }
+        if (!await _hasColumn('ledger_entries', 'counter_account_id')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.counterAccountId);
+        }
+      }
+      if (from < 17) {
+        // Whole new table — no populated-table hazard.
+        await m.createTable(savingsGoals);
+      }
     },
   );
+
+  /// One-time: turns every distinct `payment_method` string already on
+  /// [Expenses] into a real [Accounts] row, and points each matching expense
+  /// at it. `payment_method` itself is left untouched — nothing here deletes
+  /// or overwrites it, so a pre-v12 export/report that reads that column
+  /// keeps working unchanged; `account_id` is purely additive.
+  ///
+  /// In practice this is a no-op on every real install: `payment_method` has
+  /// never been settable from any screen in this app (verified — it exists
+  /// on the schema and travels through backup/export, but nothing has ever
+  /// written a non-null value). Written correctly anyway, on the chance a
+  /// debug/import path set one historically.
+  static Future<void> _migratePaymentMethodsToAccounts(
+    GeneratedDatabase db,
+  ) async {
+    final rows = await db
+        .customSelect(
+          'SELECT DISTINCT payment_method FROM expenses '
+          'WHERE payment_method IS NOT NULL',
+        )
+        .get();
+    for (final row in rows) {
+      final name = row.read<String>('payment_method');
+      // ponytail: every migrated account defaults to AccountType.cash — a
+      // free-text field with no controlled vocabulary can't be reliably
+      // classified into cash/bank/card/wallet. Reclassify by hand once the
+      // account picker (which this migration exists to seed) can edit it.
+      final accountId = await db.customInsert(
+        'INSERT INTO accounts (name, type, opening_balance_minor, '
+        'is_archived) VALUES (?, ?, 0, 0)',
+        variables: [Variable(name), Variable(AccountType.cash.name)],
+      );
+      await db.customStatement(
+        'UPDATE expenses SET account_id = ? WHERE payment_method = ?',
+        [accountId, name],
+      );
+    }
+  }
 
   /// Whether [table] already has [column], by its snake_case SQL name.
   ///
@@ -303,13 +590,40 @@ class AppDatabase extends _$AppDatabase {
   Future<void> resetToDefaults() async {
     await transaction(() async {
       // Children before parents (FK order), same as BackupRepository.replaceAll.
+      await delete(expenseReceipts).go();
       await delete(expenses).go();
+      await delete(accounts).go();
       await delete(tags).go();
       await delete(budgets).go();
       await delete(categories).go();
       await delete(settings).go();
       await batch((b) => b.insertAll(categories, _defaultCategories));
     });
+  }
+
+  /// Deletes any [ExpenseReceipts] row whose expense no longer exists.
+  ///
+  /// [ExpenseRepository.delete] deliberately leaves a deleted expense's
+  /// receipt row in place rather than deleting it there, so that the 5-second
+  /// undo snackbar (`ExpenseTile`) gets the photo back for free: undo
+  /// re-inserts the expense under its ORIGINAL id (never reused, since the
+  /// table is `PRIMARY KEY AUTOINCREMENT`), so an untouched receipt row
+  /// re-attaches itself with no extra bookkeeping. Handling this at delete
+  /// time instead would mean the undo path also has to fetch, hold, and
+  /// re-insert the photo bytes — the same class of complexity Phase 1's
+  /// `ExpenseRepository.restore` exists specifically to avoid.
+  ///
+  /// Called once from `main()`/`app.dart` on cold start, not on every resume:
+  /// an app resume can happen mid-undo-window, and sweeping then would delete
+  /// a photo the user is about to bring back. A full process restart cannot
+  /// land inside that window — the snackbar and its undo closure don't
+  /// survive the app being closed — so cold-start-only is the point past
+  /// which "orphaned" is actually permanent.
+  Future<void> pruneOrphanedReceipts() {
+    return customStatement(
+      'DELETE FROM expense_receipts WHERE expense_id NOT IN '
+      '(SELECT id FROM expenses)',
+    );
   }
 
   static LazyDatabase _open() {

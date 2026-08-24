@@ -47,6 +47,13 @@ class SettingsRepository {
   // month we last showed the "set next month's budget" nudge for.
   static const lastBudgetNudgeMonthKey = 'last_budget_nudge_month';
 
+  // App Lock (Phase 7) — whether biometric/PIN unlock is required on
+  // launch/resume. Device-local security preference, excluded from backup
+  // export (see `BackupRepository._excludedSettingsKeys`) same reasoning as
+  // auto-backup bookkeeping: restoring a file on a new device should never
+  // silently lock someone out of the app they just installed it on.
+  static const appLockEnabledKey = 'app_lock_enabled';
+
   Future<String?> get(String key) async {
     final row = await (_db.select(
       _db.settings,

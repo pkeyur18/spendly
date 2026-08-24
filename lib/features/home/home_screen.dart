@@ -2,22 +2,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/db/database.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../accounts/account_repository.dart';
+import '../accounts/accounts_screen.dart';
+import '../budgets/budget_pace.dart';
 import '../budgets/budget_repository.dart';
-import '../categories/category_manager_screen.dart';
 import '../dev/debug_data_screen.dart';
 import '../budgets/budget_setup_screen.dart';
 import '../expenses/all_transactions_screen.dart';
 import '../expenses/expense_repository.dart';
-import '../expenses/quick_add_screen.dart';
+import '../expenses/recurring_repository.dart';
+import '../expenses/recurring_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
-import '../profile/avatar.dart';
+import '../ledger/account_balance_provider.dart';
 import '../profile/profile_provider.dart';
-import '../profile/profile_screen.dart';
-import '../reports/monthly_report_screen.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
 import 'widgets/trend_bars.dart';
@@ -72,6 +72,8 @@ class HomeScreen extends ConsumerWidget {
         children: [
           _greeting(context, palette, profile?.name ?? ''),
           const _HeroCard(),
+          const _BalanceCard(),
+          const _DueRecurringCard(),
           const SectionTitle('Where it went'),
           const SpendDonut(),
           const SectionTitle('Last 6 months'),
@@ -96,25 +98,6 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 80),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          gradient: AppColors.brandGradient,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            width: 4,
-          ),
-        ),
-        child: FloatingActionButton(
-          onPressed: () => _openQuickAdd(context),
-          tooltip: 'Add expense',
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
-        ),
-      ),
-      bottomNavigationBar: _BottomNav(palette: palette, profile: profile),
     );
   }
 
@@ -159,9 +142,132 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  void _openQuickAdd(BuildContext context, {ExpenseRow? editing}) {
-    openQuickAddScreen(context, editing: editing);
+/// Total balance across every active account (Phase 6) — renders nothing at
+/// all when there are no accounts, same "silent when unused" convention as
+/// [_DueRecurringCard] below, so the dashboard is unchanged for anyone not
+/// using Accounts.
+class _BalanceCard extends ConsumerWidget {
+  const _BalanceCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(activeAccountsProvider).value ?? const [];
+    if (accounts.isEmpty) return const SizedBox.shrink();
+    final total = ref.watch(totalBalanceThisMonthProvider);
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: AppCard(
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AccountsScreen())),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Balance across accounts',
+                  style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  total.format(locale: 'en_IN'),
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            Icon(Icons.chevron_right, color: palette.textDim),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Waiting for you" nudge — shown only when a recurring expense has come due
+/// (FR-7). Rent and EMIs are the largest expenses a person has and the easiest
+/// to forget, so the reminder belongs above the fold rather than only in a
+/// notification that may have been swiped away.
+///
+/// Renders nothing at all when nothing is due, so the dashboard is unchanged
+/// for anyone not using recurring expenses.
+class _DueRecurringCard extends ConsumerWidget {
+  const _DueRecurringCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final due = ref.watch(dueRecurringProvider);
+    if (due.isEmpty) return const SizedBox.shrink();
+
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final occurrences = due.fold<int>(0, (n, s) => n + s.pending.length);
+    final first = due.first;
+    final byId = ref.watch(categoriesByIdProvider);
+    final title = first.template.note?.isNotEmpty == true
+        ? first.template.note!
+        : (byId[first.template.categoryId]?.name ?? 'An expense');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const RecurringScreen()),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(AppRadius.icon),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.repeat_rounded,
+                size: 20,
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    occurrences == 1
+                        ? '1 payment to confirm'
+                        : '$occurrences payments to confirm',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    due.length == 1
+                        ? title
+                        : '$title and ${due.length - 1} more',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: palette.textDim),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -189,6 +295,7 @@ class _HeroCard extends ConsumerWidget {
     final left = hasBudget
         ? Money.fromMinor((budget.minor - total.minor).clamp(0, budget.minor))
         : null;
+    final pace = budgetPace(spent: total, budget: budget, now: DateTime.now());
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xxl),
@@ -262,6 +369,10 @@ class _HeroCard extends ConsumerWidget {
                 ),
               ],
             ),
+            if (pace != null) ...[
+              const SizedBox(height: 10),
+              _PaceLine(pace: pace),
+            ],
           ] else
             const Text(
               'No monthly budget set',
@@ -273,103 +384,56 @@ class _HeroCard extends ConsumerWidget {
   }
 }
 
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.palette, required this.profile});
+/// The one line on the hero that turns "61% of budget" into something the user
+/// can act on today. Status is carried by the words and the icon, never by
+/// colour alone.
+class _PaceLine extends StatelessWidget {
+  const _PaceLine({required this.pace});
 
-  final AppPalette palette;
-  final Profile? profile;
+  final BudgetPace pace;
 
   @override
   Widget build(BuildContext context) {
-    void soon(String label) => ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
+    final days = pace.daysLeft == 1 ? '1 day' : '${pace.daysLeft} days';
+    final perDay = pace.perDayLeft.format(locale: 'en_IN');
 
-    Widget item(
-      IconData icon,
-      String label, {
-      bool active = false,
-      VoidCallback? onTap,
-      Widget? leading,
-    }) {
-      return IconButton(
-        onPressed: onTap ?? () => soon(label),
-        tooltip: label,
-        visualDensity: VisualDensity.compact,
-        style: IconButton.styleFrom(
-          fixedSize: const Size(48, 48),
-          backgroundColor: active
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.icon),
-          ),
-        ),
-        icon:
-            leading ??
-            Icon(icon, color: active ? Colors.white : palette.navIconInactive),
-      );
-    }
+    final (icon, label) = switch (pace.status) {
+      PaceStatus.onTrack => (
+        Icons.trending_flat_rounded,
+        'On track · $perDay/day for $days',
+      ),
+      PaceStatus.overPace => (
+        Icons.trending_up_rounded,
+        'Over pace · $perDay/day for $days',
+      ),
+      PaceStatus.overBudget => (
+        Icons.warning_amber_rounded,
+        'Over budget by ${pace.overspend.format(locale: 'en_IN')}',
+      ),
+    };
 
     return Container(
-      foregroundDecoration: BoxDecoration(
-        border: Border(top: BorderSide(color: palette.navBorder, width: 1)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppRadius.icon),
       ),
-      child: SafeArea(
-        top: false,
-        child: BottomAppBar(
-          color: palette.navBackground,
-          height: 56,
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              item(Icons.home_rounded, 'Home', active: true, onTap: () {}),
-              item(
-                Icons.bar_chart_rounded,
-                'Reports',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          MonthlyReportScreen(month: DateTime.now()),
-                    ),
-                  );
-                },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.white),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(width: 40),
-              item(
-                Icons.sell_rounded,
-                'Categories',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CategoryManagerScreen(),
-                    ),
-                  );
-                },
-              ),
-              item(
-                Icons.account_circle_rounded,
-                'Profile',
-                leading: ProfileAvatar(
-                  name: profile?.name ?? '',
-                  photoBytes: profile?.photoBytes,
-                  avatarColorIndex: profile?.avatarColorIndex,
-                  size: 26,
-                  fontSize: 11,
-                ),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                },
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

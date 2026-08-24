@@ -15,7 +15,7 @@ password is ever requested.
 ```json
 {
   "spendlyBackup": true,
-  "version": 5,
+  "version": 8,
   "encrypted": false,
   "data": { "...payload, see below..." }
 }
@@ -27,7 +27,7 @@ container instead:
 ```json
 {
   "spendlyBackup": true,
-  "version": 5,
+  "version": 8,
   "encrypted": true,
   "kdf": "PBKDF2-HMAC-SHA256",
   "kdfIterations": 200000,
@@ -266,6 +266,250 @@ pattern as every field above.
   backup is trusted as-is — Merge/Replace never re-validates this, the same way it never
   re-validates any other field.
 
+## v6 — recurring schedule (schema v10)
+
+A recurring expense is an ordinary expense row that also carries the schedule for its
+series — see `lib/features/expenses/recurring_schedule.dart`. Future occurrences are
+never materialised as rows; the series is tracked by a single pointer, so a backup only
+needs to carry that pointer and the optional end date.
+
+On each `expenses` entry:
+
+- `nextDueDate` (string, nullable, ISO 8601) — when the next occurrence falls due.
+  Null once the series has finished, or on any non-recurring expense.
+- `recurrenceEndDate` (string, nullable, ISO 8601) — last date the series may produce an
+  occurrence on. Null = repeats until switched off.
+
+`isRecurring` and `recurrence` already existed in every prior version; without these two
+new keys a restored file would keep the recurring *flag* but have nothing scheduled, so
+the reminder would never fire again. A pre-v6 file has neither key, and
+`BackupExpense.fromJson` reads a missing key as `null` — same additive, no-version-branch
+pattern as every field above. That leaves a restored pre-v6 recurring expense in exactly
+the state the schema-v10 migration leaves an existing one: flagged, unscheduled, and
+listed as "not scheduled" until the user opens it. No due date is invented, because
+there is nothing to reconstruct one from and a guessed date would fire a reminder the
+user never asked for.
+
+- **Replace** restores both verbatim, same as every other expense field.
+- **Merge** — a brand-new expense inserted by Merge carries over its schedule; a matched
+  pre-existing expense is left untouched, same as every other field. The schedule takes
+  no part in the fingerprint, so re-importing a backup after confirming an occurrence
+  locally does not duplicate the expense.
+
+## v7 — receipt photos (schema v11)
+
+A receipt photo lives in its own `expense_receipts` table, not a column on `expenses` —
+see the doc comment on `ExpenseReceipts` in `lib/core/db/database.dart` for why (every
+expense query in the app reads full rows; a blob column there would ride along on every
+one of them, including the lazily-paginated transaction list, even for expenses with no
+photo). The payload gets a new top-level array to match:
+
+```json
+"receipts": [
+  { "expenseId": 42, "photoBase64": "<base64 JPEG bytes>" }
+]
+```
+
+`expenseId` is the **backup file's** expense id — the same id `BackupExpense.id` carries
+for the row it belongs to within this same payload — never a local device id. Replace and
+Merge resolve it to a local expense id differently, so the meaning has to be fixed at the
+file level for both to agree on it:
+
+- **Replace** wipes `expense_receipts` before wiping `expenses`, then restores the backup's
+  expenses reusing their original ids verbatim (the table is empty by then — same
+  reasoning as every other Replace field). Because ids line up exactly, `expenseId` in a
+  receipt entry is reused as-is for the local `expense_receipts` row it produces.
+- **Merge** never touches a matched (already-present) expense's receipt, same as it never
+  touches any other field on a match — merge only adds, it doesn't overwrite local state.
+  Only a newly-inserted expense can gain a receipt from the backup, and only under the
+  **local id Merge just assigned it**, not the backup file's id — those two numbers are
+  unrelated once a new autoincrement id is handed out. `BackupRepository._mergeExpenses`
+  inserts a receipted expense individually (not batched) specifically to learn that new id
+  before attaching its photo; expenses with no receipt still insert batched, since that
+  path covers the common case and receipted expenses are expected to be the minority.
+
+A pre-v7 file has no `receipts` key at all, and `BackupPayload.fromJson` reads that as an
+empty list — same additive, no-version-branch pattern as every field above. Nothing is
+lost by this: a pre-v7 backup was written before receipts existed, so there was never a
+photo to carry.
+
+## v8 — accounts (schema v12)
+
+An account (cash/bank/card/wallet) is its own table, same shape of decision as receipts in
+v7: `expenses` is read in full by nearly every query in the app, so a new master-data
+concept gets its own table rather than more columns dragged through every one of those
+reads. The payload gets a new top-level array:
+
+```json
+"accounts": [
+  {
+    "id": 1,
+    "name": "HDFC Bank",
+    "type": "bank",
+    "openingBalanceMinor": 500000,
+    "isArchived": false,
+    "externalId": "...",
+    "isDefault": false
+  }
+],
+```
+
+and each `expenses` entry gains one new key:
+
+- `accountId` (int, nullable) — the backup-file id of the account it was paid from, or
+  `null`. Same convention as `tagId`: this is the **backup file's** id, resolved to a local
+  account id by Replace and Merge exactly the way `tagId` already is, not a raw local id
+  carried across devices.
+
+`type` serializes as its `.name` string (`"cash"`, `"bank"`, `"card"`, `"wallet"`), same
+convention as `recurrence`/`period`.
+
+- **Replace** wipes `accounts` (after `expenses`, since `expenses.accountId` references it —
+  same FK-order reasoning as everything else) then restores it before restoring `expenses`,
+  reusing original ids verbatim. Because ids line up exactly, an expense's `accountId` needs
+  no remapping.
+- **Merge** matches accounts by `externalId` first, falling back to normalized name — same
+  rule as categories/tags. A matched (already-present) account is left untouched, same as
+  every other master-data table; only a newly-inserted expense's `accountId` gets remapped
+  through the resulting backup-id → local-id map, the same way `tagId` already is.
+
+A pre-v8 file has no `accounts` key and no `accountId` key on its expenses.
+`BackupPayload.fromJson` reads a missing `accounts` as `[]`; `BackupExpense.fromJson` reads
+a missing `accountId` as `null` — same additive, no-version-branch pattern as every field
+above.
+
+## Additive field — `isDefault` on accounts (schema v13)
+
+At most one account is the default Quick Add prefills onto a fresh expense — enforced by
+`AccountRepository.setDefault`, not a DB constraint. Carried in the payload as a plain new
+key on each `accounts` entry, no version bump, same additive pattern as
+`isIgnoredForBudget`: a pre-v13 file simply lacks the key, and `BackupAccount.fromJson`
+reads a missing key as `false`.
+
+- **Replace** restores it verbatim, same as every other account field — safe because the
+  whole table is wiped first, and the backup itself never had two defaults at once (this
+  app's own UI never allows that), so restoring every row's flag as-is can't recreate a
+  violation that didn't exist in the file.
+- **Merge** does **not** trust this field blindly, unlike most others. A matched
+  (already-present) account's `isDefault` is left untouched, same as any other field on a
+  match. But a *newly-inserted* account's flag can't simply carry over the backup's own
+  value: if the local device already has its own default, and a merged-in account also
+  claims `isDefault: true` from its source device, honoring both would produce two default
+  accounts at once — a state the app's own `setDefault` never permits. `_mergeAccounts`
+  computes this instead: at most one newly-inserted account ever gets `isDefault: true`,
+  and only when the local device had no default at all before the merge started.
+
+## Additive field — `openingBalanceMonth` on accounts (schema v14)
+
+Opening balance is a monthly concept: `AccountRow.effectiveOpeningBalance` reads the stored
+`openingBalanceMinor` only when `openingBalanceMonth` (a `'YYYY-MM'` stamp) matches the
+current month, otherwise it reads as zero — the row itself is never wiped, only display and
+totals treat it as reset. Carried in the payload as a plain new nullable key on each
+`accounts` entry, no version bump, same additive pattern as `isDefault`: a pre-v14 file
+simply lacks the key, and `BackupAccount.fromJson` reads a missing key as `null` (already
+"not set this month" everywhere it's read).
+
+- **Replace** restores it verbatim, same as every other account field.
+- **Merge** restores it verbatim too on a newly-inserted account — unlike `isDefault`,
+  there's no "at most one" invariant to protect here, so a plain carry-over is safe. A
+  matched (already-present) account isn't touched by merge at all, so its own local stamp
+  is never overwritten by the backup's.
+
+## v9 — income (schema v15)
+
+Income entries are a new table, `LedgerEntries`, kept separate from `Expenses` rather than a
+`kind` column on it — see
+`docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s "separate ledger table"
+decision: roughly fourteen existing expense queries would each need an opt-out guard to
+exclude income if it lived in the same table, and a single missed one silently inflates
+reported spending. The payload gets a new top-level array:
+
+```json
+"ledgerEntries": [
+  {
+    "id": 1,
+    "amountMinor": 5000000,
+    "date": "2026-07-01T00:00:00.000",
+    "accountId": 1,
+    "sourceLabel": "Salary",
+    "note": null,
+    "externalId": "..."
+  }
+],
+```
+
+`accountId` is the **backup file's** account id, same convention as `expenses[].accountId` —
+resolved to a local account id by Replace (verbatim, since ids are reused) and Merge (through
+the account id map).
+
+- **Replace** wipes `ledgerEntries` before `accounts` (it references `accounts.id`, same
+  FK-order reasoning as `expenses`) then restores it after `accounts`, reusing original ids
+  verbatim.
+- **Merge** matches by `externalId` first, falling back to a content fingerprint (amount,
+  date, mapped account, source label, note) — same two-tier rule as `expenses`, since a plain
+  income entry has no natural-key field like a name to fall back on.
+
+A pre-v9 file has no `ledgerEntries` key at all. `BackupPayload.fromJson` reads it as `[]` —
+same additive, no-destructive-branch pattern as every new array before it.
+
+## Additive fields — `kind` and `counterAccountId` on ledger entries (schema v16)
+
+Transfers (Phase 6) reuse the same `ledgerEntries` array v9 introduced rather than adding a
+new one — an entry is now either `"kind": "income"` (the only kind that existed before) or
+`"kind": "transfer"`, and a transfer additionally carries `counterAccountId`: the backup
+file's id for the destination account, resolved the same way `accountId` already is (Replace
+verbatim, Merge through the account id map). No version bump, same additive pattern as
+`openingBalanceMonth` on accounts: a pre-v16 file simply lacks both keys, and
+`BackupLedgerEntry.fromJson` reads a missing `kind` as `income` and a missing
+`counterAccountId` as `null` — exactly what every pre-transfer entry already was.
+
+- **Replace** restores both fields verbatim, same as every other ledger entry field.
+- **Merge** resolves `counterAccountId` through the same account id map `accountId` uses. A
+  transfer whose either end can't be mapped to a real local account (should never happen on a
+  well-formed payload — every transfer's accounts appear in the same payload's `accounts`
+  array) is skipped entirely rather than inserted half-mapped, same orphan-safety reasoning
+  as `_mergeExpenses`'s category check.
+- The Merge dedupe fingerprint now includes `kind` and `counterAccountId` alongside the
+  existing amount/date/account/sourceLabel/note terms, so two transfers that happen to share
+  every other field but move money between different account pairs are never treated as
+  duplicates of each other.
+
+## v10 — savings goals (schema v17)
+
+A savings goal is its own table with no FK to anything else — the simplest of the
+whole-new-table additions. The payload gets a new top-level array:
+
+```json
+"savingsGoals": [
+  {
+    "id": 1,
+    "name": "New laptop",
+    "targetMinor": 8000000,
+    "savedMinor": 2000000,
+    "isArchived": false,
+    "externalId": "..."
+  }
+],
+```
+
+- **Replace** wipes and restores `savingsGoals` (any position relative to the other
+  deletes/inserts — nothing references it, nothing it references), reusing original ids
+  verbatim.
+- **Merge** matches by `externalId` first, falling back to normalized name — same rule as
+  categories/tags. A matched (already-present) goal is left untouched, including its saved
+  progress; only a newly-inserted goal carries the backup's `savedMinor` over, which is safe
+  since there's no local progress on a goal that didn't already exist here for it to clobber.
+
+A pre-v10 file has no `savingsGoals` key at all. `BackupPayload.fromJson` reads it as `[]` —
+same additive, no-destructive-branch pattern as every new array before it.
+
+## App Lock is never in the payload
+
+Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export
+entirely — same list as the auto-backup bookkeeping keys (`BackupRepository._excludedSettingsKeys`).
+Restoring a backup on a new device must never silently lock the person out of the app they
+just installed it on; App Lock is a device-local security preference, not portable state.
+
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
 - **Categories** — matched by `externalId` first when both the backup row and a local row
@@ -273,6 +517,7 @@ pattern as every field above.
   install seeds the same 8 default category names, so the name fallback is still what stops a
   Merge from doubling those.
 - **Tags** — same rule as categories.
+- **Accounts** — same rule as categories/tags.
 - **Expenses** — matched by `externalId` first; falls back to content fingerprint
   `(amountMinor, date, mappedCategoryId, note, paymentMethod)`.
 - **Budgets** — matched by `externalId` first; falls back to `(mappedCategoryId)` slot
@@ -289,10 +534,11 @@ fix — this replaces it.
 ## Replace algorithm
 
 Runs inside a single Drift transaction so a failure partway through rolls
-back automatically, never leaving partial data: delete `expenses` → delete
-`tags` → delete `budgets` → delete `categories` (child-to-parent FK order),
-then batch-insert categories, tags, budgets, expenses (reusing original ids),
-then delete+batch-insert `settings`.
+back automatically, never leaving partial data: delete `expense_receipts` →
+delete `expenses` → delete `accounts` → delete `tags` → delete `budgets` →
+delete `categories` (child-to-parent FK order), then batch-insert
+categories, tags, accounts, budgets, expenses, expense_receipts (reusing
+original ids throughout), then delete+batch-insert `settings`.
 
 ## Validation (FR-41)
 

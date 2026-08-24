@@ -6,6 +6,46 @@ import '../../core/db/providers.dart';
 import '../../core/money/money.dart';
 import '../categories/category_repository.dart';
 
+/// A search box turned into the three things it can match. Empty [text] means
+/// "no search" and every field is inert.
+typedef ExpenseQuery = ({String? text, int? amountMinor, Set<int> categoryIds});
+
+const _emptyQuery = (
+  text: null,
+  amountMinor: null,
+  categoryIds: <int>{},
+);
+
+/// Splits a raw search box into a note match, an amount match, and the set of
+/// categories whose name matches — combined with OR when the query runs, so
+/// typing "food", "lunch" or "240" all find something sensible.
+///
+/// Pure and category-name matching happens here rather than in SQL because
+/// category names live in a table the expense queries don't join; the id set
+/// is small and already in memory.
+ExpenseQuery parseExpenseQuery(String raw, Iterable<CategoryRow> categories) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return _emptyQuery;
+
+  int? amountMinor;
+  try {
+    final money = Money.parse(trimmed);
+    if (money.minor > 0) amountMinor = money.minor;
+  } on FormatException {
+    // Not a number — note and category matching still apply.
+  }
+
+  final lower = trimmed.toLowerCase();
+  return (
+    text: trimmed,
+    amountMinor: amountMinor,
+    categoryIds: {
+      for (final c in categories)
+        if (c.name.toLowerCase().contains(lower)) c.id,
+    },
+  );
+}
+
 /// Expense CRUD + money-math queries (FR-1, FR-6). All amounts flow through
 /// [Money] (integer minor units) — never a float.
 class ExpenseRepository {
@@ -24,7 +64,10 @@ class ExpenseRepository {
     String? paymentMethod,
     bool isRecurring = false,
     Recurrence? recurrence,
+    DateTime? nextDueDate,
+    DateTime? recurrenceEndDate,
     int? tagId,
+    int? accountId,
     String? fxCurrency,
     Money? fxAmount,
   }) {
@@ -39,7 +82,10 @@ class ExpenseRepository {
             paymentMethod: Value(paymentMethod),
             isRecurring: Value(isRecurring),
             recurrence: Value(recurrence),
+            nextDueDate: Value(nextDueDate),
+            recurrenceEndDate: Value(recurrenceEndDate),
             tagId: Value(tagId),
+            accountId: Value(accountId),
             fxCurrency: Value(fxCurrency),
             fxAmountMinor: Value(fxAmount?.minor),
           ),
@@ -55,7 +101,10 @@ class ExpenseRepository {
     Value<String?> paymentMethod = const Value.absent(),
     bool? isRecurring,
     Value<Recurrence?> recurrence = const Value.absent(),
+    Value<DateTime?> nextDueDate = const Value.absent(),
+    Value<DateTime?> recurrenceEndDate = const Value.absent(),
     Value<int?> tagId = const Value.absent(),
+    Value<int?> accountId = const Value.absent(),
     Value<String?> fxCurrency = const Value.absent(),
     Value<Money?> fxAmount = const Value.absent(),
   }) async {
@@ -74,7 +123,10 @@ class ExpenseRepository {
             ? const Value.absent()
             : Value(isRecurring),
         recurrence: recurrence,
+        nextDueDate: nextDueDate,
+        recurrenceEndDate: recurrenceEndDate,
         tagId: tagId,
+        accountId: accountId,
         fxCurrency: fxCurrency,
         fxAmountMinor: fxAmount.present
             ? Value(fxAmount.value?.minor)
@@ -87,14 +139,38 @@ class ExpenseRepository {
   Future<void> delete(int id) =>
       (_db.delete(_db.expenses)..where((t) => t.id.equals(id))).go();
 
+  /// Puts a deleted row back exactly as it was — same id, same `externalId`,
+  /// same timestamps. Backs the undo-a-delete snackbar.
+  ///
+  /// Re-using the original id is safe because the table is
+  /// `PRIMARY KEY AUTOINCREMENT`, so SQLite never hands a freed id to a new
+  /// row (asserted in `expense_repository_test.dart`, not assumed). Keeping
+  /// `externalId` matters just as much: a fresh one would read as a different
+  /// record to a backup Merge, so an undo would quietly fork the row across
+  /// devices.
+  Future<void> restore(ExpenseRow row) =>
+      _db.into(_db.expenses).insert(row.toCompanion(false));
+
   /// Expenses with date in [start, end), newest first. Pass [limit] to cap the
   /// rows loaded (lazy pagination for long lists); null = whole range. Pass
   /// [categoryIds] to restrict to those categories; null/empty = no filter.
+  /// Pass [accountIds] to restrict to those accounts the same way — an
+  /// account can easily accumulate years of history (unlike a trip, which is
+  /// naturally bounded), so the account detail screen reuses this same
+  /// paginated range query rather than an unbounded `watchByTag`-style list.
+  /// Pass [search] to additionally match note text, exact amount, or category
+  /// name — see [parseExpenseQuery].
+  ///
+  /// The search runs in SQL rather than over the returned list because the
+  /// list is paginated: filtering in Dart would only ever search the page
+  /// that happened to be loaded.
   Stream<List<ExpenseRow>> watchInRange(
     DateTime start,
     DateTime end, {
     int? limit,
     Set<int>? categoryIds,
+    Set<int>? accountIds,
+    ExpenseQuery? search,
   }) {
     final query = _db.select(_db.expenses)
       ..where(
@@ -106,6 +182,29 @@ class ExpenseRepository {
       ]);
     if (categoryIds != null && categoryIds.isNotEmpty) {
       query.where((t) => t.categoryId.isIn(categoryIds));
+    }
+    if (accountIds != null && accountIds.isNotEmpty) {
+      query.where((t) => t.accountId.isIn(accountIds));
+    }
+    final text = search?.text;
+    if (text != null) {
+      // OR across the three kinds of match, ANDed with the range and any
+      // explicit category filter above.
+      //
+      // ponytail: `%`/`_` typed into the box act as LIKE wildcards instead of
+      // literals. Parameterized either way, so this is a cosmetic quirk, not
+      // an injection path — add escaping if anyone ever notices.
+      query.where((t) {
+        var predicate = t.note.lower().contains(text.toLowerCase());
+        final amountMinor = search!.amountMinor;
+        if (amountMinor != null) {
+          predicate = predicate | t.amountMinor.equals(amountMinor);
+        }
+        if (search.categoryIds.isNotEmpty) {
+          predicate = predicate | t.categoryId.isIn(search.categoryIds);
+        }
+        return predicate;
+      });
     }
     if (limit != null) query.limit(limit);
     return query.watch();
@@ -290,12 +389,37 @@ class ExpenseRepository {
       },
     );
   }
+
+  /// Every distinct past note, most-frequently-used first — feeds Quick
+  /// Add's note autocomplete (`note_autocomplete.dart` does the actual
+  /// prefix filtering, client-side, against this one fetched-once pool).
+  /// [limit] caps the pool this pulls from the database, not what's shown.
+  Future<List<String>> topNotes({int limit = 30}) async {
+    final count = _db.expenses.id.count();
+    final query = _db.selectOnly(_db.expenses)
+      ..addColumns([_db.expenses.note, count])
+      ..where(_db.expenses.note.isNotNull())
+      ..groupBy([_db.expenses.note])
+      ..orderBy([OrderingTerm(expression: count, mode: OrderingMode.desc)])
+      ..limit(limit);
+    final rows = await query.get();
+    return [for (final r in rows) r.read(_db.expenses.note)!];
+  }
 }
 
 /// Half-open [start, end) bounds for the calendar month containing [month].
 (DateTime, DateTime) monthBounds(DateTime month) {
   final start = DateTime(month.year, month.month, 1);
   final end = DateTime(month.year, month.month + 1, 1);
+  return (start, end);
+}
+
+/// Half-open [start, end) bounds for the calendar year containing [day],
+/// truncated to today — Jan 1 through tomorrow, not the whole year, so it
+/// never counts a future date.
+(DateTime, DateTime) yearToDateBounds(DateTime day) {
+  final start = DateTime(day.year, 1, 1);
+  final end = DateTime(day.year, day.month, day.day).add(const Duration(days: 1));
   return (start, end);
 }
 
@@ -310,15 +434,30 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>(
   (ref) => ExpenseRepository(ref.watch(databaseProvider)),
 );
 
+/// One-shot pool for Quick Add's note autocomplete — see `topNotes`'s doc
+/// comment. Not a `StreamProvider`: a note typed in the still-open Quick Add
+/// session isn't in this pool until saved and the screen reopens, which is
+/// fine for a "past notes" suggestion feature.
+final topNotesProvider = FutureProvider<List<String>>(
+  (ref) => ref.watch(expenseRepositoryProvider).topNotes(),
+);
+
 /// Raw expense list for a half-open [start, end) range, capped at a row limit,
 /// newest first — feeds [AllTransactionsScreen] (no need for the heavier
 /// [ReportData] there). The limit grows as the user scrolls (lazy pagination).
 /// The 4th key element is the category filter: selected ids sorted and
 /// joined with `,` (empty string = no filter) — a plain `String` rather than
-/// a `Set`/`List` so the family key has real value equality.
+/// a `Set`/`List` so the family key has real value equality. The 5th is the
+/// raw search box text (empty = no search).
 final expensesInRangeProvider =
-    StreamProvider.family<List<ExpenseRow>, (DateTime, DateTime, int, String)>(
-      (ref, key) => ref
+    StreamProvider.family<
+      List<ExpenseRow>,
+      (DateTime, DateTime, int, String, String)
+    >((ref, key) {
+      // Watched, not read: category names feed the search, so a rename has to
+      // re-run the query rather than match against a cached list.
+      final categories = ref.watch(allCategoriesProvider).value ?? const [];
+      return ref
           .watch(expenseRepositoryProvider)
           .watchInRange(
             key.$1,
@@ -327,8 +466,9 @@ final expensesInRangeProvider =
             categoryIds: key.$4.isEmpty
                 ? null
                 : key.$4.split(',').map(int.parse).toSet(),
-          ),
-    );
+            search: parseExpenseQuery(key.$5, categories),
+          );
+    });
 
 /// Categories with at least one expense in [start, end), sorted for display —
 /// feeds the category filter chips on [AllTransactionsScreen].
