@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
-/// Design tokens translated verbatim from spendly-prototype.html `:root`.
-/// Single source of truth for color, spacing, radius, type. Do not hardcode
-/// hex/sizes in widgets — reference these.
+/// Design tokens. Single source of truth for color, spacing, radius, type.
+/// Do not hardcode hex/sizes in widgets — reference these.
+///
+/// Dark Premium palette (2026-08-24 redesign): the app is dark-only, no
+/// light theme. `pink`/`pinkLight` names are kept from the prior
+/// indigo/pink brand pair for diff minimalism even though their values are
+/// now violet — the gradient role (paired accent) is what the name tracks,
+/// not the literal hue.
 class AppColors {
   AppColors._();
 
-  // Brand (theme-independent)
-  static const primary = Color(0xFF6366F1);
-  static const primarySoft = Color(0xFF818CF8);
-  static const primaryDeep = Color(0xFF4F46E5);
+  // Brand (theme-independent) — gold/champagne + violet
+  static const primary = Color(0xFFD8B26A);
+  static const primarySoft = Color(0xFFE8CDA0);
+  static const primaryDeep = Color(0xFFA97D3E);
   static const accent = Color(0xFFF59E0B);
-  static const pink = Color(0xFFEC4899);
+  static const pink = Color(0xFF7C5CFF);
   static const teal = Color(0xFF14B8A6);
   static const red = Color(0xFFEF4444);
   static const green = Color(0xFF22C55E);
@@ -20,31 +25,21 @@ class AppColors {
   static const amberDeep = Color(0xFFEA580C);
   static const amberDeeper = Color(0xFFB45309);
   static const tealDeep = Color(0xFF0D9488);
-  static const pinkLight = Color(0xFFF472B6);
+  static const pinkLight = Color(0xFFA78BFA);
 
-  // Light
-  static const lightBg = Color(0xFFF5F5F7);
-  static const lightCard = Color(0xFFFFFFFF);
-  static const lightCard2 = Color(0xFFFFFFFF);
-  static const lightText = Color(0xFF14141C);
-  static const lightTextDim = Color(0xFF6B6B7B);
-  static const lightLine = Color(0xFFECECF1);
+  // Dark surfaces (the only theme — see AppTheme)
+  static const darkBg = Color(0xFF0B0B10);
+  static const darkCard = Color(0xFF17151F);
+  static const darkCard2 = Color(0xFF1D1A29);
+  static const darkText = Color(0xFFF5F4F7);
+  static const darkTextDim = Color(0xFF96939F);
+  static const darkLine = Color(0x21FFFFFF);
 
-  // Dark
-  static const darkBg = Color(0xFF0B0B12);
-  static const darkCard = Color(0xFF16161F);
-  static const darkCard2 = Color(0xFF1D1D28);
-  static const darkText = Color(0xFFF4F4F8);
-  static const darkTextDim = Color(0xFF8B8B9C);
-  static const darkLine = Color(0xFF26262F);
+  // Bottom nav (own violet-black surface, distinct from card)
+  static const navBgDark = Color(0xFF15121F);
+  static const navIconOffDark = Color(0xFF8A85A6);
 
-  // Bottom nav (own indigo-plum surface, distinct from card)
-  static const navBgLight = Color(0xFF1B1533);
-  static const navBgDark = Color(0xFF201A3D);
-  static const navIconOffLight = Color(0xFF8B84B0);
-  static const navIconOffDark = Color(0xFF9086B8);
-
-  /// Hero / FAB / primary-button gradient (135deg deep → primary → pink).
+  /// Hero / FAB / primary-button gradient (135deg deep gold → gold → violet).
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -58,7 +53,8 @@ class AppColors {
   );
 
   /// Curated swatches for color pickers (categories, tags) — distinct hues
-  /// so items stay visually distinguishable even with many of them.
+  /// so items stay visually distinguishable even with many of them. NOT
+  /// part of the theme-chrome redesign: these are user-chosen colors.
   static const swatchPalette = [
     Color(0xFF3B82F6), // blue
     Color(0xFF6366F1), // indigo
@@ -102,16 +98,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color navBackground;
   final Color navIconInactive;
   final Color navBorder;
-
-  static const light = AppPalette(
-    card: AppColors.lightCard,
-    card2: AppColors.lightCard2,
-    textDim: AppColors.lightTextDim,
-    line: AppColors.lightLine,
-    navBackground: AppColors.navBgLight,
-    navIconInactive: AppColors.navIconOffLight,
-    navBorder: Color(0x0FFFFFFF),
-  );
 
   static const dark = AppPalette(
     card: AppColors.darkCard,
@@ -173,8 +159,8 @@ class AppSpacing {
 class AppRadius {
   AppRadius._();
   static const chip = 100.0;
-  static const card = 22.0;
+  static const card = 26.0;
   static const hero = 26.0;
-  static const button = 16.0;
+  static const button = 18.0;
   static const icon = 13.0;
 }
