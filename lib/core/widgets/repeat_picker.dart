@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../features/expenses/recurring_schedule.dart';
-import '../../features/expenses/widgets/expense_tile.dart' show relativeDayLabel;
+import '../../features/expenses/widgets/expense_tile.dart'
+    show relativeDayLabel;
 import '../db/database.dart';
 import '../theme/tokens.dart';
 
@@ -26,96 +27,97 @@ Future<void> showRepeatPickerSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
     ),
-    builder: (sheetContext) => StatefulBuilder(
-      builder: (sheetContext, setSheetState) {
-        var sheetRecurrence = recurrence;
-        var sheetEndDate = endDate;
+    builder: (sheetContext) {
+      var sheetRecurrence = recurrence;
+      var sheetEndDate = endDate;
+      return StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          void choose(Recurrence? r) {
+            setSheetState(() {
+              sheetRecurrence = r;
+              // An end date without a schedule is meaningless, and leaving a
+              // stale one behind would silently truncate the series if repeat
+              // were switched back on later.
+              if (r == null) sheetEndDate = null;
+            });
+            onRecurrenceChanged(r);
+            if (r == null) onEndDateChanged(null);
+          }
 
-        void choose(Recurrence? r) {
-          setSheetState(() {
-            sheetRecurrence = r;
-            // An end date without a schedule is meaningless, and leaving a
-            // stale one behind would silently truncate the series if repeat
-            // were switched back on later.
-            if (r == null) sheetEndDate = null;
-          });
-          onRecurrenceChanged(r);
-          if (r == null) onEndDateChanged(null);
-        }
-
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Text(
-                  'Repeat',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-              RadioGroup<Recurrence?>(
-                groupValue: sheetRecurrence,
-                onChanged: choose,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RadioListTile<Recurrence?>(
-                      value: null,
-                      title: const Text('Does not repeat'),
-                    ),
-                    for (final r in Recurrence.values)
-                      RadioListTile<Recurrence?>(
-                        value: r,
-                        title: Text(recurrenceLabel(r)),
-                      ),
-                  ],
-                ),
-              ),
-              if (sheetRecurrence != null)
-                ListTile(
-                  leading: const Icon(Icons.event_busy_outlined),
-                  title: const Text('Ends'),
-                  subtitle: Text(
-                    sheetEndDate == null
-                        ? 'Never — until you switch it off'
-                        : relativeDayLabel(sheetEndDate!),
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
                   ),
-                  trailing: sheetEndDate == null
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear end date',
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () {
-                            setSheetState(() => sheetEndDate = null);
-                            onEndDateChanged(null);
-                          },
-                        ),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: sheetContext,
-                      initialDate:
-                          sheetEndDate ??
-                          DateTime.now().add(const Duration(days: 365)),
-                      firstDate: anchorDate,
-                      lastDate: DateTime(DateTime.now().year + 20),
-                    );
-                    if (picked == null) return;
-                    setSheetState(() => sheetEndDate = picked);
-                    onEndDateChanged(picked);
-                  },
+                  child: Text(
+                    'Repeat',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
-              const SizedBox(height: AppSpacing.sm),
-            ],
-          ),
-        );
-      },
-    ),
+                RadioGroup<Recurrence?>(
+                  groupValue: sheetRecurrence,
+                  onChanged: choose,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<Recurrence?>(
+                        value: null,
+                        title: const Text('Does not repeat'),
+                      ),
+                      for (final r in Recurrence.values)
+                        RadioListTile<Recurrence?>(
+                          value: r,
+                          title: Text(recurrenceLabel(r)),
+                        ),
+                    ],
+                  ),
+                ),
+                if (sheetRecurrence != null)
+                  ListTile(
+                    leading: const Icon(Icons.event_busy_outlined),
+                    title: const Text('Ends'),
+                    subtitle: Text(
+                      sheetEndDate == null
+                          ? 'Never — until you switch it off'
+                          : relativeDayLabel(sheetEndDate!),
+                    ),
+                    trailing: sheetEndDate == null
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear end date',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              setSheetState(() => sheetEndDate = null);
+                              onEndDateChanged(null);
+                            },
+                          ),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: sheetContext,
+                        initialDate:
+                            sheetEndDate ??
+                            DateTime.now().add(const Duration(days: 365)),
+                        firstDate: anchorDate,
+                        lastDate: DateTime(DateTime.now().year + 20),
+                      );
+                      if (picked == null) return;
+                      setSheetState(() => sheetEndDate = picked);
+                      onEndDateChanged(picked);
+                    },
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ),
+          );
+        },
+      );
+    },
   );
 }

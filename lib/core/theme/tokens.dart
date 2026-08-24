@@ -14,6 +14,7 @@ class AppColors {
   static const pink = Color(0xFFEC4899);
   static const teal = Color(0xFF14B8A6);
   static const red = Color(0xFFEF4444);
+  static const green = Color(0xFF22C55E);
 
   // Gradient companions (paired with a brand color above, never used alone)
   static const amberDeep = Color(0xFFEA580C);

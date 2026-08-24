@@ -134,7 +134,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SectionTitle('Preferences'),
+            const SectionTitle('General'),
             _MenuGroup(
               children: [
                 _MenuRow(
@@ -155,16 +155,11 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: 'Indian Rupee (₹)',
                   onTap: null, // read-only: multi-currency is v2, PROGRESS.md
                 ),
-                _MenuRow(
-                  icon: Icons.cloud_outlined,
-                  title: 'Backup & Restore',
-                  subtitle: 'Back up your data, restore from a file',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const BackupRestoreScreen(),
-                    ),
-                  ),
-                ),
+              ],
+            ),
+            const SectionTitle('Money'),
+            _MenuGroup(
+              children: [
                 _MenuRow(
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'Accounts',
@@ -189,6 +184,11 @@ class ProfileScreen extends ConsumerWidget {
                     MaterialPageRoute(builder: (_) => const IncomeScreen()),
                   ),
                 ),
+              ],
+            ),
+            const SectionTitle('Reports & goals'),
+            _MenuGroup(
+              children: [
                 _MenuRow(
                   icon: Icons.calendar_month_outlined,
                   title: 'Monthly recap',
@@ -218,6 +218,21 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: 'Category trends and recurring spend',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const InsightsScreen()),
+                  ),
+                ),
+              ],
+            ),
+            const SectionTitle('Data'),
+            _MenuGroup(
+              children: [
+                _MenuRow(
+                  icon: Icons.cloud_outlined,
+                  title: 'Backup & Restore',
+                  subtitle: 'Back up your data, restore from a file',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const BackupRestoreScreen(),
+                    ),
                   ),
                 ),
               ],
@@ -500,7 +515,10 @@ class _AppLockRow extends ConsumerWidget {
                   children: [
                     const Text(
                       'App lock',
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     Text(
                       subtitle,
@@ -513,8 +531,9 @@ class _AppLockRow extends ConsumerWidget {
                 value: enabled,
                 activeThumbColor: AppColors.primary,
                 onChanged: supported
-                    ? (value) =>
-                        ref.read(appLockEnabledProvider.notifier).setEnabled(value)
+                    ? (value) => ref
+                          .read(appLockEnabledProvider.notifier)
+                          .setEnabled(value)
                     : null,
               ),
             ],
