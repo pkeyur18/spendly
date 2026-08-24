@@ -164,74 +164,57 @@ class _BalanceCard extends ConsumerWidget {
     // theme's own card color (not a flat swatch) so it stays correct in
     // both light and dark mode instead of just the light-mode hue.
     final tint = total.minor < 0 ? AppColors.red : AppColors.green;
-    final tintedCard = Color.alphaBlend(
+    // Blended off the glass tint (not the flat card color) so the sign
+    // reads at a glance while the card stays part of the glass family.
+    final tintedGlass = Color.alphaBlend(
       tint.withValues(alpha: 0.16),
-      palette.card,
+      palette.glassCard,
     );
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),
-      child: InkWell(
+      child: AppCard(
+        color: tintedGlass,
         onTap: () => Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const AccountsScreen())),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [palette.card, tintedCard],
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Balance across accounts',
+                  style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  total.format(locale: 'en_IN'),
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: palette.line),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Balance across accounts',
-                    style: TextStyle(fontSize: 12, color: palette.textDim),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Nothing to transfer between with a single account — same
+                // gating as the transfer icon on the account detail screen.
+                // Deliberately quiet (an icon, not a FAB) since this is a
+                // 2-3x/month action, not a daily one like Add Expense.
+                if (accounts.length > 1)
+                  IconButton(
+                    tooltip: 'Transfer money',
+                    icon: const Icon(Icons.swap_horiz),
+                    onPressed: () => showTransferEditSheet(context),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    total.format(locale: 'en_IN'),
-                    style: const TextStyle(
-                      fontFamily: 'Sora',
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Nothing to transfer between with a single account — same
-                  // gating as the transfer icon on the account detail screen.
-                  // Deliberately quiet (an icon, not a FAB) since this is a
-                  // 2-3x/month action, not a daily one like Add Expense.
-                  if (accounts.length > 1)
-                    IconButton(
-                      tooltip: 'Transfer money',
-                      icon: const Icon(Icons.swap_horiz),
-                      onPressed: () => showTransferEditSheet(context),
-                    ),
-                  Icon(Icons.chevron_right, color: palette.textDim),
-                ],
-              ),
-            ],
-          ),
+                Icon(Icons.chevron_right, color: palette.textDim),
+              ],
+            ),
+          ],
         ),
       ),
     );

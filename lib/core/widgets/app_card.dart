@@ -15,6 +15,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.longPressHint,
+    this.color,
   });
 
   final Widget child;
@@ -26,6 +27,9 @@ class AppCard extends StatelessWidget {
   /// reader unless it's named, so the action would otherwise not exist for
   /// VoiceOver/TalkBack users.
   final String? longPressHint;
+
+  /// Overrides the default glass tint — see [GlassSurface.color].
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +52,7 @@ class AppCard extends StatelessWidget {
             ),
           );
 
-    return GlassSurface(borderRadius: radius, child: interactive);
+    return GlassSurface(borderRadius: radius, color: color, child: interactive);
   }
 }
 

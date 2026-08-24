@@ -15,10 +15,16 @@ class GlassSurface extends StatelessWidget {
     this.borderRadius = const BorderRadius.all(
       Radius.circular(AppRadius.card),
     ),
+    this.color,
   });
 
   final Widget child;
   final BorderRadius borderRadius;
+
+  /// Overrides [AppPalette.glassCard] — for a surface that needs its own
+  /// tint (e.g. a balance card blending in a red/green sign tint) while
+  /// staying blurred glass rather than falling back to a flat color.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +41,7 @@ class GlassSurface extends StatelessWidget {
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: palette.glassCard,
+            color: color ?? palette.glassCard,
             borderRadius: borderRadius,
             border: Border.all(color: palette.glassBorder),
             boxShadow: [

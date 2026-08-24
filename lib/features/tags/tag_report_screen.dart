@@ -92,55 +92,47 @@ class _TagRow extends ConsumerWidget {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final color = Color(tag.colorValue);
     final count = ref.watch(tagExpenseCountProvider(tag.id)).value ?? 0;
-    return InkWell(
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
       onTap: () => Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => TagDetailScreen(tag: tag))),
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: palette.card,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: palette.line),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(AppRadius.icon),
-              ),
-              alignment: Alignment.center,
-              child: Icon(Icons.card_travel_outlined, size: 18, color: color),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(AppRadius.icon),
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tag.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+            alignment: Alignment.center,
+            child: Icon(Icons.card_travel_outlined, size: 18, color: color),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tag.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  Text(
-                    count == 1 ? '1 expense' : '$count expenses',
-                    style: TextStyle(fontSize: 12, color: palette.textDim),
-                  ),
-                ],
-              ),
+                ),
+                Text(
+                  count == 1 ? '1 expense' : '$count expenses',
+                  style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+              ],
             ),
-            Text(
-              total.format(locale: 'en_IN'),
-              style: const TextStyle(fontFamily: 'Sora', fontSize: 15),
-            ),
-          ],
-        ),
+          ),
+          Text(
+            total.format(locale: 'en_IN'),
+            style: const TextStyle(fontFamily: 'Sora', fontSize: 15),
+          ),
+        ],
       ),
     );
   }
