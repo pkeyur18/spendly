@@ -78,13 +78,6 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       ref.invalidate(recurringReminderCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
     }
-    // Re-lock on backgrounding, not just cold start — otherwise App Lock
-    // would only ever gate the very first launch, and anyone could resume
-    // the app from the app switcher with nothing to unlock.
-    if (state == AppLifecycleState.paused &&
-        (ref.read(appLockEnabledProvider).value ?? false)) {
-      ref.read(appUnlockedProvider.notifier).set(false);
-    }
   }
 
   /// Widget quick-add deep link: `spendly://quickadd?category=<id>` opens

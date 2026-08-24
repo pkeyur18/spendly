@@ -70,9 +70,10 @@ final appLockEnabledProvider = AsyncNotifierProvider<AppLockNotifier, bool>(
 );
 
 /// In-memory only — never persisted, so every cold start requires unlocking
-/// again regardless of how the app was last left. Reset to false whenever
-/// the app is backgrounded (see `app.dart`'s lifecycle observer) so
-/// resuming from the background re-locks too, not just a fresh launch.
+/// again regardless of how the app was last left. Stays true for the rest
+/// of the process once unlocked — backgrounding/resuming (navigation,
+/// switching apps, screen timeout) does not re-lock; only actually closing
+/// the app does, since a fresh process rebuilds this provider from scratch.
 class AppUnlockedNotifier extends Notifier<bool> {
   @override
   bool build() => false;
