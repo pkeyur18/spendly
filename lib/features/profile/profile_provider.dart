@@ -51,8 +51,8 @@ class Profile {
   );
 }
 
-/// Persisted in the [SettingsRepository] key/value store — same pattern as
-/// [ThemeModeNotifier] (theme_mode_provider.dart).
+/// Persisted in the [SettingsRepository] key/value store via the standard
+/// settings-backed AsyncNotifier pattern.
 class ProfileNotifier extends AsyncNotifier<Profile> {
   @override
   Future<Profile> build() async {

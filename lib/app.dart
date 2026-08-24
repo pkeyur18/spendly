@@ -19,7 +19,6 @@ import 'features/profile/profile_provider.dart';
 import 'features/recap/recap_providers.dart';
 import 'features/security/app_lock_provider.dart';
 import 'features/security/lock_screen.dart';
-import 'features/settings/theme_mode_provider.dart';
 import 'features/widgets/widget_refresh.dart';
 import 'features/widgets/widget_snapshot.dart' show widgetAppGroupId;
 
@@ -133,8 +132,6 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     // schedule is rebuilt while the app is open.
     ref.watch(recurringReminderCheckProvider);
     ref.watch(incomeRecurringReminderCheckProvider);
-    // Falls back to system while the persisted value loads.
-    final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);
     // Falls back to "not locked" while the persisted value loads, same as
     // every other settings-backed toggle in this app — a locked-by-default
@@ -147,19 +144,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       title: 'Spendly',
       navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: themeMode,
-      // Crossfades light/dark colors on a theme switch — the prototype's one
-      // intentional motion rule (`body { transition: background .4s ease,
-      // color .4s ease }`). No other animation was designed, so this is the
-      // only motion this sprint adds (Sprint 7).
-      builder: (context, child) => AnimatedTheme(
-        data: Theme.of(context),
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.ease,
-        child: child!,
-      ),
+      theme: AppTheme.dark(),
       home: (lockEnabled && !unlocked)
           ? const AppLockScreen()
           : profileAsync.when(

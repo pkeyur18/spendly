@@ -32,8 +32,8 @@ class AutoBackupSettings {
   final BackupFrequency frequency;
 }
 
-/// FR-37 toggle + frequency, persisted in the settings table — same
-/// AsyncNotifier pattern as `theme_mode_provider.dart`.
+/// FR-37 toggle + frequency, persisted in the settings table via the
+/// standard settings-backed AsyncNotifier pattern.
 class AutoBackupSettingsNotifier extends AsyncNotifier<AutoBackupSettings> {
   @override
   Future<AutoBackupSettings> build() async {
