@@ -5,6 +5,7 @@ import '../../core/db/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../backup/backup_restore_screen.dart' show performManualBackup;
+import '../settings/theme_mode_provider.dart';
 import 'profile_provider.dart';
 
 enum _BackupChoice { backUp, skip, cancel }
@@ -32,6 +33,7 @@ Future<void> runDeleteAllDataFlow(BuildContext context, WidgetRef ref) async {
   if (confirmed != true) return;
 
   await ref.read(databaseProvider).resetToDefaults();
+  ref.invalidate(themeModeProvider);
   ref.invalidate(profileProvider);
 
   if (!context.mounted) return;

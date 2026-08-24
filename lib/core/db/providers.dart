@@ -15,6 +15,8 @@ class SettingsRepository {
   SettingsRepository(this._db);
   final AppDatabase _db;
 
+  static const themeModeKey = 'theme_mode';
+
   // Profile (name/email/phone shown on generated reports).
   static const profileNameKey = 'profile_name';
   static const profileEmailKey = 'profile_email';

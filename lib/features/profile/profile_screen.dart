@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../accounts/accounts_screen.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../backup/backup_restore_screen.dart';
+import '../settings/theme_mode_provider.dart';
 import 'avatar.dart';
 import 'avatar_picker_screen.dart';
 import 'delete_all_data_flow.dart';
@@ -31,6 +33,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(profileProvider);
+    final themeModeAsync = ref.watch(themeModeProvider);
     final stats = ref.watch(lifetimeStatsProvider).value ?? LifetimeStats.zero;
     final palette = Theme.of(context).extension<AppPalette>()!;
 
@@ -134,6 +137,18 @@ class ProfileScreen extends ConsumerWidget {
             const SectionTitle('General'),
             _MenuGroup(
               children: [
+                _MenuRow(
+                  icon: Icons.brightness_6_outlined,
+                  title: 'Theme',
+                  subtitle: _themeLabel(
+                    themeModeAsync.value ?? ThemeMode.system,
+                  ),
+                  onTap: () => _openThemePicker(
+                    context,
+                    ref,
+                    themeModeAsync.value ?? ThemeMode.system,
+                  ),
+                ),
                 const _MenuRow(
                   icon: Icons.currency_rupee,
                   title: 'Currency',
@@ -242,6 +257,56 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
+  String _themeLabel(ThemeMode m) => switch (m) {
+    ThemeMode.system => 'System default',
+    ThemeMode.light => 'Light',
+    ThemeMode.dark => 'Dark',
+  };
+
+  Future<void> _openThemePicker(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeMode current,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.boldDialogActions(dialogContext),
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          title: const Text('Theme'),
+          contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          content: RadioGroup<ThemeMode>(
+            groupValue: current,
+            onChanged: (value) {
+              if (value == null) return;
+              ref.read(themeModeProvider.notifier).setMode(value);
+              Navigator.of(dialogContext).pop();
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final mode in ThemeMode.values)
+                  RadioListTile<ThemeMode>(
+                    value: mode,
+                    title: Text(_themeLabel(mode)),
+                    activeColor: AppColors.primary,
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _EditBadge extends StatelessWidget {
