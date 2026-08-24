@@ -17,6 +17,7 @@ import '../expenses/recurring_repository.dart';
 import '../expenses/recurring_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../ledger/account_balance_provider.dart';
+import '../ledger/transfer_screen.dart' show showTransferEditSheet;
 import '../profile/profile_provider.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
@@ -184,7 +185,22 @@ class _BalanceCard extends ConsumerWidget {
                 ),
               ],
             ),
-            Icon(Icons.chevron_right, color: palette.textDim),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Nothing to transfer between with a single account — same
+                // gating as the transfer icon on the account detail screen.
+                // Deliberately quiet (an icon, not a FAB) since this is a
+                // 2-3x/month action, not a daily one like Add Expense.
+                if (accounts.length > 1)
+                  IconButton(
+                    tooltip: 'Transfer money',
+                    icon: const Icon(Icons.swap_horiz),
+                    onPressed: () => showTransferEditSheet(context),
+                  ),
+                Icon(Icons.chevron_right, color: palette.textDim),
+              ],
+            ),
           ],
         ),
       ),
