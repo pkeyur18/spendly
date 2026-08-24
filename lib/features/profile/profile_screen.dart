@@ -15,6 +15,7 @@ import 'edit_profile_screen.dart';
 import 'lifetime_stats.dart';
 import 'profile_provider.dart';
 import '../expenses/recurring_screen.dart';
+import '../ledger/income_screen.dart';
 import '../recap/monthly_recap_screen.dart';
 
 /// Profile (FR-51, FR-57) — prototype phone 10. The account/settings hub:
@@ -175,6 +176,14 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: 'Rent, EMIs and subscriptions you track',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const RecurringScreen()),
+                  ),
+                ),
+                _MenuRow(
+                  icon: Icons.savings_outlined,
+                  title: 'Income',
+                  subtitle: 'Salary and other money coming in',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const IncomeScreen()),
                   ),
                 ),
                 _MenuRow(

@@ -415,6 +415,43 @@ simply lacks the key, and `BackupAccount.fromJson` reads a missing key as `null`
   matched (already-present) account isn't touched by merge at all, so its own local stamp
   is never overwritten by the backup's.
 
+## v9 — income (schema v15)
+
+Income entries are a new table, `LedgerEntries`, kept separate from `Expenses` rather than a
+`kind` column on it — see
+`docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s "separate ledger table"
+decision: roughly fourteen existing expense queries would each need an opt-out guard to
+exclude income if it lived in the same table, and a single missed one silently inflates
+reported spending. The payload gets a new top-level array:
+
+```json
+"ledgerEntries": [
+  {
+    "id": 1,
+    "amountMinor": 5000000,
+    "date": "2026-07-01T00:00:00.000",
+    "accountId": 1,
+    "sourceLabel": "Salary",
+    "note": null,
+    "externalId": "..."
+  }
+],
+```
+
+`accountId` is the **backup file's** account id, same convention as `expenses[].accountId` —
+resolved to a local account id by Replace (verbatim, since ids are reused) and Merge (through
+the account id map).
+
+- **Replace** wipes `ledgerEntries` before `accounts` (it references `accounts.id`, same
+  FK-order reasoning as `expenses`) then restores it after `accounts`, reusing original ids
+  verbatim.
+- **Merge** matches by `externalId` first, falling back to a content fingerprint (amount,
+  date, mapped account, source label, note) — same two-tier rule as `expenses`, since a plain
+  income entry has no natural-key field like a name to fall back on.
+
+A pre-v9 file has no `ledgerEntries` key at all. `BackupPayload.fromJson` reads it as `[]` —
+same additive, no-destructive-branch pattern as every new array before it.
+
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
 - **Categories** — matched by `externalId` first when both the backup row and a local row

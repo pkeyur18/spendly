@@ -594,6 +594,96 @@ class BackupReceipt {
   };
 }
 
+/// An income entry (backup v9). [accountId] is the BACKUP FILE's account id
+/// (matching [BackupAccount.id] within the same payload), same convention
+/// as [BackupExpense.accountId] — resolved to a local account id on Merge,
+/// reused verbatim on Replace.
+class BackupLedgerEntry {
+  const BackupLedgerEntry({
+    required this.id,
+    required this.amountMinor,
+    required this.date,
+    required this.accountId,
+    required this.sourceLabel,
+    required this.note,
+    required this.externalId,
+  });
+
+  final int id;
+  final int amountMinor;
+  final DateTime date;
+  final int? accountId;
+  final String? sourceLabel;
+  final String? note;
+  final String? externalId;
+
+  factory BackupLedgerEntry.fromRow(LedgerEntryRow row) => BackupLedgerEntry(
+    id: row.id,
+    amountMinor: row.amountMinor,
+    date: row.date,
+    accountId: row.accountId,
+    sourceLabel: row.sourceLabel,
+    note: row.note,
+    externalId: row.externalId,
+  );
+
+  factory BackupLedgerEntry.fromJson(Map<String, dynamic> j) =>
+      BackupLedgerEntry(
+        id: j['id'] as int,
+        amountMinor: j['amountMinor'] as int,
+        date: DateTime.parse(j['date'] as String),
+        accountId: j['accountId'] as int?,
+        sourceLabel: j['sourceLabel'] as String?,
+        note: j['note'] as String?,
+        externalId: j['externalId'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'amountMinor': amountMinor,
+    'date': date.toIso8601String(),
+    'accountId': accountId,
+    'sourceLabel': sourceLabel,
+    'note': note,
+    'externalId': externalId,
+  };
+
+  /// Merge: new row, id auto-assigned. [mappedAccountId] is the local
+  /// account id the backup's accountId was resolved to (null if unassigned).
+  LedgerEntriesCompanion toInsertCompanion({required int? mappedAccountId}) =>
+      LedgerEntriesCompanion.insert(
+        amountMinor: amountMinor,
+        date: date,
+        accountId: Value(mappedAccountId),
+        sourceLabel: Value(sourceLabel),
+        note: Value(note),
+        externalId: externalId == null
+            ? const Value.absent()
+            : Value(externalId),
+      );
+
+  /// Replace: tables are wiped first, so the original id is reused verbatim.
+  LedgerEntriesCompanion toReplaceCompanion() => LedgerEntriesCompanion(
+    id: Value(id),
+    amountMinor: Value(amountMinor),
+    date: Value(date),
+    accountId: Value(accountId),
+    sourceLabel: Value(sourceLabel),
+    note: Value(note),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
+  );
+
+  /// Content fingerprint used to dedupe on Merge for entries written before
+  /// this field existed or by a backup file that predates it entirely —
+  /// same role as [BackupExpense.fingerprint]. [mappedAccountId] is the
+  /// *local* account id, so fingerprints compare like for like even when the
+  /// backup's own account ids don't match this device's.
+  String fingerprint({required int? mappedAccountId}) =>
+      '$amountMinor|${date.toIso8601String()}|$mappedAccountId|$sourceLabel|$note';
+}
+
 class BackupSetting {
   const BackupSetting({required this.key, required this.value});
 
@@ -624,6 +714,7 @@ class BackupPayload {
     required this.tags,
     this.receipts = const [],
     this.accounts = const [],
+    this.ledgerEntries = const [],
   });
 
   final DateTime exportedAt;
@@ -634,6 +725,7 @@ class BackupPayload {
   final List<BackupTag> tags;
   final List<BackupReceipt> receipts;
   final List<BackupAccount> accounts;
+  final List<BackupLedgerEntry> ledgerEntries;
 
   (DateTime, DateTime)? get expenseDateRange {
     if (expenses.isEmpty) return null;
@@ -695,6 +787,15 @@ class BackupPayload {
           : (j['accounts'] as List)
                 .map((e) => BackupAccount.fromJson(e as Map<String, dynamic>))
                 .toList(),
+      // Pre-v9 backups have no "ledgerEntries" key at all.
+      ledgerEntries: j['ledgerEntries'] == null
+          ? const []
+          : (j['ledgerEntries'] as List)
+                .map(
+                  (e) =>
+                      BackupLedgerEntry.fromJson(e as Map<String, dynamic>),
+                )
+                .toList(),
     );
   }
 
@@ -713,5 +814,6 @@ class BackupPayload {
     'tags': tags.map((t) => t.toJson()).toList(),
     'receipts': receipts.map((r) => r.toJson()).toList(),
     'accounts': accounts.map((a) => a.toJson()).toList(),
+    'ledgerEntries': ledgerEntries.map((l) => l.toJson()).toList(),
   };
 }

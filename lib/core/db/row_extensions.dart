@@ -35,6 +35,10 @@ extension CategoryRowX on CategoryRow {
 String yearMonthStamp(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
 
+extension LedgerEntryRowX on LedgerEntryRow {
+  Money get amount => Money.fromMinor(amountMinor);
+}
+
 extension AccountRowX on AccountRow {
   Money get openingBalance => Money.fromMinor(openingBalanceMinor);
 

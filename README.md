@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v14, backup format v8, 409 passing tests (51 test
+> Recap feature. Drift schema v15, backup format v9, 428 passing tests (53 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -71,6 +71,14 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   account clears the flag rather than silently picking a replacement). The free-text
   `paymentMethod` field expenses already carried is migrated into real accounts
   automatically on upgrade, preserved either way.
+- **Income & savings rate** — log income (amount, date, optional account, source label,
+  note) from a dedicated Income screen under Profile; swipe to delete with undo, same as
+  expenses. Kept in its own table, never mixed into `Expenses` — see
+  [docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md](docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md)'s
+  "separate ledger table" decision, which keeps every existing spend/budget query correct
+  by construction rather than by an opt-out guard someone could forget. Once any income is
+  logged for a month, Monthly Recap and the monthly/custom reports additionally show net
+  cashflow and savings rate — silent (unchanged) for the many users who never touch Income.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -93,7 +101,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v14 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v15 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, `excel`, `share_plus` |
@@ -127,6 +135,7 @@ lib/
     ├── home/                       # dashboard + charts + providers
     ├── expenses/                   # quick add, all-transactions, repository, recurrence
     ├── accounts/                   # cash/bank/card/wallet accounts, manage screen
+    ├── ledger/                     # income entries, cashflow/savings-rate math
     ├── categories/                 # manager, edit sheet (strip+popup), archived
     ├── budgets/                    # per-month budget setup + repository
     ├── reports/                    # monthly/custom reports, export (PDF/CSV)

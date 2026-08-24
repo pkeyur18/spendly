@@ -333,6 +333,51 @@ void main() {
     expect(decoded.accounts, isEmpty);
   });
 
+  test('a v9 ledger entry round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            amountMinor: 5000000,
+            date: DateTime(2026, 7, 1),
+            accountId: 1,
+            sourceLabel: 'Salary',
+            note: 'July payout',
+            externalId: 'inc-1',
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).ledgerEntries.single;
+    expect(decoded.amountMinor, 5000000);
+    expect(decoded.accountId, 1);
+    expect(decoded.sourceLabel, 'Salary');
+    expect(decoded.note, 'July payout');
+    expect(decoded.externalId, 'inc-1');
+  });
+
+  test('a pre-v9 file (no ledgerEntries key) decodes with no ledger entries '
+      'at all', () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()..remove('ledgerEntries'),
+    });
+
+    final decoded = await decodePayload(v8Json);
+    expect(decoded.ledgerEntries, isEmpty);
+  });
+
   test('a v7 receipt round-trips as base64', () async {
     final payload = _samplePayload();
     final envelope = await encodeEnvelope(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart' show monthKeyFor;
+import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
@@ -13,6 +14,8 @@ import '../expenses/expense_repository.dart';
 import '../expenses/receipt_repository.dart';
 import '../home/dashboard_providers.dart';
 import '../home/widgets/spend_donut.dart';
+import '../ledger/cashflow_math.dart';
+import '../ledger/ledger_repository.dart';
 import '../profile/profile_provider.dart';
 import '../tags/tag_report_screen.dart';
 import '../tags/tag_repository.dart';
@@ -42,6 +45,8 @@ class MonthlyReportScreen extends ConsumerWidget {
       ignoredCategoryIds(byId),
     );
     final profile = ref.watch(profileProvider).value;
+    final incomeTotal =
+        ref.watch(incomeTotalByRangeProvider((start, end))).value ?? Money.zero;
 
     return Scaffold(
       appBar: AppBar(
@@ -90,6 +95,16 @@ class MonthlyReportScreen extends ConsumerWidget {
                   ('Transactions', '${data.txnCount}'),
                   ('Top category', data.topCategory?.$1.name ?? '—'),
                   ('Budget used', budgetUsed),
+                  // Only shown once income has actually been logged for this
+                  // month — most users never touch Income, and a 0%/₹0 pair
+                  // on every report would just be noise for them.
+                  if (incomeTotal.minor > 0) ...[
+                    ('Income', incomeTotal.format(locale: 'en_IN')),
+                    (
+                      'Savings rate',
+                      '${computeCashflow(income: incomeTotal, expense: data.total).savingsRatePercent}%',
+                    ),
+                  ],
                 ],
               ),
               const SectionTitle('By category'),

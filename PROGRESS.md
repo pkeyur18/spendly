@@ -976,3 +976,67 @@ Three requests on top of the Phase 4 accounts feature.
   migrated from a pre-v12 `payment_method` string (never had an opening balance
   entered) gets no stamp, same as a fresh zero-balance `create()`.
 - Not run on a device/simulator — same standing gap as every prior phase.
+
+## Phase 5 — Income & savings rate (schema v15, backup v9) — done
+
+Implemented per `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s Phase 5
+section, which was already written and approved earlier in this project. No re-brainstorm
+needed; proceeded directly from the existing spec.
+
+- [x] **`LedgerEntries` table** (schema v15) — money coming IN, deliberately kept apart
+      from `Expenses` rather than a `kind` column on it. The spec's stated reason: roughly
+      fourteen existing `Expenses` queries would each need an opt-out guard to exclude
+      income if it lived there, and a single missed one silently inflates reported spend.
+      **Scoped down from the spec's original table design**: no `kind` column yet, since
+      this table currently holds only income — the spec's `kind (income/transfer)` design
+      anticipated Phase 6, which doesn't exist yet (YAGNI; the column is trivial to add
+      additively when transfers actually land). Fields: amount, date, optional account,
+      optional source label ("Salary", "Freelance"), optional note, `externalId`.
+- [x] **`LedgerRepository`** — CRUD plus `watchInRange`/`watchTotalInRange`. Entries are
+      **hard-deleted**, not archived — unlike categories/tags/accounts, nothing else in the
+      schema references a ledger entry by id, so there's no history to protect. Delete
+      still gets the same swipe + 5-second undo snackbar as expenses (`restore()` reuses
+      the exact same "re-insert via `toCompanion(false)`, same id/externalId" trick as
+      `ExpenseRepository.restore`).
+- [x] **Income screen** (`lib/features/ledger/income_screen.dart`) — reached from a new
+      Profile row, same shape as Accounts/Recurring: a "this month" total card, a list of
+      every entry (newest first), swipe-to-delete-with-undo, tap to edit. Add/edit is a
+      bottom sheet mirroring `_AccountEditSheet`'s shape (amount/date/source/account
+      chips/note), not a rebuild of Quick Add's custom keypad — a plain form is the
+      correct-weight tool for an occasional, low-frequency entry.
+- [x] **Net cashflow / savings rate** — pure `computeCashflow()` (`ledger/cashflow_math.dart`,
+      unit-tested directly) derives net (income − expense) and a savings-rate percentage,
+      null when income is zero (nothing to divide by). Surfaced as an additional `StatGrid`
+      pair on the monthly and custom report screens, and a new `_SavingsRateCard` on
+      Monthly Recap — **all three gated on `incomeTotal.minor > 0`, appearing only once
+      income has actually been logged for that period.** Deliberately did NOT rewrite
+      Recap's existing budget-based hero headline (the spec's illustrative "you kept 22%"
+      line): that logic is well-tested and used by every user, income or not; an additive
+      card ships the same value without risking a regression for the common no-income case.
+- [x] **Backup v9** — `ledgerEntries` is a new top-level array (first version bump since
+      v8's `accounts`, since every field added in between was additive to an existing
+      table). `BackupLedgerEntry` follows the `BackupExpense` shape exactly: Replace wipes
+      before `accounts` and restores after (same FK-order reasoning), reusing ids verbatim;
+      Merge matches by `externalId` first, falling back to a content fingerprint (amount,
+      date, mapped account, source label, note) — a plain income entry has no natural-key
+      field like a name to fall back on, same as expenses.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **428 passed** (was 409 before this phase; 53 test files, up from 51).
+  New coverage: `cashflow_math_test.dart` (5 pure-function tests including the zero-income
+  null case and a negative/over-spend case), `ledger_repository_test.dart` (8 tests:
+  CRUD, account attach/clear, delete+restore identity, range queries), a v1→v15 migration
+  assertion, 4 new `backup_format_test.dart` cases (v9 round-trip, pre-v9 absence), and a
+  new `ledger entries (income)` group in `backup_repository_test.dart` (4 tests: export→
+  replace, merge with account remapping, merge-twice dedupe, pre-v9 merge).
+- Not run on a device/simulator — per standing user instruction, the app is launched and
+  tested manually, not via `flutter run`, so this is expected, not a gap.
+
+### Deferred / notes
+- Phase 5's own text flags budgets staying strictly expense-based (no income-aware
+  budgeting) as an explicit, deliberate scope boundary, not a gap.
+- Phase 6 (transfers, derived live balances, the ledger+expenses union on account detail)
+  and Phase 7 (insights, savings goals, app lock, autocomplete) remain unstarted, per the
+  original roadmap — not requested yet.
+

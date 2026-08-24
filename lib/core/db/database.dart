@@ -255,6 +255,36 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// Income entries (schema v15) — money coming IN, deliberately a separate
+/// table rather than a `kind` column on [Expenses]. See
+/// `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s "separate
+/// ledger table" decision: roughly fourteen existing queries over `Expenses`
+/// would each need an opt-out guard to exclude income if it lived there — a
+/// single missed one silently inflates spend. Keeping income structurally
+/// apart means every one of those queries is correct by construction, with
+/// nothing to remember. No `kind` column yet — this table holds only income
+/// today; Phase 6 (transfers) adds one when a second kind actually exists.
+@DataClassName('LedgerEntryRow')
+@TableIndex(name: 'idx_ledger_entries_date', columns: {#date})
+class LedgerEntries extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get amountMinor => integer()();
+  DateTimeColumn get date => dateTime()();
+
+  /// Which account the money landed in, or null if unassigned — same
+  /// optionality as [Expenses.accountId].
+  IntColumn get accountId => integer().nullable().references(Accounts, #id)();
+
+  /// Free text, e.g. "Salary", "Freelance" — purely descriptive.
+  TextColumn get sourceLabel => text().nullable()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+
+  /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
+  TextColumn get externalId =>
+      text().nullable().clientDefault(generateExternalId)();
+}
+
 @DriftDatabase(
   tables: [
     Categories,
@@ -264,6 +294,7 @@ class Settings extends Table {
     Tags,
     ExpenseReceipts,
     Accounts,
+    LedgerEntries,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -281,7 +312,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -435,6 +466,11 @@ class AppDatabase extends _$AppDatabase {
         if (!await _hasColumn('accounts', 'opening_balance_month')) {
           await m.addColumn(accounts, accounts.openingBalanceMonth);
         }
+      }
+      if (from < 15) {
+        // Whole new table — no populated-table hazard, same as
+        // expenseReceipts/accounts were at their own introduction.
+        await m.createTable(ledgerEntries);
       }
     },
   );

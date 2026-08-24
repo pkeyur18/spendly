@@ -33,6 +33,7 @@ class BackupRepository {
     final tags = await _db.select(_db.tags).get();
     final receipts = await _db.select(_db.expenseReceipts).get();
     final accounts = await _db.select(_db.accounts).get();
+    final ledgerEntries = await _db.select(_db.ledgerEntries).get();
 
     return BackupPayload(
       exportedAt: DateTime.now(),
@@ -55,6 +56,7 @@ class BackupRepository {
           ),
       ],
       accounts: accounts.map(BackupAccount.fromRow).toList(),
+      ledgerEntries: ledgerEntries.map(BackupLedgerEntry.fromRow).toList(),
     );
   }
 
@@ -68,10 +70,13 @@ class BackupRepository {
     await _db.transaction(() async {
       // Children before parents (FK order). expenseReceipts is a child of
       // expenses, so it goes first, same reasoning as everything below it.
+      // ledgerEntries is also a child of accounts (accountId), same as
+      // expenses — both are deleted before accounts.
       // accounts is a parent of expenses (accountId), so it's deleted after
       // expenses, same as categories/tags.
       await _db.delete(_db.expenseReceipts).go();
       await _db.delete(_db.expenses).go();
+      await _db.delete(_db.ledgerEntries).go();
       await _db.delete(_db.accounts).go();
       await _db.delete(_db.tags).go();
       await _db.delete(_db.budgets).go();
@@ -117,6 +122,12 @@ class BackupRepository {
             ),
           );
         }
+        if (payload.ledgerEntries.isNotEmpty) {
+          b.insertAll(
+            _db.ledgerEntries,
+            payload.ledgerEntries.map((l) => l.toReplaceCompanion()),
+          );
+        }
       });
     });
   }
@@ -140,6 +151,7 @@ class BackupRepository {
         accountIdMap,
         payload.receipts,
       );
+      await _mergeLedgerEntries(payload.ledgerEntries, accountIdMap);
     });
   }
 
@@ -361,6 +373,43 @@ class BackupRepository {
               photoBytes: base64Decode(receipt.photoBase64),
             ),
           );
+    }
+  }
+
+  /// Matches by [BackupLedgerEntry.externalId] first, falling back to
+  /// content fingerprint — same two-tier rule as [_mergeExpenses], for the
+  /// same reason: a natural-key match (like categories/tags/accounts have by
+  /// name) doesn't exist for a plain income entry.
+  Future<void> _mergeLedgerEntries(
+    List<BackupLedgerEntry> backupEntries,
+    Map<int, int> accountIdMap,
+  ) async {
+    final existing = await _db.select(_db.ledgerEntries).get();
+    final knownExternalIds = <String>{
+      for (final e in existing)
+        if (e.externalId != null) e.externalId!,
+    };
+    final fingerprints = <String>{
+      for (final e in existing)
+        BackupLedgerEntry.fromRow(
+          e,
+        ).fingerprint(mappedAccountId: e.accountId),
+    };
+
+    final toInsert = <LedgerEntriesCompanion>[];
+    for (final e in backupEntries) {
+      if (e.externalId != null && knownExternalIds.contains(e.externalId)) {
+        continue; // already present locally, matched by stable id
+      }
+      final mappedAccountId = e.accountId == null
+          ? null
+          : accountIdMap[e.accountId];
+      final fp = e.fingerprint(mappedAccountId: mappedAccountId);
+      if (!fingerprints.add(fp)) continue; // already present (or dup in file)
+      toInsert.add(e.toInsertCompanion(mappedAccountId: mappedAccountId));
+    }
+    if (toInsert.isNotEmpty) {
+      await _db.batch((batch) => batch.insertAll(_db.ledgerEntries, toInsert));
     }
   }
 

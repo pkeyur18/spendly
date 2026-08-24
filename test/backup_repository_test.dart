@@ -14,6 +14,7 @@ import 'package:spendly/features/budgets/budget_repository.dart';
 import 'package:spendly/features/categories/category_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
 import 'package:spendly/features/expenses/receipt_repository.dart';
+import 'package:spendly/features/ledger/ledger_repository.dart';
 import 'package:spendly/features/tags/tag_repository.dart';
 
 void main() {
@@ -770,6 +771,104 @@ void main() {
           isTrue,
         );
       });
+    });
+  });
+
+  group('ledger entries (income)', () {
+    test('export then replace reattaches the entry to the same account',
+        () async {
+      final accountRepo = AccountRepository(db);
+      final accountId = await accountRepo.create(
+        name: 'HDFC Bank',
+        type: AccountType.bank,
+      );
+      final ledger = LedgerRepository(db);
+      final entryId = await ledger.addIncome(
+        amount: Money.parse('50000'),
+        date: DateTime(2026, 7, 1),
+        accountId: accountId,
+        sourceLabel: 'Salary',
+      );
+
+      final payload = await repo.exportAll();
+      expect(payload.ledgerEntries, hasLength(1));
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restoredEntry = await (freshDb.select(
+        freshDb.ledgerEntries,
+      )..where((t) => t.id.equals(entryId))).getSingle();
+      final restoredAccount = await (freshDb.select(
+        freshDb.accounts,
+      )..where((t) => t.id.equals(restoredEntry.accountId!))).getSingle();
+      expect(restoredAccount.name, 'HDFC Bank');
+      expect(restoredEntry.sourceLabel, 'Salary');
+    });
+
+    test('merge attaches an entry to a newly-inserted account under its '
+        'new local id', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceAccountId = await AccountRepository(sourceDb).create(
+        name: 'Wallet',
+        type: AccountType.wallet,
+      );
+      await LedgerRepository(sourceDb).addIncome(
+        amount: Money.parse('1000'),
+        date: DateTime(2026, 7, 10),
+        accountId: sourceAccountId,
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload); // into the fresh 8-default db
+
+      final accounts = await db.select(db.accounts).get();
+      final entries = await db.select(db.ledgerEntries).get();
+      expect(accounts, hasLength(1));
+      // The merged entry's account id was assigned fresh by THIS device — it
+      // must point at the account that actually landed here.
+      expect(entries.single.accountId, accounts.single.id);
+    });
+
+    test('merging the same backup twice does not duplicate the entry',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await LedgerRepository(
+        sourceDb,
+      ).addIncome(amount: Money.parse('500'), date: DateTime(2026, 7, 1));
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+      await repo.mergeAll(payload); // run twice
+
+      expect(await db.select(db.ledgerEntries).get(), hasLength(1));
+    });
+
+    test('a pre-v9 backup (no ledgerEntries key) merges with no ledger '
+        'entries at all', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await ExpenseRepository(
+        sourceDb,
+      ).add(amount: Money.parse('20'), categoryId: 1, date: DateTime(2026, 7, 3));
+      final exported = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+      final preV9 = BackupPayload(
+        exportedAt: exported.exportedAt,
+        categories: exported.categories,
+        expenses: exported.expenses,
+        budgets: exported.budgets,
+        settings: exported.settings,
+        tags: exported.tags,
+        // No `ledgerEntries:` — defaults to const [].
+      );
+
+      await repo.mergeAll(preV9);
+
+      expect(await db.select(db.expenses).get(), hasLength(1));
+      expect(await db.select(db.ledgerEntries).get(), isEmpty);
     });
   });
 }

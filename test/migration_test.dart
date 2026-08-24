@@ -54,7 +54,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v14 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v15 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -237,5 +237,21 @@ void main() {
       reloadedAccounts.single.effectiveOpeningBalance(DateTime.now()),
       Money.zero,
     );
+
+    // from<15: ledger_entries is a whole new table (no populated-table
+    // hazard), queryable right away.
+    final entryId = await db
+        .into(db.ledgerEntries)
+        .insert(
+          LedgerEntriesCompanion.insert(
+            amountMinor: 50000,
+            date: DateTime(2026, 6, 1),
+          ),
+        );
+    final entry = await (db.select(
+      db.ledgerEntries,
+    )..where((t) => t.id.equals(entryId))).getSingle();
+    expect(entry.amountMinor, 50000);
+    expect(entry.externalId, isNotNull);
   });
 }
