@@ -563,6 +563,69 @@ void main() {
     expect(decoded.counterAccountId, 2);
   });
 
+  test('a recurring income entry (schema v21) round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            amountMinor: 5000000,
+            date: DateTime(2026, 7, 1),
+            accountId: 1,
+            sourceLabel: 'Salary',
+            note: null,
+            externalId: 'inc-1',
+            isRecurring: true,
+            recurrence: Recurrence.monthly,
+            nextDueDate: DateTime(2026, 8, 1),
+            recurrenceEndDate: DateTime(2027, 7, 1),
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).ledgerEntries.single;
+    expect(decoded.isRecurring, isTrue);
+    expect(decoded.recurrence, Recurrence.monthly);
+    expect(decoded.nextDueDate, DateTime(2026, 8, 1));
+    expect(decoded.recurrenceEndDate, DateTime(2027, 7, 1));
+  });
+
+  test('a pre-v21 ledger entry (no recurrence keys) decodes as not '
+      'recurring', () async {
+    final v9Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 9,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['ledgerEntries'] = [
+          {
+            'id': 1,
+            'amountMinor': 5000000,
+            'date': DateTime(2026, 7, 1).toIso8601String(),
+            'accountId': null,
+            'sourceLabel': 'Salary',
+            'note': null,
+            'externalId': 'inc-1',
+            // No recurrence keys at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v9Json)).ledgerEntries.single;
+    expect(decoded.isRecurring, isFalse);
+    expect(decoded.recurrence, isNull);
+    expect(decoded.nextDueDate, isNull);
+    expect(decoded.recurrenceEndDate, isNull);
+  });
+
   test('a pre-v16 ledger entry (no "kind" key) decodes as income', () async {
     final v9Json = jsonEncode({
       'spendlyBackup': true,

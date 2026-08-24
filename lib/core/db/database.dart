@@ -324,6 +324,15 @@ class LedgerEntries extends Table {
   TextColumn get note => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
+  /// Recurring income (schema v21) — same four columns and pointer-based
+  /// series tracking as [Expenses]' own (`recurring_schedule.dart`'s pure
+  /// math is schema-agnostic, reused as-is). Only ever meaningful on a
+  /// `kind == income` row; a transfer never recurs.
+  BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
+  TextColumn get recurrence => textEnum<Recurrence>().nullable()();
+  DateTimeColumn get nextDueDate => dateTime().nullable()();
+  DateTimeColumn get recurrenceEndDate => dateTime().nullable()();
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
@@ -378,7 +387,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -581,6 +590,20 @@ class AppDatabase extends _$AppDatabase {
         }
         if (!await _hasColumn('accounts', 'custom_type_color_value')) {
           await m.addColumn(accounts, accounts.customTypeColorValue);
+        }
+      }
+      if (from < 21) {
+        if (!await _hasColumn('ledger_entries', 'is_recurring')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.isRecurring);
+        }
+        if (!await _hasColumn('ledger_entries', 'recurrence')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.recurrence);
+        }
+        if (!await _hasColumn('ledger_entries', 'next_due_date')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.nextDueDate);
+        }
+        if (!await _hasColumn('ledger_entries', 'recurrence_end_date')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.recurrenceEndDate);
         }
       }
     },

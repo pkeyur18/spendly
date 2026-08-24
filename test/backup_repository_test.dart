@@ -925,6 +925,52 @@ void main() {
       expect(restoredEntry.sourceLabel, 'Salary');
     });
 
+    test('replace restores a recurring income entry\'s schedule verbatim',
+        () async {
+      final ledger = LedgerRepository(db);
+      await ledger.addIncome(
+        amount: Money.parse('50000'),
+        date: DateTime(2026, 7, 1),
+        sourceLabel: 'Salary',
+        isRecurring: true,
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 8, 1),
+      );
+      final payload = await repo.exportAll();
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restored = (await freshDb.select(freshDb.ledgerEntries).get())
+          .single;
+      expect(restored.isRecurring, isTrue);
+      expect(restored.recurrence, Recurrence.monthly);
+      expect(restored.nextDueDate, DateTime(2026, 8, 1));
+    });
+
+    test('merge carries a recurring income entry\'s schedule over to a '
+        'newly-inserted row', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await LedgerRepository(sourceDb).addIncome(
+        amount: Money.parse('50000'),
+        date: DateTime(2026, 7, 1),
+        sourceLabel: 'Salary',
+        isRecurring: true,
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 8, 1),
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      final entry = (await db.select(db.ledgerEntries).get()).single;
+      expect(entry.isRecurring, isTrue);
+      expect(entry.recurrence, Recurrence.monthly);
+      expect(entry.nextDueDate, DateTime(2026, 8, 1));
+    });
+
     test('merge attaches an entry to a newly-inserted account under its '
         'new local id', () async {
       final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());

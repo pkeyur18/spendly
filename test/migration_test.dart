@@ -258,6 +258,14 @@ void main() {
     expect(entry.kind, LedgerEntryKind.income);
     expect(entry.counterAccountId, isNull);
 
+    // from<21: same createTable trap once more — the recurrence columns
+    // default false/null, same as any pre-v21 row (none of which could
+    // recur) would read once upgraded.
+    expect(entry.isRecurring, isFalse);
+    expect(entry.recurrence, isNull);
+    expect(entry.nextDueDate, isNull);
+    expect(entry.recurrenceEndDate, isNull);
+
     // from<17: savings_goals is a whole new table (no populated-table
     // hazard), queryable right away.
     final goalId = await db

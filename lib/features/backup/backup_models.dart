@@ -666,6 +666,10 @@ class BackupLedgerEntry {
     required this.externalId,
     this.kind = LedgerEntryKind.income,
     this.counterAccountId,
+    this.isRecurring = false,
+    this.recurrence,
+    this.nextDueDate,
+    this.recurrenceEndDate,
   });
 
   final int id;
@@ -686,6 +690,15 @@ class BackupLedgerEntry {
   /// way [accountId] is). Null for income.
   final int? counterAccountId;
 
+  /// Recurring income (schema v21) — additive, no version bump, same
+  /// pattern as `kind`. Only ever meaningful on an income row. A pre-v21
+  /// file simply lacks these keys, all reading as false/null, matching
+  /// every pre-v21 entry (none of which could recur).
+  final bool isRecurring;
+  final Recurrence? recurrence;
+  final DateTime? nextDueDate;
+  final DateTime? recurrenceEndDate;
+
   factory BackupLedgerEntry.fromRow(LedgerEntryRow row) => BackupLedgerEntry(
     id: row.id,
     amountMinor: row.amountMinor,
@@ -696,6 +709,10 @@ class BackupLedgerEntry {
     externalId: row.externalId,
     kind: row.kind,
     counterAccountId: row.counterAccountId,
+    isRecurring: row.isRecurring,
+    recurrence: row.recurrence,
+    nextDueDate: row.nextDueDate,
+    recurrenceEndDate: row.recurrenceEndDate,
   );
 
   factory BackupLedgerEntry.fromJson(Map<String, dynamic> j) =>
@@ -712,6 +729,17 @@ class BackupLedgerEntry {
             ? LedgerEntryKind.income
             : LedgerEntryKind.values.byName(j['kind'] as String),
         counterAccountId: j['counterAccountId'] as int?,
+        // Pre-v21 files have no recurrence keys at all; absent = false/null.
+        isRecurring: j['isRecurring'] as bool? ?? false,
+        recurrence: j['recurrence'] == null
+            ? null
+            : Recurrence.values.byName(j['recurrence'] as String),
+        nextDueDate: j['nextDueDate'] == null
+            ? null
+            : DateTime.parse(j['nextDueDate'] as String),
+        recurrenceEndDate: j['recurrenceEndDate'] == null
+            ? null
+            : DateTime.parse(j['recurrenceEndDate'] as String),
       );
 
   Map<String, dynamic> toJson() => {
@@ -724,6 +752,10 @@ class BackupLedgerEntry {
     'externalId': externalId,
     'kind': kind.name,
     'counterAccountId': counterAccountId,
+    'isRecurring': isRecurring,
+    'recurrence': recurrence?.name,
+    'nextDueDate': nextDueDate?.toIso8601String(),
+    'recurrenceEndDate': recurrenceEndDate?.toIso8601String(),
   };
 
   /// Merge: new row, id auto-assigned. [mappedAccountId]/[mappedCounterAccountId]
@@ -740,6 +772,10 @@ class BackupLedgerEntry {
     counterAccountId: Value(mappedCounterAccountId),
     sourceLabel: Value(sourceLabel),
     note: Value(note),
+    isRecurring: Value(isRecurring),
+    recurrence: Value(recurrence),
+    nextDueDate: Value(nextDueDate),
+    recurrenceEndDate: Value(recurrenceEndDate),
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
@@ -755,6 +791,10 @@ class BackupLedgerEntry {
     counterAccountId: Value(counterAccountId),
     sourceLabel: Value(sourceLabel),
     note: Value(note),
+    isRecurring: Value(isRecurring),
+    recurrence: Value(recurrence),
+    nextDueDate: Value(nextDueDate),
+    recurrenceEndDate: Value(recurrenceEndDate),
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),

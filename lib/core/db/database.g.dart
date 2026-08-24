@@ -4172,6 +4172,53 @@ class $LedgerEntriesTable extends LedgerEntries
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
+  static const VerificationMeta _isRecurringMeta = const VerificationMeta(
+    'isRecurring',
+  );
+  @override
+  late final GeneratedColumn<bool> isRecurring = GeneratedColumn<bool>(
+    'is_recurring',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_recurring" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<Recurrence?, String> recurrence =
+      GeneratedColumn<String>(
+        'recurrence',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      ).withConverter<Recurrence?>($LedgerEntriesTable.$converterrecurrencen);
+  static const VerificationMeta _nextDueDateMeta = const VerificationMeta(
+    'nextDueDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextDueDate = GeneratedColumn<DateTime>(
+    'next_due_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _recurrenceEndDateMeta = const VerificationMeta(
+    'recurrenceEndDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> recurrenceEndDate =
+      GeneratedColumn<DateTime>(
+        'recurrence_end_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _externalIdMeta = const VerificationMeta(
     'externalId',
   );
@@ -4195,6 +4242,10 @@ class $LedgerEntriesTable extends LedgerEntries
     sourceLabel,
     note,
     createdAt,
+    isRecurring,
+    recurrence,
+    nextDueDate,
+    recurrenceEndDate,
     externalId,
   ];
   @override
@@ -4267,6 +4318,33 @@ class $LedgerEntriesTable extends LedgerEntries
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
+    if (data.containsKey('is_recurring')) {
+      context.handle(
+        _isRecurringMeta,
+        isRecurring.isAcceptableOrUnknown(
+          data['is_recurring']!,
+          _isRecurringMeta,
+        ),
+      );
+    }
+    if (data.containsKey('next_due_date')) {
+      context.handle(
+        _nextDueDateMeta,
+        nextDueDate.isAcceptableOrUnknown(
+          data['next_due_date']!,
+          _nextDueDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recurrence_end_date')) {
+      context.handle(
+        _recurrenceEndDateMeta,
+        recurrenceEndDate.isAcceptableOrUnknown(
+          data['recurrence_end_date']!,
+          _recurrenceEndDateMeta,
+        ),
+      );
+    }
     if (data.containsKey('external_id')) {
       context.handle(
         _externalIdMeta,
@@ -4320,6 +4398,24 @@ class $LedgerEntriesTable extends LedgerEntries
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
+      isRecurring: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_recurring'],
+      )!,
+      recurrence: $LedgerEntriesTable.$converterrecurrencen.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}recurrence'],
+        ),
+      ),
+      nextDueDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_due_date'],
+      ),
+      recurrenceEndDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}recurrence_end_date'],
+      ),
       externalId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
@@ -4334,6 +4430,10 @@ class $LedgerEntriesTable extends LedgerEntries
 
   static JsonTypeConverter2<LedgerEntryKind, String, String> $converterkind =
       const EnumNameConverter<LedgerEntryKind>(LedgerEntryKind.values);
+  static JsonTypeConverter2<Recurrence, String, String> $converterrecurrence =
+      const EnumNameConverter<Recurrence>(Recurrence.values);
+  static JsonTypeConverter2<Recurrence?, String?, String?>
+  $converterrecurrencen = JsonTypeConverter2.asNullable($converterrecurrence);
 }
 
 class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
@@ -4360,6 +4460,15 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
   final String? note;
   final DateTime createdAt;
 
+  /// Recurring income (schema v21) — same four columns and pointer-based
+  /// series tracking as [Expenses]' own (`recurring_schedule.dart`'s pure
+  /// math is schema-agnostic, reused as-is). Only ever meaningful on a
+  /// `kind == income` row; a transfer never recurs.
+  final bool isRecurring;
+  final Recurrence? recurrence;
+  final DateTime? nextDueDate;
+  final DateTime? recurrenceEndDate;
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
   const LedgerEntryRow({
@@ -4372,6 +4481,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     this.sourceLabel,
     this.note,
     required this.createdAt,
+    required this.isRecurring,
+    this.recurrence,
+    this.nextDueDate,
+    this.recurrenceEndDate,
     this.externalId,
   });
   @override
@@ -4398,6 +4511,18 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       map['note'] = Variable<String>(note);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['is_recurring'] = Variable<bool>(isRecurring);
+    if (!nullToAbsent || recurrence != null) {
+      map['recurrence'] = Variable<String>(
+        $LedgerEntriesTable.$converterrecurrencen.toSql(recurrence),
+      );
+    }
+    if (!nullToAbsent || nextDueDate != null) {
+      map['next_due_date'] = Variable<DateTime>(nextDueDate);
+    }
+    if (!nullToAbsent || recurrenceEndDate != null) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate);
+    }
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
@@ -4421,6 +4546,16 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           : Value(sourceLabel),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       createdAt: Value(createdAt),
+      isRecurring: Value(isRecurring),
+      recurrence: recurrence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrence),
+      nextDueDate: nextDueDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextDueDate),
+      recurrenceEndDate: recurrenceEndDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceEndDate),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
@@ -4444,6 +4579,14 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       sourceLabel: serializer.fromJson<String?>(json['sourceLabel']),
       note: serializer.fromJson<String?>(json['note']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      isRecurring: serializer.fromJson<bool>(json['isRecurring']),
+      recurrence: $LedgerEntriesTable.$converterrecurrencen.fromJson(
+        serializer.fromJson<String?>(json['recurrence']),
+      ),
+      nextDueDate: serializer.fromJson<DateTime?>(json['nextDueDate']),
+      recurrenceEndDate: serializer.fromJson<DateTime?>(
+        json['recurrenceEndDate'],
+      ),
       externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
@@ -4462,6 +4605,12 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       'sourceLabel': serializer.toJson<String?>(sourceLabel),
       'note': serializer.toJson<String?>(note),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'isRecurring': serializer.toJson<bool>(isRecurring),
+      'recurrence': serializer.toJson<String?>(
+        $LedgerEntriesTable.$converterrecurrencen.toJson(recurrence),
+      ),
+      'nextDueDate': serializer.toJson<DateTime?>(nextDueDate),
+      'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
       'externalId': serializer.toJson<String?>(externalId),
     };
   }
@@ -4476,6 +4625,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     Value<String?> sourceLabel = const Value.absent(),
     Value<String?> note = const Value.absent(),
     DateTime? createdAt,
+    bool? isRecurring,
+    Value<Recurrence?> recurrence = const Value.absent(),
+    Value<DateTime?> nextDueDate = const Value.absent(),
+    Value<DateTime?> recurrenceEndDate = const Value.absent(),
     Value<String?> externalId = const Value.absent(),
   }) => LedgerEntryRow(
     id: id ?? this.id,
@@ -4489,6 +4642,12 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     sourceLabel: sourceLabel.present ? sourceLabel.value : this.sourceLabel,
     note: note.present ? note.value : this.note,
     createdAt: createdAt ?? this.createdAt,
+    isRecurring: isRecurring ?? this.isRecurring,
+    recurrence: recurrence.present ? recurrence.value : this.recurrence,
+    nextDueDate: nextDueDate.present ? nextDueDate.value : this.nextDueDate,
+    recurrenceEndDate: recurrenceEndDate.present
+        ? recurrenceEndDate.value
+        : this.recurrenceEndDate,
     externalId: externalId.present ? externalId.value : this.externalId,
   );
   LedgerEntryRow copyWithCompanion(LedgerEntriesCompanion data) {
@@ -4508,6 +4667,18 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           : this.sourceLabel,
       note: data.note.present ? data.note.value : this.note,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      isRecurring: data.isRecurring.present
+          ? data.isRecurring.value
+          : this.isRecurring,
+      recurrence: data.recurrence.present
+          ? data.recurrence.value
+          : this.recurrence,
+      nextDueDate: data.nextDueDate.present
+          ? data.nextDueDate.value
+          : this.nextDueDate,
+      recurrenceEndDate: data.recurrenceEndDate.present
+          ? data.recurrenceEndDate.value
+          : this.recurrenceEndDate,
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
@@ -4526,6 +4697,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           ..write('sourceLabel: $sourceLabel, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
+          ..write('isRecurring: $isRecurring, ')
+          ..write('recurrence: $recurrence, ')
+          ..write('nextDueDate: $nextDueDate, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -4542,6 +4717,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     sourceLabel,
     note,
     createdAt,
+    isRecurring,
+    recurrence,
+    nextDueDate,
+    recurrenceEndDate,
     externalId,
   );
   @override
@@ -4557,6 +4736,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           other.sourceLabel == this.sourceLabel &&
           other.note == this.note &&
           other.createdAt == this.createdAt &&
+          other.isRecurring == this.isRecurring &&
+          other.recurrence == this.recurrence &&
+          other.nextDueDate == this.nextDueDate &&
+          other.recurrenceEndDate == this.recurrenceEndDate &&
           other.externalId == this.externalId);
 }
 
@@ -4570,6 +4753,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
   final Value<String?> sourceLabel;
   final Value<String?> note;
   final Value<DateTime> createdAt;
+  final Value<bool> isRecurring;
+  final Value<Recurrence?> recurrence;
+  final Value<DateTime?> nextDueDate;
+  final Value<DateTime?> recurrenceEndDate;
   final Value<String?> externalId;
   const LedgerEntriesCompanion({
     this.id = const Value.absent(),
@@ -4581,6 +4768,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     this.sourceLabel = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.isRecurring = const Value.absent(),
+    this.recurrence = const Value.absent(),
+    this.nextDueDate = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
     this.externalId = const Value.absent(),
   });
   LedgerEntriesCompanion.insert({
@@ -4593,6 +4784,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     this.sourceLabel = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.isRecurring = const Value.absent(),
+    this.recurrence = const Value.absent(),
+    this.nextDueDate = const Value.absent(),
+    this.recurrenceEndDate = const Value.absent(),
     this.externalId = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        date = Value(date);
@@ -4606,6 +4801,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     Expression<String>? sourceLabel,
     Expression<String>? note,
     Expression<DateTime>? createdAt,
+    Expression<bool>? isRecurring,
+    Expression<String>? recurrence,
+    Expression<DateTime>? nextDueDate,
+    Expression<DateTime>? recurrenceEndDate,
     Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
@@ -4618,6 +4817,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
       if (sourceLabel != null) 'source_label': sourceLabel,
       if (note != null) 'note': note,
       if (createdAt != null) 'created_at': createdAt,
+      if (isRecurring != null) 'is_recurring': isRecurring,
+      if (recurrence != null) 'recurrence': recurrence,
+      if (nextDueDate != null) 'next_due_date': nextDueDate,
+      if (recurrenceEndDate != null) 'recurrence_end_date': recurrenceEndDate,
       if (externalId != null) 'external_id': externalId,
     });
   }
@@ -4632,6 +4835,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     Value<String?>? sourceLabel,
     Value<String?>? note,
     Value<DateTime>? createdAt,
+    Value<bool>? isRecurring,
+    Value<Recurrence?>? recurrence,
+    Value<DateTime?>? nextDueDate,
+    Value<DateTime?>? recurrenceEndDate,
     Value<String?>? externalId,
   }) {
     return LedgerEntriesCompanion(
@@ -4644,6 +4851,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
       sourceLabel: sourceLabel ?? this.sourceLabel,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurrence: recurrence ?? this.recurrence,
+      nextDueDate: nextDueDate ?? this.nextDueDate,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       externalId: externalId ?? this.externalId,
     );
   }
@@ -4680,6 +4891,20 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (isRecurring.present) {
+      map['is_recurring'] = Variable<bool>(isRecurring.value);
+    }
+    if (recurrence.present) {
+      map['recurrence'] = Variable<String>(
+        $LedgerEntriesTable.$converterrecurrencen.toSql(recurrence.value),
+      );
+    }
+    if (nextDueDate.present) {
+      map['next_due_date'] = Variable<DateTime>(nextDueDate.value);
+    }
+    if (recurrenceEndDate.present) {
+      map['recurrence_end_date'] = Variable<DateTime>(recurrenceEndDate.value);
+    }
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
@@ -4698,6 +4923,10 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
           ..write('sourceLabel: $sourceLabel, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
+          ..write('isRecurring: $isRecurring, ')
+          ..write('recurrence: $recurrence, ')
+          ..write('nextDueDate: $nextDueDate, ')
+          ..write('recurrenceEndDate: $recurrenceEndDate, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -8183,6 +8412,10 @@ typedef $$LedgerEntriesTableCreateCompanionBuilder =
       Value<String?> sourceLabel,
       Value<String?> note,
       Value<DateTime> createdAt,
+      Value<bool> isRecurring,
+      Value<Recurrence?> recurrence,
+      Value<DateTime?> nextDueDate,
+      Value<DateTime?> recurrenceEndDate,
       Value<String?> externalId,
     });
 typedef $$LedgerEntriesTableUpdateCompanionBuilder =
@@ -8196,6 +8429,10 @@ typedef $$LedgerEntriesTableUpdateCompanionBuilder =
       Value<String?> sourceLabel,
       Value<String?> note,
       Value<DateTime> createdAt,
+      Value<bool> isRecurring,
+      Value<Recurrence?> recurrence,
+      Value<DateTime?> nextDueDate,
+      Value<DateTime?> recurrenceEndDate,
       Value<String?> externalId,
     });
 
@@ -8284,6 +8521,27 @@ class $$LedgerEntriesTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isRecurring => $composableBuilder(
+    column: $table.isRecurring,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<Recurrence?, Recurrence, String>
+  get recurrence => $composableBuilder(
+    column: $table.recurrence,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextDueDate => $composableBuilder(
+    column: $table.nextDueDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8383,6 +8641,26 @@ class $$LedgerEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isRecurring => $composableBuilder(
+    column: $table.isRecurring,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get recurrence => $composableBuilder(
+    column: $table.recurrence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextDueDate => $composableBuilder(
+    column: $table.nextDueDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get externalId => $composableBuilder(
     column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
@@ -8468,6 +8746,27 @@ class $$LedgerEntriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get isRecurring => $composableBuilder(
+    column: $table.isRecurring,
+    builder: (column) => column,
+  );
+
+  GeneratedColumnWithTypeConverter<Recurrence?, String> get recurrence =>
+      $composableBuilder(
+        column: $table.recurrence,
+        builder: (column) => column,
+      );
+
+  GeneratedColumn<DateTime> get nextDueDate => $composableBuilder(
+    column: $table.nextDueDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get recurrenceEndDate => $composableBuilder(
+    column: $table.recurrenceEndDate,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get externalId => $composableBuilder(
     column: $table.externalId,
@@ -8558,6 +8857,10 @@ class $$LedgerEntriesTableTableManager
                 Value<String?> sourceLabel = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> isRecurring = const Value.absent(),
+                Value<Recurrence?> recurrence = const Value.absent(),
+                Value<DateTime?> nextDueDate = const Value.absent(),
+                Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => LedgerEntriesCompanion(
                 id: id,
@@ -8569,6 +8872,10 @@ class $$LedgerEntriesTableTableManager
                 sourceLabel: sourceLabel,
                 note: note,
                 createdAt: createdAt,
+                isRecurring: isRecurring,
+                recurrence: recurrence,
+                nextDueDate: nextDueDate,
+                recurrenceEndDate: recurrenceEndDate,
                 externalId: externalId,
               ),
           createCompanionCallback:
@@ -8582,6 +8889,10 @@ class $$LedgerEntriesTableTableManager
                 Value<String?> sourceLabel = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
+                Value<bool> isRecurring = const Value.absent(),
+                Value<Recurrence?> recurrence = const Value.absent(),
+                Value<DateTime?> nextDueDate = const Value.absent(),
+                Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => LedgerEntriesCompanion.insert(
                 id: id,
@@ -8593,6 +8904,10 @@ class $$LedgerEntriesTableTableManager
                 sourceLabel: sourceLabel,
                 note: note,
                 createdAt: createdAt,
+                isRecurring: isRecurring,
+                recurrence: recurrence,
+                nextDueDate: nextDueDate,
+                recurrenceEndDate: recurrenceEndDate,
                 externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0

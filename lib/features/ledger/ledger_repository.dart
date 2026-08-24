@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import '../../core/money/money.dart';
+import '../expenses/recurring_schedule.dart';
 import '../reports/report_providers.dart' show DateRange;
+
+/// One recurring income template together with the occurrences currently
+/// waiting on the user — the income-side twin of
+/// `recurring_repository.dart`'s `RecurringSeries`.
+typedef IncomeRecurringSeries = ({LedgerEntryRow template, List<DateTime> pending});
 
 /// Income + transfer CRUD (schema v15, transfers added v16) — see
 /// [LedgerEntries]'s doc comment for why this lives apart from
@@ -15,12 +21,20 @@ class LedgerRepository {
   LedgerRepository(this._db);
   final AppDatabase _db;
 
+  Future<LedgerEntryRow?> byId(int id) => (_db.select(
+    _db.ledgerEntries,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
+
   Future<int> addIncome({
     required Money amount,
     required DateTime date,
     int? accountId,
     String? sourceLabel,
     String? note,
+    bool isRecurring = false,
+    Recurrence? recurrence,
+    DateTime? nextDueDate,
+    DateTime? recurrenceEndDate,
   }) => _db
       .into(_db.ledgerEntries)
       .insert(
@@ -31,6 +45,10 @@ class LedgerRepository {
           accountId: Value(accountId),
           sourceLabel: Value(sourceLabel),
           note: Value(note),
+          isRecurring: Value(isRecurring),
+          recurrence: Value(recurrence),
+          nextDueDate: Value(nextDueDate),
+          recurrenceEndDate: Value(recurrenceEndDate),
         ),
       );
 
@@ -67,6 +85,10 @@ class LedgerRepository {
     int? counterAccountId,
     String? sourceLabel,
     String? note,
+    bool? isRecurring,
+    Value<Recurrence?> recurrence = const Value.absent(),
+    Value<DateTime?> nextDueDate = const Value.absent(),
+    Value<DateTime?> recurrenceEndDate = const Value.absent(),
   }) => (_db.update(_db.ledgerEntries)..where((t) => t.id.equals(id))).write(
     LedgerEntriesCompanion(
       amountMinor: amount == null ? const Value.absent() : Value(amount.minor),
@@ -79,6 +101,12 @@ class LedgerRepository {
           : Value(counterAccountId),
       sourceLabel: sourceLabel == null ? const Value.absent() : Value(sourceLabel),
       note: note == null ? const Value.absent() : Value(note),
+      isRecurring: isRecurring == null
+          ? const Value.absent()
+          : Value(isRecurring),
+      recurrence: recurrence,
+      nextDueDate: nextDueDate,
+      recurrenceEndDate: recurrenceEndDate,
     ),
   );
 
@@ -230,6 +258,103 @@ class LedgerRepository {
           ))
         .watch();
   }
+
+  /// Every income entry flagged recurring, newest first — templates, whether
+  /// or not anything is due. Income-side twin of
+  /// `RecurringRepository.watchTemplates`.
+  Stream<List<LedgerEntryRow>> watchIncomeTemplates() {
+    return (_db.select(_db.ledgerEntries)
+          ..where(
+            (t) =>
+                t.kind.equalsValue(LedgerEntryKind.income) &
+                t.isRecurring.equals(true),
+          )
+          ..orderBy(
+            [(t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc)],
+          ))
+        .watch();
+  }
+
+  /// Templates paired with their pending occurrences, as of [now].
+  Stream<List<IncomeRecurringSeries>> watchIncomeSeries({DateTime? now}) {
+    return watchIncomeTemplates().map((templates) {
+      final at = now ?? DateTime.now();
+      return [
+        for (final template in templates)
+          (
+            template: template,
+            pending: pendingOccurrences(
+              nextDueDate: template.nextDueDate,
+              recurrence: template.recurrence,
+              endDate: template.recurrenceEndDate,
+              anchorDay: template.date.day,
+              now: at,
+            ),
+          ),
+      ];
+    });
+  }
+
+  /// Logs [occurrence] as a new, non-recurring income entry and advances
+  /// [template]'s pointer past it — the income-side twin of
+  /// `RecurringRepository.confirm`, except the logged fields are whatever the
+  /// confirm sheet was left showing (possibly edited from the template),
+  /// never the template's own values blindly copied: unlike an expense
+  /// confirm (one silent tap), an income confirm is always a reviewed save.
+  /// [occurrence] alone drives how the schedule advances, regardless of what
+  /// [date] ends up being — paying a salary two days late doesn't shift every
+  /// future payday.
+  Future<void> confirmIncome(
+    LedgerEntryRow template,
+    DateTime occurrence, {
+    required Money amount,
+    required DateTime date,
+    int? accountId,
+    String? sourceLabel,
+    String? note,
+  }) async {
+    await _db.transaction(() async {
+      await addIncome(
+        amount: amount,
+        date: date,
+        accountId: accountId,
+        sourceLabel: sourceLabel,
+        note: note,
+      );
+      await _advanceIncomePast(template, occurrence);
+    });
+  }
+
+  /// Declines [occurrence] — nothing is logged, the pointer still moves on.
+  Future<void> skipIncome(LedgerEntryRow template, DateTime occurrence) =>
+      _advanceIncomePast(template, occurrence);
+
+  /// Stops the series. The template row stays an ordinary (now non-
+  /// recurring) income entry — the money it represents was really received
+  /// when it was first logged, so cancelling a schedule must not delete
+  /// history.
+  Future<void> cancelIncomeRecurrence(LedgerEntryRow template) => update(
+    template.id,
+    isRecurring: false,
+    nextDueDate: const Value(null),
+  );
+
+  Future<void> _advanceIncomePast(
+    LedgerEntryRow template,
+    DateTime resolved,
+  ) {
+    final next = nextDueAfter(
+      resolved,
+      template.recurrence,
+      endDate: template.recurrenceEndDate,
+      anchorDay: template.date.day,
+    );
+    return update(
+      template.id,
+      isRecurring: next != null,
+      nextDueDate: Value(next),
+    );
+  }
 }
 
 final ledgerRepositoryProvider = Provider<LedgerRepository>(
@@ -274,3 +399,25 @@ final transfersInTotalsByAccountRangeProvider =
           .watch(ledgerRepositoryProvider)
           .watchTransfersInTotalsByAccount(range.$1, range.$2),
     );
+
+/// Live recurring income series with their pending occurrences — feeds the
+/// Recurring screen's Income tab and the Home due card. Income-side twin of
+/// `recurring_repository.dart`'s `recurringSeriesProvider`.
+final incomeRecurringSeriesProvider =
+    StreamProvider<List<IncomeRecurringSeries>>(
+      (ref) => ref.watch(ledgerRepositoryProvider).watchIncomeSeries(),
+    );
+
+/// Just the income series with something waiting, oldest due first — the
+/// income-side twin of `recurring_repository.dart`'s `dueRecurringProvider`.
+final dueIncomeRecurringProvider = Provider<List<IncomeRecurringSeries>>((
+  ref,
+) {
+  final series = ref.watch(incomeRecurringSeriesProvider).value ?? const [];
+  final due = [
+    for (final s in series)
+      if (s.pending.isNotEmpty) s,
+  ];
+  due.sort((a, b) => a.pending.first.compareTo(b.pending.first));
+  return due;
+});
