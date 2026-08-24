@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/theme/app_theme.dart';
+import 'package:spendly/core/theme/tokens.dart';
 
 void main() {
   group('AppTheme.dialogTheme', () {
@@ -44,6 +45,30 @@ void main() {
 
       expect(textButtonStyle!.fontWeight, FontWeight.bold);
       expect(filledButtonStyle!.fontWeight, FontWeight.bold);
+    });
+  });
+
+  group('AppTheme — SnackBar/DatePicker/TimePicker themed in both modes', () {
+    test('light: uses light card surfaces and the brand accent', () {
+      final theme = AppTheme.light();
+      expect(theme.snackBarTheme.backgroundColor, AppColors.lightCard2);
+      expect(theme.snackBarTheme.actionTextColor, AppColors.primary);
+      expect(theme.snackBarTheme.behavior, SnackBarBehavior.floating);
+      expect(theme.datePickerTheme.backgroundColor, AppColors.lightCard);
+      expect(theme.datePickerTheme.headerBackgroundColor, AppColors.lightCard2);
+      expect(theme.timePickerTheme.backgroundColor, AppColors.lightCard);
+      expect(theme.timePickerTheme.dialBackgroundColor, AppColors.lightCard2);
+    });
+
+    test('dark: uses dark card surfaces and the brand accent', () {
+      final theme = AppTheme.dark();
+      expect(theme.snackBarTheme.backgroundColor, AppColors.darkCard2);
+      expect(theme.snackBarTheme.actionTextColor, AppColors.primary);
+      expect(theme.snackBarTheme.behavior, SnackBarBehavior.floating);
+      expect(theme.datePickerTheme.backgroundColor, AppColors.darkCard);
+      expect(theme.datePickerTheme.headerBackgroundColor, AppColors.darkCard2);
+      expect(theme.timePickerTheme.backgroundColor, AppColors.darkCard);
+      expect(theme.timePickerTheme.dialBackgroundColor, AppColors.darkCard2);
     });
   });
 }

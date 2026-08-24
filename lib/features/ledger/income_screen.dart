@@ -9,6 +9,8 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/buttons.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/repeat_picker.dart';
 import '../accounts/account_picker_sheet.dart';
 import '../accounts/account_repository.dart';
@@ -17,13 +19,42 @@ import '../expenses/recurring_schedule.dart';
 import '../expenses/widgets/expense_tile.dart' show relativeDayLabel;
 import 'ledger_repository.dart';
 
-/// Income (schema v15) — every entry, newest first, with this month's total
-/// up top. Reached from Profile, same shape as Accounts/Recurring.
-class IncomeScreen extends ConsumerWidget {
+/// Groups [entries] by calendar month (1-12), preserving each group's
+/// existing relative order. Generic and DB-agnostic so it's unit-testable
+/// without a Drift row — used by [_YearGroupedList] to split the "Year"
+/// toggle's flat list into per-month sections without touching how the
+/// data is fetched.
+Map<int, List<T>> groupByMonth<T>(
+  Iterable<T> entries,
+  DateTime Function(T) dateOf,
+) {
+  final grouped = <int, List<T>>{};
+  for (final e in entries) {
+    grouped.putIfAbsent(dateOf(e).month, () => []).add(e);
+  }
+  return grouped;
+}
+
+/// Income (schema v15) — this month's entries by default, with a toggle to
+/// the full current year grouped by month (2026-08-24 redesign). Reached
+/// from Profile, same shape as Accounts/Recurring.
+///
+/// The month/year split is a pure UI-layer transform over the same
+/// all-time stream [allIncomeProvider] already fetches — no new query.
+/// `_fullYear` is view-only state, same pattern as
+/// `AccountDetailScreen`'s own month/year toggle.
+class IncomeScreen extends ConsumerStatefulWidget {
   const IncomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<IncomeScreen> createState() => _IncomeScreenState();
+}
+
+class _IncomeScreenState extends ConsumerState<IncomeScreen> {
+  bool _fullYear = false;
+
+  @override
+  Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final async = ref.watch(allIncomeProvider);
     final (start, end) = monthBounds(DateTime.now());
@@ -53,48 +84,147 @@ class IncomeScreen extends ConsumerWidget {
               message: 'No income logged yet. Tap + to add your first entry.',
             );
           }
+          final now = DateTime.now();
+          final yearEntries = entries
+              .where((e) => e.date.year == now.year)
+              .toList();
+          final monthEntries = yearEntries
+              .where((e) => e.date.month == now.month)
+              .toList();
+          final yearTotal = yearEntries.fold(
+            Money.zero,
+            (acc, e) => acc + e.amount,
+          );
+
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: AppCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'This month',
-                        style: TextStyle(fontSize: 13, color: palette.textDim),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                ),
+                child: Column(
+                  children: [
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _fullYear ? 'This year' : 'This month',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: palette.textDim,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            (_fullYear
+                                    ? yearTotal
+                                    : (monthTotal.value ?? Money.zero))
+                                .format(locale: 'en_IN'),
+                            style: const TextStyle(
+                              fontFamily: 'Sora',
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        (monthTotal.value ?? Money.zero).format(locale: 'en_IN'),
-                        style: const TextStyle(
-                          fontFamily: 'Sora',
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Month'),
+                          selected: !_fullYear,
+                          onSelected: (_) => setState(() => _fullYear = false),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: AppSpacing.sm),
+                        ChoiceChip(
+                          label: const Text('Year'),
+                          selected: _fullYear,
+                          onSelected: (_) => setState(() => _fullYear = true),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    0,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                  ),
-                  itemCount: entries.length,
-                  itemBuilder: (context, i) => _IncomeTile(entry: entries[i]),
-                ),
+                child: _fullYear
+                    ? _YearGroupedList(entries: yearEntries, year: now.year)
+                    : _MonthList(entries: monthEntries),
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// Current-month flat list — the default view.
+class _MonthList extends StatelessWidget {
+  const _MonthList({required this.entries});
+  final List<LedgerEntryRow> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) {
+      return const EmptyView(
+        icon: Icons.savings_outlined,
+        message: 'No income logged this month yet.',
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
+      itemCount: entries.length,
+      itemBuilder: (context, i) => _IncomeTile(entry: entries[i]),
+    );
+  }
+}
+
+/// Full current-year list, grouped by month (most recent month first) — the
+/// "Year" toggle state. [entries] is already filtered to [year] by the
+/// caller; grouping and sorting is the only work done here, over data
+/// already fetched by [allIncomeProvider].
+class _YearGroupedList extends StatelessWidget {
+  const _YearGroupedList({required this.entries, required this.year});
+  final List<LedgerEntryRow> entries;
+  final int year;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) {
+      return const EmptyView(
+        icon: Icons.savings_outlined,
+        message: 'No income logged this year yet.',
+      );
+    }
+    final grouped = groupByMonth(entries, (e) => e.date);
+    final monthsDesc = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.lg,
+      ),
+      children: [
+        for (final month in monthsDesc) ...[
+          SectionTitle(DateFormat('MMMM').format(DateTime(year, month))),
+          for (final e in grouped[month]!) _IncomeTile(entry: e),
+        ],
+      ],
     );
   }
 }
@@ -215,13 +345,8 @@ Future<int?> showIncomeEditSheet(
   BuildContext context, {
   LedgerEntryRow? existing,
 }) {
-  return showModalBottomSheet<int>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<int>(
+    context,
     builder: (_) => _IncomeEditSheet(existing: existing),
   );
 }
@@ -237,13 +362,8 @@ Future<int?> showIncomeConfirmSheet(
   required LedgerEntryRow template,
   required DateTime occurrence,
 }) {
-  return showModalBottomSheet<int>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<int>(
+    context,
     builder: (_) => _IncomeEditSheet(
       confirmTemplate: template,
       confirmOccurrence: occurrence,
@@ -429,30 +549,10 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
   }
 
   Widget _saveButton() {
-    return Semantics(
-      button: true,
-      label: _saving ? 'Saving' : 'Save income',
-      child: GestureDetector(
-        onTap: _saving ? null : _save,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          decoration: BoxDecoration(
-            gradient: AppColors.brandGradient,
-            borderRadius: BorderRadius.circular(AppRadius.button),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            _saving ? 'Saving…' : 'Save',
-            style: const TextStyle(
-              fontFamily: 'Sora',
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
+    return PrimaryGradientButton(
+      label: _saving ? 'Saving…' : 'Save',
+      semanticLabel: _saving ? 'Saving' : 'Save income',
+      onPressed: _saving ? null : _save,
     );
   }
 

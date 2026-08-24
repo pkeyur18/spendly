@@ -8,6 +8,7 @@ import '../../../core/db/row_extensions.dart';
 import '../../../core/money/money.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/glass.dart';
 import '../expense_repository.dart';
 import '../quick_add_screen.dart';
 import '../receipt_repository.dart';
@@ -245,8 +246,8 @@ class ExpenseTile extends ConsumerWidget {
   /// who can't reliably perform a drag gesture — until now the only way to
   /// delete an expense was [Dismissible].
   void _showActions(BuildContext context, WidgetRef ref, String title) {
-    showModalBottomSheet<void>(
-      context: context,
+    showGlassSheet<void>(
+      context,
       builder: (sheetContext) {
         final palette = Theme.of(sheetContext).extension<AppPalette>()!;
         void close() => Navigator.of(sheetContext).pop();

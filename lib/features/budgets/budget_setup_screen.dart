@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/glass.dart';
 import '../categories/category_repository.dart';
 import '../expenses/expense_repository.dart';
 import '../home/dashboard_providers.dart';
@@ -359,15 +360,8 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     WidgetRef ref,
     List<CategoryRow> budgetable,
   ) async {
-    final chosen = await showModalBottomSheet<CategoryRow>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<CategoryRow>(
+      context,
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

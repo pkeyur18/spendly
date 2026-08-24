@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -143,34 +145,49 @@ class _BottomNav extends StatelessWidget {
       foregroundDecoration: BoxDecoration(
         border: Border(top: BorderSide(color: palette.navBorder, width: 1)),
       ),
-      child: SafeArea(
-        top: false,
-        child: BottomAppBar(
-          color: palette.navBackground,
-          height: 56,
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              item(Icons.home_rounded, 'Home', ShellTab.home),
-              item(Icons.bar_chart_rounded, 'Reports', ShellTab.reports),
-              const SizedBox(width: 40), // notch for the FAB
-              item(Icons.sell_rounded, 'Categories', ShellTab.categories),
-              item(
-                Icons.account_circle_rounded,
-                'Profile',
-                ShellTab.profile,
-                leading: ProfileAvatar(
-                  name: profile?.name ?? '',
-                  photoBytes: profile?.photoBytes,
-                  avatarColorIndex: profile?.avatarColorIndex,
-                  size: 26,
-                  fontSize: 11,
-                ),
+      // Glass nav bar: blurs whatever content has scrolled behind it instead
+      // of sitting on a flat opaque surface. ClipRect is required — an
+      // unclipped BackdropFilter blurs the entire scene behind it, not just
+      // its own bounds (this is what caused the whole-screen blur bug).
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: AppRadius.glassBlurSigma,
+            sigmaY: AppRadius.glassBlurSigma,
+          ),
+          child: SafeArea(
+            top: false,
+            child: BottomAppBar(
+              color: palette.navBackground.withValues(alpha: 0.94),
+              height: 56,
+              shape: const CircularNotchedRectangle(),
+              notchMargin: 8,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 4,
               ),
-            ],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  item(Icons.home_rounded, 'Home', ShellTab.home),
+                  item(Icons.bar_chart_rounded, 'Reports', ShellTab.reports),
+                  const SizedBox(width: 40), // notch for the FAB
+                  item(Icons.sell_rounded, 'Categories', ShellTab.categories),
+                  item(
+                    Icons.account_circle_rounded,
+                    'Profile',
+                    ShellTab.profile,
+                    leading: ProfileAvatar(
+                      name: profile?.name ?? '',
+                      photoBytes: profile?.photoBytes,
+                      avatarColorIndex: profile?.avatarColorIndex,
+                      size: 26,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

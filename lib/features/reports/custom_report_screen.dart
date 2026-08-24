@@ -225,13 +225,8 @@ class _RangeBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Expanded(
-      child: Container(
+      child: AppCard(
         padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: palette.card,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: palette.line),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

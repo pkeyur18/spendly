@@ -93,6 +93,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.navBackground,
     required this.navIconInactive,
     required this.navBorder,
+    required this.glassCard,
+    required this.glassBorder,
   });
 
   final Color card;
@@ -103,6 +105,18 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color navIconInactive;
   final Color navBorder;
 
+  /// Translucent card surface for the glass-treatment redesign — a low-
+  /// opacity tint over the theme's own background, meant to sit under a
+  /// `BackdropFilter` blur (see `AppRadius.glassBlurSigma`). Distinct from
+  /// [card], which stays the flat opaque surface used where glass isn't
+  /// appropriate (e.g. dialogs).
+  final Color glassCard;
+
+  /// Hairline border for a glass card. Needs its own value per theme:
+  /// light needs a dark-tinted hairline (a white one is invisible on a
+  /// light ground), dark needs a light-tinted one.
+  final Color glassBorder;
+
   static const light = AppPalette(
     card: AppColors.lightCard,
     card2: AppColors.lightCard2,
@@ -111,6 +125,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     navBackground: AppColors.navBgLight,
     navIconInactive: AppColors.navIconOffLight,
     navBorder: Color(0x0FFFFFFF),
+    glassCard: Color(0xE6FFFFFF),
+    glassBorder: Color(0x14000000),
   );
 
   static const dark = AppPalette(
@@ -121,6 +137,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     navBackground: AppColors.navBgDark,
     navIconInactive: AppColors.navIconOffDark,
     navBorder: Color(0x14FFFFFF),
+    glassCard: Color(0x1FFFFFFF),
+    glassBorder: Color(0x21FFFFFF),
   );
 
   @override
@@ -132,6 +150,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? navBackground,
     Color? navIconInactive,
     Color? navBorder,
+    Color? glassCard,
+    Color? glassBorder,
   }) {
     return AppPalette(
       card: card ?? this.card,
@@ -141,6 +161,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       navBackground: navBackground ?? this.navBackground,
       navIconInactive: navIconInactive ?? this.navIconInactive,
       navBorder: navBorder ?? this.navBorder,
+      glassCard: glassCard ?? this.glassCard,
+      glassBorder: glassBorder ?? this.glassBorder,
     );
   }
 
@@ -155,6 +177,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       navBackground: Color.lerp(navBackground, other.navBackground, t)!,
       navIconInactive: Color.lerp(navIconInactive, other.navIconInactive, t)!,
       navBorder: Color.lerp(navBorder, other.navBorder, t)!,
+      glassCard: Color.lerp(glassCard, other.glassCard, t)!,
+      glassBorder: Color.lerp(glassBorder, other.glassBorder, t)!,
     );
   }
 }
@@ -173,8 +197,12 @@ class AppSpacing {
 class AppRadius {
   AppRadius._();
   static const chip = 100.0;
-  static const card = 22.0;
+  static const card = 26.0;
   static const hero = 26.0;
-  static const button = 16.0;
+  static const button = 18.0;
   static const icon = 13.0;
+
+  /// `BackdropFilter` blur sigma for glass cards — same in both themes,
+  /// only the tint under it ([AppPalette.glassCard]) differs.
+  static const glassBlurSigma = 20.0;
 }

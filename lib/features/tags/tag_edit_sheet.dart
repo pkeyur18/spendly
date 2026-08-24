@@ -8,6 +8,7 @@ import '../../core/money/fx.dart';
 import '../../core/money/fx_rate_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/glass.dart';
 import 'currency_picker_screen.dart';
 import 'tag_repository.dart';
 
@@ -564,13 +565,8 @@ class _TagEditSheetState extends ConsumerState<TagEditSheet> {
 /// Open the add/edit sheet as a modal bottom sheet. Resolves to the
 /// created/edited tag's id, or null if dismissed without saving.
 Future<int?> showTagEditSheet(BuildContext context, {TagRow? existing}) {
-  return showModalBottomSheet<int?>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<int?>(
+    context,
     builder: (_) => TagEditSheet(existing: existing),
   );
 }

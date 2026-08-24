@@ -7,7 +7,9 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/icon_color_picker.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
 import 'account_detail_screen.dart';
@@ -288,13 +290,8 @@ Future<({int id, bool archived})?> showAccountEditSheet(
   BuildContext context, {
   AccountRow? existing,
 }) {
-  return showModalBottomSheet<({int id, bool archived})>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<({int id, bool archived})>(
+    context,
     builder: (_) => _AccountEditSheet(existing: existing),
   );
 }
@@ -395,6 +392,30 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
     Navigator.of(context).pop((id: id, archived: false));
   }
 
+  /// Switch title with an (i) that reveals [info] on tap, instead of a
+  /// permanent subtitle line — the subtitles were the main cause of this
+  /// sheet overflowing shorter phones.
+  Widget _infoLabel(BuildContext context, String label, String info) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: Text(label)),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: info,
+          triggerMode: TooltipTriggerMode.tap,
+          showDuration: const Duration(seconds: 5),
+          child: Icon(
+            Icons.info_outline_rounded,
+            size: 16,
+            color: palette.textDim,
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _archive(bool archived) async {
     final id = widget.existing!.id;
     await ref.read(accountRepositoryProvider).setArchived(id, archived);
@@ -412,7 +433,8 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
       ),
       child: SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -466,10 +488,11 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
             ],
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('This is money I owe'),
-              subtitle: const Text(
+              title: _infoLabel(
+                context,
+                'This is money I owe',
                 'Loan, credit card debt — opening balance below is stored '
-                'as a negative running balance',
+                    'as a negative running balance',
               ),
               value: _isLiability,
               onChanged: (v) => setState(() => _isLiability = v),
@@ -488,20 +511,19 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Count toward net worth total'),
-              subtitle: const Text(
+              title: _infoLabel(
+                context,
+                'Count toward net worth total',
                 "Include this account in the home screen's balance",
               ),
               value: _includeInNetWorth,
               onChanged: (v) => setState(() => _includeInNetWorth = v),
             ),
             const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving…' : 'Save'),
-              ),
+            PrimaryGradientButton(
+              label: _saving ? 'Saving…' : 'Save',
+              semanticLabel: _isEdit ? 'Save account' : 'Add account',
+              onPressed: _saving ? null : _save,
             ),
             if (_isEdit) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -518,6 +540,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
               ),
             ],
           ],
+          ),
         ),
       ),
     );

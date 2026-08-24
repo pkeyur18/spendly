@@ -80,13 +80,8 @@ class StatGrid extends StatelessWidget {
       childAspectRatio: 2.6,
       children: [
         for (final (label, value) in stats)
-          Container(
+          AppCard(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: palette.card,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: palette.line),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,

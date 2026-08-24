@@ -5,6 +5,7 @@ import '../../features/expenses/widgets/expense_tile.dart'
     show relativeDayLabel;
 import '../db/database.dart';
 import '../theme/tokens.dart';
+import 'glass.dart';
 
 /// The "Repeat" bottom sheet — originally Quick Add's own, extracted so
 /// Income's recurring toggle looks and behaves identically rather than
@@ -21,12 +22,8 @@ Future<void> showRepeatPickerSheet(
   required ValueChanged<Recurrence?> onRecurrenceChanged,
   required ValueChanged<DateTime?> onEndDateChanged,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<void>(
+    context,
     builder: (sheetContext) {
       var sheetRecurrence = recurrence;
       var sheetEndDate = endDate;

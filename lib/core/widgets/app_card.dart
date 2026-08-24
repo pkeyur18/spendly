@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
+import 'glass.dart';
 
-/// Standard content card: card surface, hairline border, soft shadow, 22px
-/// radius — the prototype's `.chart-card` / `.txn` container.
+/// Standard content card: frosted glass surface (blurred translucent tint,
+/// hairline border via [GlassSurface]), 26px radius — the prototype's
+/// `.chart-card` / `.txn` container, redesigned to the glass treatment
+/// (2026-08-24).
 class AppCard extends StatelessWidget {
   const AppCard({
     super.key,
@@ -12,6 +15,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.longPressHint,
+    this.color,
   });
 
   final Widget child;
@@ -24,36 +28,31 @@ class AppCard extends StatelessWidget {
   /// VoiceOver/TalkBack users.
   final String? longPressHint;
 
+  /// Overrides the default glass tint — see [GlassSurface.color].
+  final Color? color;
+
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AppPalette>()!;
-    final card = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: palette.card,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: palette.line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: child,
-    );
-    if (onTap == null && onLongPress == null) return card;
-    return Semantics(
-      button: true,
-      onLongPressHint: longPressHint,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: card,
-      ),
-    );
+    final radius = BorderRadius.circular(AppRadius.card);
+    final paddedChild = Padding(padding: padding, child: child);
+
+    // InkWell must sit inside GlassSurface's clip (not wrap it) so the
+    // ripple stays within the rounded glass shape instead of spilling past
+    // it.
+    final interactive = (onTap == null && onLongPress == null)
+        ? paddedChild
+        : Semantics(
+            button: true,
+            onLongPressHint: longPressHint,
+            child: InkWell(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              borderRadius: radius,
+              child: paddedChild,
+            ),
+          );
+
+    return GlassSurface(borderRadius: radius, color: color, child: interactive);
   }
 }
 

@@ -347,13 +347,8 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Expanded(
-      child: Container(
+      child: AppCard(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: palette.card,
-          border: Border.all(color: palette.line),
-          borderRadius: BorderRadius.circular(16),
-        ),
         child: Column(
           children: [
             Text(
@@ -386,13 +381,8 @@ class _MenuGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.card,
-        border: Border.all(color: palette.line),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return AppCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           for (var i = 0; i < children.length; i++) ...[

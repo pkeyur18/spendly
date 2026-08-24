@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/db/database.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/glass.dart';
 
 /// Sentinel distinguishing an explicit "No account" pick from a dismissed
 /// sheet, when [showAccountPickerSheet] is called with `allowNone: true`.
@@ -20,13 +21,8 @@ Future<int?> showAccountPickerSheet(
   String title = 'Account',
 }) {
   final options = accounts.where((a) => !exclude.contains(a.id)).toList();
-  return showModalBottomSheet<int>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<int>(
+    context,
     builder: (sheetContext) => SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(

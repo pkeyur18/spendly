@@ -18,6 +18,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/repeat_picker.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
@@ -313,9 +314,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                               alignment: WrapAlignment.center,
                               children: [
                                 _dateChip(context, palette),
-                                _tripChip(context, palette),
                                 _accountChip(context, palette),
-                                _repeatChip(context, palette),
                                 _receiptChip(context, palette),
                               ],
                             ),
@@ -454,12 +453,89 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            _isEdit ? 'Edit expense' : 'New expense',
-            style: Theme.of(context).textTheme.titleLarge,
+          Expanded(
+            child: Text(
+              _isEdit ? 'Edit expense' : 'New expense',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
           ),
+          _tripButton(context, palette),
+          _repeatButton(context, palette),
         ],
       ),
+    );
+  }
+
+  /// Small bordered icon button matching the title bar's Close button —
+  /// shared by the trip and repeat title-bar actions.
+  Widget _titleBarIconButton({
+    required IconData icon,
+    required String semanticsLabel,
+    required VoidCallback onTap,
+    required AppPalette palette,
+    bool active = false,
+    Color? activeColor,
+  }) {
+    final tint = activeColor ?? AppColors.primary;
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active ? tint.withValues(alpha: 0.15) : palette.card,
+                border: Border.all(color: active ? tint : palette.line),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 16, color: active ? tint : null),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Trip picker, moved off the main chip row into the title bar — used
+  /// rarely enough that it doesn't need equal billing with date/account.
+  Widget _tripButton(BuildContext context, AppPalette palette) {
+    final tags = ref.watch(activeTagsProvider).value ?? const <TagRow>[];
+    final selected = tags
+        .where((t) => t.id == _tagId)
+        .cast<TagRow?>()
+        .firstOrNull;
+    return _titleBarIconButton(
+      icon: Icons.card_travel_outlined,
+      semanticsLabel: selected == null ? 'Add trip' : 'Trip, ${selected.name}',
+      onTap: () => _openTagPicker(tags),
+      palette: palette,
+      active: selected != null,
+      activeColor: selected == null ? null : Color(selected.colorValue),
+    );
+  }
+
+  /// Repeat picker, moved off the main chip row into the title bar — same
+  /// reasoning as [_tripButton]: set-and-forget, not a per-entry decision.
+  Widget _repeatButton(BuildContext context, AppPalette palette) {
+    final label = _recurrence == null
+        ? 'Repeat, off'
+        : 'Repeats ${recurrenceLabel(_recurrence!)}${_recurrenceEndDate == null
+              ? ''
+              : ', until ${relativeDayLabel(_recurrenceEndDate!)}'}';
+    return _titleBarIconButton(
+      icon: Icons.repeat_rounded,
+      semanticsLabel: label,
+      onTap: _openRepeatSheet,
+      palette: palette,
+      active: _recurrence != null,
     );
   }
 
@@ -636,25 +712,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
-  /// Trip/tag chip: shows the selected tag or "Add trip", tap opens a picker
-  /// of active tags. Orthogonal to category — see [Expenses.tagId].
-  Widget _tripChip(BuildContext context, AppPalette palette) {
-    final tags = ref.watch(activeTagsProvider).value ?? const <TagRow>[];
-    final selected = tags
-        .where((t) => t.id == _tagId)
-        .cast<TagRow?>()
-        .firstOrNull;
-    return _metaChip(
-      icon: Icons.card_travel_outlined,
-      label: selected?.name ?? 'Add trip',
-      semanticsLabel: selected == null ? 'Add trip' : 'Trip, ${selected.name}',
-      onTap: () => _openTagPicker(tags),
-      palette: palette,
-      emphasized: selected != null,
-      emphasisColor: selected == null ? null : Color(selected.colorValue),
-    );
-  }
-
   /// Account chip: shows the selected account or "Add account", tap opens a
   /// picker of active accounts. Orthogonal to category and trip — see
   /// [Expenses.accountId].
@@ -682,15 +739,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   static const _noAccountChoice = -1;
 
   Future<void> _openAccountPicker(List<AccountRow> accounts) async {
-    final chosen = await showModalBottomSheet<int?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<int?>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -781,25 +831,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     });
   }
 
-  /// Repeat chip: shows the schedule or "Repeat", tap opens the picker.
-  Widget _repeatChip(BuildContext context, AppPalette palette) {
-    final label = _recurrence == null
-        ? 'Repeat'
-        : recurrenceLabel(_recurrence!);
-    return _metaChip(
-      icon: Icons.repeat_rounded,
-      label: label,
-      semanticsLabel: _recurrence == null
-          ? 'Repeat, off'
-          : 'Repeats $label${_recurrenceEndDate == null ? '' : ', until '
-              '\${relativeDayLabel(_recurrenceEndDate!)}'}',
-      onTap: _openRepeatSheet,
-      palette: palette,
-      emphasized: _recurrence != null,
-      emphasisColor: _recurrence == null ? null : AppColors.primary,
-    );
-  }
-
   Future<void> _openRepeatSheet() => showRepeatPickerSheet(
     context,
     recurrence: _recurrence,
@@ -844,8 +875,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _pickReceiptPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
+    final source = await showGlassSheet<ImageSource>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -889,14 +920,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _showReceiptPreview() async {
-    final action = await showModalBottomSheet<_ReceiptAction>(
-      context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final action = await showGlassSheet<_ReceiptAction>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -947,15 +972,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _openTagPicker(List<TagRow> tags) async {
-    final chosen = await showModalBottomSheet<int?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<int?>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -1184,15 +1202,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   Future<void> _openCategoryPicker(List<CategoryRow> categories) async {
-    final chosen = await showModalBottomSheet<CategoryRow>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
+    final chosen = await showGlassSheet<CategoryRow>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(

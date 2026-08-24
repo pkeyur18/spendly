@@ -32,6 +32,7 @@ class AppTheme {
     final isDark = brightness == Brightness.dark;
     final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
     final card = isDark ? AppColors.darkCard : AppColors.lightCard;
+    final card2 = isDark ? AppColors.darkCard2 : AppColors.lightCard2;
     final text = isDark ? AppColors.darkText : AppColors.lightText;
     final palette = isDark ? AppPalette.dark : AppPalette.light;
 
@@ -82,6 +83,46 @@ class AppTheme {
           fontWeight: FontWeight.w400,
           color: isDark ? text : Colors.black,
         ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: card2,
+        contentTextStyle: TextStyle(fontFamily: _body, color: text),
+        actionTextColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.button),
+        ),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: card,
+        headerBackgroundColor: card2,
+        headerForegroundColor: text,
+        weekdayStyle: TextStyle(fontFamily: _body, color: palette.textDim),
+        dayForegroundColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? Colors.white : text,
+        ),
+        dayBackgroundColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? AppColors.primary : null,
+        ),
+        todayForegroundColor: const WidgetStatePropertyAll(AppColors.primary),
+        todayBorder: const BorderSide(color: AppColors.primary),
+        surfaceTintColor: Colors.transparent,
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: card,
+        hourMinuteColor: WidgetStateColor.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? AppColors.primary : card2,
+        ),
+        hourMinuteTextColor: WidgetStateColor.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? Colors.white : text,
+        ),
+        dialHandColor: AppColors.primary,
+        dialBackgroundColor: card2,
+        entryModeIconColor: text,
       ),
     );
   }

@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/glass.dart';
 import '../backup/backup_restore_screen.dart' show PrimaryButton;
 import 'avatar.dart';
 import 'profile_provider.dart';
@@ -36,8 +37,8 @@ class _AvatarPickerScreenState extends ConsumerState<AvatarPickerScreen> {
   }
 
   Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
+    final source = await showGlassSheet<ImageSource>(
+      context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
