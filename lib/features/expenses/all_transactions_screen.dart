@@ -8,6 +8,7 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/glass.dart';
 import '../home/dashboard_providers.dart';
 import 'expense_repository.dart';
 import 'widgets/expense_tile.dart';
@@ -214,13 +215,8 @@ class _AllTransactionsScreenState extends ConsumerState<AllTransactionsScreen> {
   }
 
   Future<void> _openCategoryFilterSheet(List<CategoryRow> categories) async {
-    final result = await showModalBottomSheet<Set<int>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
+    final result = await showGlassSheet<Set<int>>(
+      context,
       builder: (_) => _CategoryFilterSheet(
         categories: categories,
         initialSelected: _selectedCategoryIds,

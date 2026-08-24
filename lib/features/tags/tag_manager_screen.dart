@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import 'tag_edit_sheet.dart';
 import 'tag_repository.dart';
@@ -73,53 +74,45 @@ class TagListTile extends StatelessWidget {
       child: Semantics(
         button: true,
         label: '${tag.name}, ${tag.isArchived ? 'Archived' : 'Active'}',
-        child: InkWell(
+        child: AppCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
           onTap: () => showTagEditSheet(context, existing: tag),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: palette.card,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: palette.line),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppRadius.icon),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.card_travel_outlined,
-                    size: 18,
-                    color: color,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.icon),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tag.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        tag.isArchived ? 'Archived' : 'Active',
-                        style: TextStyle(fontSize: 12, color: palette.textDim),
-                      ),
-                    ],
-                  ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.card_travel_outlined,
+                  size: 18,
+                  color: color,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tag.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      tag.isArchived ? 'Archived' : 'Active',
+                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

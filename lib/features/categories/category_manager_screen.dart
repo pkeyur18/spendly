@@ -6,6 +6,7 @@ import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
 import '../budgets/budget_repository.dart';
@@ -155,54 +156,46 @@ class CategoryListTile extends StatelessWidget {
           const CustomSemanticsAction(label: 'Move up'): ?onMoveUp,
           const CustomSemanticsAction(label: 'Move down'): ?onMoveDown,
         },
-        child: InkWell(
+        child: AppCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
           onTap: () => showCategoryEditSheet(context, existing: category),
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: palette.card,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: palette.line),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: category.color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(AppRadius.icon),
-                  ),
-                  alignment: Alignment.center,
-                  child: CategoryGlyph(category.icon, size: 17),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: category.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.icon),
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        category.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                alignment: Alignment.center,
+                child: CategoryGlyph(category.icon, size: 17),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(fontSize: 12, color: palette.textDim),
-                      ),
-                    ],
-                  ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                    ),
+                  ],
                 ),
-                if (reorderIndex != null)
-                  ReorderableDragStartListener(
-                    index: reorderIndex!,
-                    child: Icon(Icons.drag_handle, color: palette.textDim),
-                  ),
-              ],
-            ),
+              ),
+              if (reorderIndex != null)
+                ReorderableDragStartListener(
+                  index: reorderIndex!,
+                  child: Icon(Icons.drag_handle, color: palette.textDim),
+                ),
+            ],
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/glass.dart';
 import '../../core/widgets/icon_color_picker.dart';
 import 'category_repository.dart';
 
@@ -337,13 +338,8 @@ Future<void> showCategoryEditSheet(
   BuildContext context, {
   CategoryRow? existing,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<void>(
+    context,
     builder: (_) => CategoryEditSheet(existing: existing),
   );
 }
