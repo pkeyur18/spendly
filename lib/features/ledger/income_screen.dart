@@ -303,20 +303,148 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
     Navigator.of(context).pop(id);
   }
 
-  Future<void> _delete() async {
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this entry?'),
+        content: const Text(
+          "This can't be undone from here — you'd need to re-enter it.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     await ref.read(ledgerRepositoryProvider).delete(widget.existing!.id);
     if (!mounted) return;
     Navigator.of(context).pop();
   }
 
+  Future<void> _openAccountPicker(List<AccountRow> accounts) async {
+    final chosen = await showModalBottomSheet<int?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+      ),
+      // Same list shape as Quick Add's account picker — one proven pattern
+      // for "pick an account", not a second one invented for this sheet.
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.6,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: Text('Account'),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: accounts.length + 1,
+                  itemBuilder: (context, i) {
+                    if (i == 0) {
+                      return ListTile(
+                        leading: const Icon(Icons.close, size: 20),
+                        title: const Text('No account'),
+                        trailing: _accountId == null
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: AppColors.primary,
+                                size: 18,
+                              )
+                            : null,
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop<int?>(_noAccountChoice),
+                      );
+                    }
+                    final a = accounts[i - 1];
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                        size: 20,
+                      ),
+                      title: Text(a.name),
+                      trailing: a.id == _accountId
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: AppColors.primary,
+                              size: 18,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop<int?>(a.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() => _accountId = chosen == _noAccountChoice ? null : chosen);
+  }
+
+  /// Sentinel distinguishing an explicit "No account" pick from a dismissed
+  /// sheet — same pattern as Quick Add's account picker.
+  static const _noAccountChoice = -1;
+
+  Widget _saveButton() {
+    return Semantics(
+      button: true,
+      label: _saving ? 'Saving' : 'Save income',
+      child: GestureDetector(
+        onTap: _saving ? null : _save,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          decoration: BoxDecoration(
+            gradient: AppColors.brandGradient,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _saving ? 'Saving…' : 'Save',
+            style: const TextStyle(
+              fontFamily: 'Sora',
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     final accounts =
         ref.watch(activeAccountsProvider).value ?? const <AccountRow>[];
+    final selectedAccount = accounts
+        .where((a) => a.id == _accountId)
+        .cast<AccountRow?>()
+        .firstOrNull;
     return Padding(
       padding: EdgeInsets.only(
-        left: AppSpacing.lg,
-        right: AppSpacing.lg,
+        left: AppSpacing.xl,
+        right: AppSpacing.xl,
         top: AppSpacing.lg,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
       ),
@@ -328,31 +456,71 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
             children: [
               Text(
                 _isEdit ? 'Edit income' : 'Add income',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.lg),
+              // Amount leads and stands apart from the fields below it — the
+              // one figure this whole sheet exists to capture. Sora, like
+              // every monetary figure elsewhere in the app.
               TextField(
                 controller: _amount,
                 autofocus: !_isEdit,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                style: const TextStyle(
+                  fontFamily: 'Sora',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'Amount',
                   prefixText: '₹ ',
+                  prefixStyle: TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              InkWell(
-                onTap: _pickDate,
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Date',
-                    border: OutlineInputBorder(),
+              const SizedBox(height: AppSpacing.lg),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _pickDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Date',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(DateFormat('MMM d, yyyy').format(_date)),
+                      ),
+                    ),
                   ),
-                  child: Text(DateFormat('MMM d, yyyy').format(_date)),
-                ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _openAccountPicker(accounts),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Account',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          selectedAccount?.name ?? 'None',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                'Details',
+                style: TextStyle(color: palette.textDim, fontSize: 13),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _sourceLabel,
                 decoration: const InputDecoration(
@@ -362,24 +530,6 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: [
-                  ChoiceChip(
-                    label: const Text('No account'),
-                    selected: _accountId == null,
-                    onSelected: (_) => setState(() => _accountId = null),
-                  ),
-                  for (final a in accounts)
-                    ChoiceChip(
-                      label: Text(a.name),
-                      selected: _accountId == a.id,
-                      onSelected: (_) => setState(() => _accountId = a.id),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: _note,
                 decoration: const InputDecoration(
@@ -387,21 +537,18 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: Text(_saving ? 'Saving…' : 'Save'),
-                ),
-              ),
+              const SizedBox(height: AppSpacing.xl),
+              _saveButton(),
               if (_isEdit) ...[
                 const SizedBox(height: AppSpacing.sm),
                 SizedBox(
                   width: double.infinity,
                   child: TextButton(
-                    onPressed: _delete,
-                    child: const Text('Delete'),
+                    onPressed: _confirmDelete,
+                    child: const Text(
+                      'Delete entry',
+                      style: TextStyle(color: AppColors.red),
+                    ),
                   ),
                 ),
               ],
