@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../money/money.dart';
 import '../theme/tokens.dart';
+import 'glass.dart';
 
 /// Apply a keypad key to the current amount string. Pure so it's unit-testable.
 /// Keys: '0'-'9', '.', 'del'. Blocks a 3rd decimal (money is 2 places).
@@ -128,13 +129,8 @@ Future<Money?> showAmountSheet(
   Money? initial,
   String title = 'Set amount',
 }) {
-  return showModalBottomSheet<Money>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-    ),
+  return showGlassSheet<Money>(
+    context,
     builder: (_) => _AmountSheet(initial: initial, title: title),
   );
 }

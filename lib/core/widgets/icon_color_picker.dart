@@ -4,6 +4,7 @@ import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'category_glyph.dart';
+import 'glass.dart';
 
 const _stripPreviewCount = 6;
 
@@ -307,13 +308,8 @@ class IconColorPicker extends StatelessWidget {
   }
 
   Future<void> _openIconPicker(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
+    await showGlassSheet<void>(
+      context,
       builder: (popupContext) => Padding(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.xl,
@@ -343,13 +339,8 @@ class IconColorPicker extends StatelessWidget {
   }
 
   Future<void> _openColorPicker(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
+    await showGlassSheet<void>(
+      context,
       builder: (popupContext) => Padding(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.xl,
