@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
+import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 
 /// Account CRUD (schema v12). Never hard-deleted — archived only, matching
@@ -58,6 +59,9 @@ class AccountRepository {
             name: name,
             type: type,
             openingBalanceMinor: Value(openingBalance.minor),
+            openingBalanceMonth: openingBalance.minor == 0
+                ? const Value.absent()
+                : Value(yearMonthStamp(DateTime.now())),
             isDefault: Value(isFirst),
           ),
         );
@@ -89,6 +93,12 @@ class AccountRepository {
         openingBalanceMinor: openingBalance == null
             ? const Value.absent()
             : Value(openingBalance.minor),
+        // Re-stamped every time the balance is (re)saved, even to the same
+        // figure — a save is exactly the "I've re-entered it this month"
+        // signal effectiveOpeningBalance keys off of.
+        openingBalanceMonth: openingBalance == null
+            ? const Value.absent()
+            : Value(yearMonthStamp(DateTime.now())),
       ),
     );
   }

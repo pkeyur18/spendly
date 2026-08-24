@@ -626,6 +626,17 @@ class $AccountsTable extends Accounts
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _openingBalanceMonthMeta =
+      const VerificationMeta('openingBalanceMonth');
+  @override
+  late final GeneratedColumn<String> openingBalanceMonth =
+      GeneratedColumn<String>(
+        'opening_balance_month',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _isArchivedMeta = const VerificationMeta(
     'isArchived',
   );
@@ -674,6 +685,7 @@ class $AccountsTable extends Accounts
     name,
     type,
     openingBalanceMinor,
+    openingBalanceMonth,
     isArchived,
     isDefault,
     externalId,
@@ -707,6 +719,15 @@ class $AccountsTable extends Accounts
         openingBalanceMinor.isAcceptableOrUnknown(
           data['opening_balance_minor']!,
           _openingBalanceMinorMeta,
+        ),
+      );
+    }
+    if (data.containsKey('opening_balance_month')) {
+      context.handle(
+        _openingBalanceMonthMeta,
+        openingBalanceMonth.isAcceptableOrUnknown(
+          data['opening_balance_month']!,
+          _openingBalanceMonthMeta,
         ),
       );
     }
@@ -755,6 +776,10 @@ class $AccountsTable extends Accounts
         DriftSqlType.int,
         data['${effectivePrefix}opening_balance_minor'],
       )!,
+      openingBalanceMonth: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}opening_balance_month'],
+      ),
       isArchived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -789,6 +814,15 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// this stays the one fixed point every later balance calculation starts
   /// from.
   final int openingBalanceMinor;
+
+  /// 'YYYY-MM' stamp of the month [openingBalanceMinor] was last set
+  /// (schema v14). Null on accounts created before this column existed.
+  /// Opening balance is a monthly concept — read it through
+  /// `AccountRow.effectiveOpeningBalanceMinor`, never this raw column
+  /// directly: a stamp from an earlier month means the balance has rolled
+  /// over to zero for display purposes even though the row itself is left
+  /// untouched (no background job zeroes it out on the 1st).
+  final String? openingBalanceMonth;
   final bool isArchived;
 
   /// At most one account is default at a time (enforced in
@@ -805,6 +839,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     required this.name,
     required this.type,
     required this.openingBalanceMinor,
+    this.openingBalanceMonth,
     required this.isArchived,
     required this.isDefault,
     this.externalId,
@@ -818,6 +853,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       map['type'] = Variable<String>($AccountsTable.$convertertype.toSql(type));
     }
     map['opening_balance_minor'] = Variable<int>(openingBalanceMinor);
+    if (!nullToAbsent || openingBalanceMonth != null) {
+      map['opening_balance_month'] = Variable<String>(openingBalanceMonth);
+    }
     map['is_archived'] = Variable<bool>(isArchived);
     map['is_default'] = Variable<bool>(isDefault);
     if (!nullToAbsent || externalId != null) {
@@ -832,6 +870,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       name: Value(name),
       type: Value(type),
       openingBalanceMinor: Value(openingBalanceMinor),
+      openingBalanceMonth: openingBalanceMonth == null && nullToAbsent
+          ? const Value.absent()
+          : Value(openingBalanceMonth),
       isArchived: Value(isArchived),
       isDefault: Value(isDefault),
       externalId: externalId == null && nullToAbsent
@@ -854,6 +895,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       openingBalanceMinor: serializer.fromJson<int>(
         json['openingBalanceMinor'],
       ),
+      openingBalanceMonth: serializer.fromJson<String?>(
+        json['openingBalanceMonth'],
+      ),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       externalId: serializer.fromJson<String?>(json['externalId']),
@@ -869,6 +913,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
         $AccountsTable.$convertertype.toJson(type),
       ),
       'openingBalanceMinor': serializer.toJson<int>(openingBalanceMinor),
+      'openingBalanceMonth': serializer.toJson<String?>(openingBalanceMonth),
       'isArchived': serializer.toJson<bool>(isArchived),
       'isDefault': serializer.toJson<bool>(isDefault),
       'externalId': serializer.toJson<String?>(externalId),
@@ -880,6 +925,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     String? name,
     AccountType? type,
     int? openingBalanceMinor,
+    Value<String?> openingBalanceMonth = const Value.absent(),
     bool? isArchived,
     bool? isDefault,
     Value<String?> externalId = const Value.absent(),
@@ -888,6 +934,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     name: name ?? this.name,
     type: type ?? this.type,
     openingBalanceMinor: openingBalanceMinor ?? this.openingBalanceMinor,
+    openingBalanceMonth: openingBalanceMonth.present
+        ? openingBalanceMonth.value
+        : this.openingBalanceMonth,
     isArchived: isArchived ?? this.isArchived,
     isDefault: isDefault ?? this.isDefault,
     externalId: externalId.present ? externalId.value : this.externalId,
@@ -900,6 +949,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       openingBalanceMinor: data.openingBalanceMinor.present
           ? data.openingBalanceMinor.value
           : this.openingBalanceMinor,
+      openingBalanceMonth: data.openingBalanceMonth.present
+          ? data.openingBalanceMonth.value
+          : this.openingBalanceMonth,
       isArchived: data.isArchived.present
           ? data.isArchived.value
           : this.isArchived,
@@ -917,6 +969,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('name: $name, ')
           ..write('type: $type, ')
           ..write('openingBalanceMinor: $openingBalanceMinor, ')
+          ..write('openingBalanceMonth: $openingBalanceMonth, ')
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
           ..write('externalId: $externalId')
@@ -930,6 +983,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     name,
     type,
     openingBalanceMinor,
+    openingBalanceMonth,
     isArchived,
     isDefault,
     externalId,
@@ -942,6 +996,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.name == this.name &&
           other.type == this.type &&
           other.openingBalanceMinor == this.openingBalanceMinor &&
+          other.openingBalanceMonth == this.openingBalanceMonth &&
           other.isArchived == this.isArchived &&
           other.isDefault == this.isDefault &&
           other.externalId == this.externalId);
@@ -952,6 +1007,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<String> name;
   final Value<AccountType> type;
   final Value<int> openingBalanceMinor;
+  final Value<String?> openingBalanceMonth;
   final Value<bool> isArchived;
   final Value<bool> isDefault;
   final Value<String?> externalId;
@@ -960,6 +1016,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.name = const Value.absent(),
     this.type = const Value.absent(),
     this.openingBalanceMinor = const Value.absent(),
+    this.openingBalanceMonth = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.externalId = const Value.absent(),
@@ -969,6 +1026,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     required String name,
     required AccountType type,
     this.openingBalanceMinor = const Value.absent(),
+    this.openingBalanceMonth = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.externalId = const Value.absent(),
@@ -979,6 +1037,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<String>? name,
     Expression<String>? type,
     Expression<int>? openingBalanceMinor,
+    Expression<String>? openingBalanceMonth,
     Expression<bool>? isArchived,
     Expression<bool>? isDefault,
     Expression<String>? externalId,
@@ -989,6 +1048,8 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       if (type != null) 'type': type,
       if (openingBalanceMinor != null)
         'opening_balance_minor': openingBalanceMinor,
+      if (openingBalanceMonth != null)
+        'opening_balance_month': openingBalanceMonth,
       if (isArchived != null) 'is_archived': isArchived,
       if (isDefault != null) 'is_default': isDefault,
       if (externalId != null) 'external_id': externalId,
@@ -1000,6 +1061,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<String>? name,
     Value<AccountType>? type,
     Value<int>? openingBalanceMinor,
+    Value<String?>? openingBalanceMonth,
     Value<bool>? isArchived,
     Value<bool>? isDefault,
     Value<String?>? externalId,
@@ -1009,6 +1071,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       name: name ?? this.name,
       type: type ?? this.type,
       openingBalanceMinor: openingBalanceMinor ?? this.openingBalanceMinor,
+      openingBalanceMonth: openingBalanceMonth ?? this.openingBalanceMonth,
       isArchived: isArchived ?? this.isArchived,
       isDefault: isDefault ?? this.isDefault,
       externalId: externalId ?? this.externalId,
@@ -1032,6 +1095,11 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     if (openingBalanceMinor.present) {
       map['opening_balance_minor'] = Variable<int>(openingBalanceMinor.value);
     }
+    if (openingBalanceMonth.present) {
+      map['opening_balance_month'] = Variable<String>(
+        openingBalanceMonth.value,
+      );
+    }
     if (isArchived.present) {
       map['is_archived'] = Variable<bool>(isArchived.value);
     }
@@ -1051,6 +1119,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('name: $name, ')
           ..write('type: $type, ')
           ..write('openingBalanceMinor: $openingBalanceMinor, ')
+          ..write('openingBalanceMonth: $openingBalanceMonth, ')
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
           ..write('externalId: $externalId')
@@ -4214,6 +4283,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required String name,
       required AccountType type,
       Value<int> openingBalanceMinor,
+      Value<String?> openingBalanceMonth,
       Value<bool> isArchived,
       Value<bool> isDefault,
       Value<String?> externalId,
@@ -4224,6 +4294,7 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<AccountType> type,
       Value<int> openingBalanceMinor,
+      Value<String?> openingBalanceMonth,
       Value<bool> isArchived,
       Value<bool> isDefault,
       Value<String?> externalId,
@@ -4279,6 +4350,11 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<int> get openingBalanceMinor => $composableBuilder(
     column: $table.openingBalanceMinor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get openingBalanceMonth => $composableBuilder(
+    column: $table.openingBalanceMonth,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4352,6 +4428,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get openingBalanceMonth => $composableBuilder(
+    column: $table.openingBalanceMonth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isArchived => $composableBuilder(
     column: $table.isArchived,
     builder: (column) => ColumnOrderings(column),
@@ -4388,6 +4469,11 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<int> get openingBalanceMinor => $composableBuilder(
     column: $table.openingBalanceMinor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get openingBalanceMonth => $composableBuilder(
+    column: $table.openingBalanceMonth,
     builder: (column) => column,
   );
 
@@ -4462,6 +4548,7 @@ class $$AccountsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<AccountType> type = const Value.absent(),
                 Value<int> openingBalanceMinor = const Value.absent(),
+                Value<String?> openingBalanceMonth = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
@@ -4470,6 +4557,7 @@ class $$AccountsTableTableManager
                 name: name,
                 type: type,
                 openingBalanceMinor: openingBalanceMinor,
+                openingBalanceMonth: openingBalanceMonth,
                 isArchived: isArchived,
                 isDefault: isDefault,
                 externalId: externalId,
@@ -4480,6 +4568,7 @@ class $$AccountsTableTableManager
                 required String name,
                 required AccountType type,
                 Value<int> openingBalanceMinor = const Value.absent(),
+                Value<String?> openingBalanceMonth = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
@@ -4488,6 +4577,7 @@ class $$AccountsTableTableManager
                 name: name,
                 type: type,
                 openingBalanceMinor: openingBalanceMinor,
+                openingBalanceMonth: openingBalanceMonth,
                 isArchived: isArchived,
                 isDefault: isDefault,
                 externalId: externalId,

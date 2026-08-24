@@ -939,3 +939,40 @@ test — a real quirk of the library, not of `buildXlsx`.
   bare one and asserting every new column is populated on the rich row and blank on
   the bare one.
 - Not run on a device/simulator — same standing gap as every prior phase.
+
+## Accounts follow-up: grouping, month-first detail, monthly opening-balance reset — done
+
+Three requests on top of the Phase 4 accounts feature.
+
+- [x] **Grouped by type** — `AccountsScreen`'s active list is now sectioned by
+      `AccountType` (Cash, Bank, Card, Wallet — enum order), a `SectionTitle` per
+      non-empty group, same pattern already used for the trailing Archived section.
+- [x] **Detail screen defaults to the current month** — `AccountDetailScreen` no longer
+      shows an all-time total/list by default; it shows this month (`monthBounds`,
+      same helper the manage screen already uses), with a `TextButton` in the app bar
+      ("Full year" / "This month") toggling to calendar-year-to-date
+      (`yearToDateBounds`, new helper next to `monthBounds` in
+      `expense_repository.dart`) and back. Both the header total and the paginated
+      transaction list re-key off the selected range; switching resets pagination.
+- [x] **Opening balance resets monthly, computed not destructive** — schema v14 adds a
+      nullable `openingBalanceMonth` ('YYYY-MM') column to `Accounts`. `create()`/
+      `update()` stamp it with the current month whenever a non-zero balance is set;
+      `AccountRow.effectiveOpeningBalance(now)` (new `row_extensions.dart` extension)
+      reads the stored minor value only when the stamp matches the current month,
+      otherwise zero. Nothing wipes the DB row on the 1st — a stale stamp just stops
+      being surfaced, so restoring an old backup or opening the app after a long gap
+      can't lose data through a background job that never ran. The edit sheet prefills
+      with this *effective* value (not the raw stored one), so re-saving always
+      reflects what's currently live. `BackupAccount` carries the field additively (no
+      backup version bump), restored verbatim by both Merge (safe — no "at most one"
+      invariant like `isDefault`'s) and Replace.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **409 passed** (was 404 before this). New coverage: 5 repository
+  tests for the monthly-reset behavior (create/update stamping, a stale-month stamp
+  reading as zero while the raw column stays untouched, a zero-balance create leaving
+  no stamp at all) plus an extended v1→v14 migration assertion confirming an account
+  migrated from a pre-v12 `payment_method` string (never had an opening balance
+  entered) gets no stamp, same as a fresh zero-balance `create()`.
+- Not run on a device/simulator — same standing gap as every prior phase.

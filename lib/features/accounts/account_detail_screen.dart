@@ -14,20 +14,6 @@ import '../home/dashboard_providers.dart' show categoriesByIdProvider;
 import 'account_repository.dart';
 import 'accounts_screen.dart' show showAccountEditSheet;
 
-/// All-time bounds for "every expense ever paid from this account", day-
-/// truncated rather than a raw `DateTime.now()`. A fresh `DateTime.now()`
-/// evaluated inside a provider key caused a real bug once already (search
-/// got permanently stuck reloading — see `transactionsQueryKey`'s doc
-/// comment): a `StreamProvider.family` key compared by value gets a new,
-/// never-before-seen key on nearly every rebuild if it carries a
-/// microsecond-precision timestamp, so Riverpod never lets the query survive
-/// long enough to emit. Day precision is stable for a whole session and
-/// loses nothing — no expense can be dated in the future.
-(DateTime, DateTime) _allTimeRange(DateTime now) => (
-  DateTime(2000),
-  DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
-);
-
 const _pageSize = 100;
 
 /// Every expense paid from one account, all-time, with a running lifetime
@@ -45,6 +31,7 @@ class AccountDetailScreen extends ConsumerStatefulWidget {
 
 class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
   int _limit = _pageSize;
+  bool _fullYear = false;
   final _scrollController = ScrollController();
 
   @override
@@ -59,12 +46,17 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
     super.dispose();
   }
 
+  (DateTime, DateTime) get _range {
+    final now = DateTime.now();
+    return _fullYear ? yearToDateBounds(now) : monthBounds(now);
+  }
+
   void _onScroll() {
     final pos = _scrollController.position;
     if (pos.pixels < pos.maxScrollExtent - 400) return;
     // staleness-ok: reads the same page build() already watches, for pagination bookkeeping.
     final loaded = ref
-        .read(_accountExpensesProvider((widget.account.id, _limit)))
+        .read(_accountExpensesProvider((widget.account.id, _limit, _range)))
         .asData
         ?.value
         .length;
@@ -76,18 +68,28 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    final key = (widget.account.id, _limit);
+    final range = _range;
+    final key = (widget.account.id, _limit, range);
     final async = ref.watch(_accountExpensesProvider(key));
-    final range = _allTimeRange(DateTime.now());
     final total = ref
         .watch(accountTotalsByRangeProvider(range))
         .value?[widget.account.id];
     final byId = ref.watch(categoriesByIdProvider);
+    final openingBalance = widget.account.effectiveOpeningBalance(
+      DateTime.now(),
+    );
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.account.name),
         actions: [
+          TextButton(
+            onPressed: () => setState(() {
+              _fullYear = !_fullYear;
+              _limit = _pageSize;
+            }),
+            child: Text(_fullYear ? 'This month' : 'Full year'),
+          ),
           IconButton(
             tooltip: 'Edit account',
             icon: const Icon(Icons.edit_outlined),
@@ -115,7 +117,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Total spent',
+                    _fullYear ? 'Spent this year' : 'Spent this month',
                     style: TextStyle(fontSize: 13, color: palette.textDim),
                   ),
                   const SizedBox(height: 4),
@@ -127,11 +129,10 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (widget.account.openingBalanceMinor != 0) ...[
+                  if (openingBalance.minor != 0) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Opening balance '
-                      '${Money.fromMinor(widget.account.openingBalanceMinor).format(locale: 'en_IN')}',
+                      'Opening balance ${openingBalance.format(locale: 'en_IN')}',
                       style: TextStyle(fontSize: 12, color: palette.textDim),
                     ),
                   ],
@@ -193,19 +194,19 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
   }
 }
 
-/// Paginated, all-time expense list for one account — the same shape as
-/// [expensesInRangeProvider] but keyed by account instead of date range,
-/// since an account detail screen has no range to scope to.
+/// Paginated expense list for one account, scoped to the current month or
+/// year-to-date per the screen's toggle.
 final _accountExpensesProvider =
-    StreamProvider.family<List<ExpenseRow>, (int, int)>((ref, key) {
-      final (accountId, limit) = key;
-      final range = _allTimeRange(DateTime.now());
-      return ref
-          .watch(expenseRepositoryProvider)
-          .watchInRange(
-            range.$1,
-            range.$2,
-            limit: limit,
-            accountIds: {accountId},
-          );
-    });
+    StreamProvider.family<List<ExpenseRow>, (int, int, (DateTime, DateTime))>(
+      (ref, key) {
+        final (accountId, limit, range) = key;
+        return ref
+            .watch(expenseRepositoryProvider)
+            .watchInRange(
+              range.$1,
+              range.$2,
+              limit: limit,
+              accountIds: {accountId},
+            );
+      },
+    );

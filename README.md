@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v13, backup format v8, 404 passing tests (51 test
+> Recap feature. Drift schema v14, backup format v8, 409 passing tests (51 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -59,14 +59,18 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   expense row itself, so browsing transactions never has to load photo bytes it isn't
   showing. Travels in full-fidelity backups; a device restoring a backup gets every
   attached photo back, correctly matched to its own expense.
-- **Accounts** — track cash, bank, card and wallet balances; pick which account an expense
-  was paid from in Quick Add, or let it default — one account can be marked the default
-  (the first one you add becomes it automatically), prefilled on every fresh expense and
-  still changeable per-entry. Tap an account under Profile for its all-time transaction
-  history and total spent. Never hard-deleted — archived like categories/tags, so history
-  and exports stay intact (archiving the default account clears the flag rather than
-  silently picking a replacement). The free-text `paymentMethod` field expenses already
-  carried is migrated into real accounts automatically on upgrade, preserved either way.
+- **Accounts** — track cash, bank, card and wallet balances, grouped by type on the manage
+  screen; pick which account an expense was paid from in Quick Add, or let it default — one
+  account can be marked the default (the first one you add becomes it automatically),
+  prefilled on every fresh expense and still changeable per-entry. Tap an account under
+  Profile for this month's transaction history and total spent by default, with a
+  top-right toggle to switch to the full calendar year. Opening balance resets to zero
+  every month — the figure shown and used is only whatever was entered *this* month; the
+  user re-enters it monthly, nothing is deleted from history. Never hard-deleted —
+  archived like categories/tags, so history and exports stay intact (archiving the default
+  account clears the flag rather than silently picking a replacement). The free-text
+  `paymentMethod` field expenses already carried is migrated into real accounts
+  automatically on upgrade, preserved either way.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -89,7 +93,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v13 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v14 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, `excel`, `share_plus` |

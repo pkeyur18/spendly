@@ -4,6 +4,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/row_extensions.dart';
+import 'package:spendly/core/money/money.dart';
 
 /// Raw CREATE TABLE statements reconstructing the schema exactly as it was
 /// at v1 (commit aaf6d2f), before any `onUpgrade` block ever ran. Verified
@@ -53,7 +54,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v13 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v14 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -228,5 +229,13 @@ void main() {
     // for every upgrading user, not just new installs.
     final reloadedAccounts = await db.select(db.accounts).get();
     expect(reloadedAccounts.single.isDefault, isTrue);
+
+    // from<14: the migrated account never had an opening balance entered, so
+    // it gets no month stamp — same as a fresh zero-balance create() would.
+    expect(reloadedAccounts.single.openingBalanceMonth, isNull);
+    expect(
+      reloadedAccounts.single.effectiveOpeningBalance(DateTime.now()),
+      Money.zero,
+    );
   });
 }

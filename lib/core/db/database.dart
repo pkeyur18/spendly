@@ -82,6 +82,15 @@ class Accounts extends Table {
   /// from.
   IntColumn get openingBalanceMinor =>
       integer().withDefault(const Constant(0))();
+
+  /// 'YYYY-MM' stamp of the month [openingBalanceMinor] was last set
+  /// (schema v14). Null on accounts created before this column existed.
+  /// Opening balance is a monthly concept — read it through
+  /// `AccountRow.effectiveOpeningBalanceMinor`, never this raw column
+  /// directly: a stamp from an earlier month means the balance has rolled
+  /// over to zero for display purposes even though the row itself is left
+  /// untouched (no background job zeroes it out on the 1st).
+  TextColumn get openingBalanceMonth => text().nullable()();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
 
   /// At most one account is default at a time (enforced in
@@ -272,7 +281,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -420,6 +429,12 @@ class AppDatabase extends _$AppDatabase {
           'UPDATE accounts SET is_default = 1 WHERE id = '
           '(SELECT MIN(id) FROM accounts)',
         );
+      }
+      if (from < 14) {
+        // Same createTable trap as is_default hit above.
+        if (!await _hasColumn('accounts', 'opening_balance_month')) {
+          await m.addColumn(accounts, accounts.openingBalanceMonth);
+        }
       }
     },
   );

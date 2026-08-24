@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/database.dart';
+import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
@@ -66,8 +67,15 @@ class AccountsScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
-              for (final a in active)
-                _AccountTile(account: a, spentThisMonth: totals.value?[a.id]),
+              for (final type in AccountType.values)
+                if (active.any((a) => a.type == type)) ...[
+                  SectionTitle(_typeLabel(type)),
+                  for (final a in active.where((a) => a.type == type))
+                    _AccountTile(
+                      account: a,
+                      spentThisMonth: totals.value?[a.id],
+                    ),
+                ],
               if (archived.isNotEmpty) ...[
                 const SectionTitle('Archived'),
                 for (final a in archived)
@@ -217,9 +225,10 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
   late final _openingBalance = TextEditingController(
     text: widget.existing == null
         ? ''
-        : Money.fromMinor(
-            widget.existing!.openingBalanceMinor,
-          ).major.toStringAsFixed(2),
+        : widget.existing!
+              .effectiveOpeningBalance(DateTime.now())
+              .major
+              .toStringAsFixed(2),
   );
   late AccountType _type = widget.existing?.type ?? AccountType.cash;
   bool _saving = false;

@@ -398,6 +398,15 @@ class ExpenseRepository {
   return (start, end);
 }
 
+/// Half-open [start, end) bounds for the calendar year containing [day],
+/// truncated to today — Jan 1 through tomorrow, not the whole year, so it
+/// never counts a future date.
+(DateTime, DateTime) yearToDateBounds(DateTime day) {
+  final start = DateTime(day.year, 1, 1);
+  final end = DateTime(day.year, day.month, day.day).add(const Duration(days: 1));
+  return (start, end);
+}
+
 /// Half-open [start, end) bounds for the calendar day containing [day].
 (DateTime, DateTime) dayBounds(DateTime day) {
   final start = DateTime(day.year, day.month, day.day);

@@ -399,6 +399,22 @@ reads a missing key as `false`.
   computes this instead: at most one newly-inserted account ever gets `isDefault: true`,
   and only when the local device had no default at all before the merge started.
 
+## Additive field — `openingBalanceMonth` on accounts (schema v14)
+
+Opening balance is a monthly concept: `AccountRow.effectiveOpeningBalance` reads the stored
+`openingBalanceMinor` only when `openingBalanceMonth` (a `'YYYY-MM'` stamp) matches the
+current month, otherwise it reads as zero — the row itself is never wiped, only display and
+totals treat it as reset. Carried in the payload as a plain new nullable key on each
+`accounts` entry, no version bump, same additive pattern as `isDefault`: a pre-v14 file
+simply lacks the key, and `BackupAccount.fromJson` reads a missing key as `null` (already
+"not set this month" everywhere it's read).
+
+- **Replace** restores it verbatim, same as every other account field.
+- **Merge** restores it verbatim too on a newly-inserted account — unlike `isDefault`,
+  there's no "at most one" invariant to protect here, so a plain carry-over is safe. A
+  matched (already-present) account isn't touched by merge at all, so its own local stamp
+  is never overwritten by the backup's.
+
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
 - **Categories** — matched by `externalId` first when both the backup row and a local row

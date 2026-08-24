@@ -1,6 +1,8 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
+import 'package:spendly/core/db/row_extensions.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/accounts/account_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
@@ -199,6 +201,62 @@ void main() {
       );
       await accounts.setArchived(second, true);
       expect((await accounts.byId(first))!.isDefault, isTrue);
+    });
+  });
+
+  group('opening balance monthly reset', () {
+    test('create stamps the current month', () async {
+      final id = await accounts.create(
+        name: 'Cash',
+        type: AccountType.cash,
+        openingBalance: Money.parse('500'),
+      );
+      final row = (await accounts.byId(id))!;
+      expect(row.openingBalanceMonth, yearMonthStamp(DateTime.now()));
+      expect(row.effectiveOpeningBalance(DateTime.now()), Money.parse('500'));
+    });
+
+    test('update with a new opening balance re-stamps the month', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.update(id, openingBalance: Money.parse('200'));
+      final row = (await accounts.byId(id))!;
+      expect(row.openingBalanceMonth, yearMonthStamp(DateTime.now()));
+    });
+
+    test('update without touching the balance leaves the stamp alone', () async {
+      final id = await accounts.create(
+        name: 'Cash',
+        type: AccountType.cash,
+        openingBalance: Money.parse('500'),
+      );
+      await accounts.update(id, name: 'Cash wallet');
+      final row = (await accounts.byId(id))!;
+      expect(row.openingBalanceMonth, yearMonthStamp(DateTime.now()));
+    });
+
+    test('effectiveOpeningBalance reads 0 once the stamped month has passed',
+        () async {
+      final id = await accounts.create(
+        name: 'Cash',
+        type: AccountType.cash,
+        openingBalance: Money.parse('500'),
+      );
+      // Simulate an opening balance set last month and never re-entered —
+      // the row itself is untouched (raw column still 500), only the
+      // computed display value should read as reset.
+      await (db.update(db.accounts)..where((t) => t.id.equals(id))).write(
+        const AccountsCompanion(openingBalanceMonth: Value('2000-01')),
+      );
+      final row = (await accounts.byId(id))!;
+      expect(row.openingBalanceMinor, Money.parse('500').minor);
+      expect(row.effectiveOpeningBalance(DateTime(2026, 6, 15)), Money.zero);
+    });
+
+    test('a fresh account with no opening balance has no stamp', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final row = (await accounts.byId(id))!;
+      expect(row.openingBalanceMonth, isNull);
+      expect(row.effectiveOpeningBalance(DateTime.now()), Money.zero);
     });
   });
 }
