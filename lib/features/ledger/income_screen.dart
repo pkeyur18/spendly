@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,9 +9,11 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/repeat_picker.dart';
 import '../accounts/account_picker_sheet.dart';
 import '../accounts/account_repository.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
+import '../expenses/recurring_schedule.dart';
 import '../expenses/widgets/expense_tile.dart' show relativeDayLabel;
 import 'ledger_repository.dart';
 
@@ -207,7 +210,7 @@ class _IncomeTile extends ConsumerWidget {
 }
 
 /// Create (no [existing]) or edit an income entry: amount, date, source
-/// label, account, note. Mirrors `_AccountEditSheet`'s shape.
+/// label, account, note, repeat. Mirrors `_AccountEditSheet`'s shape.
 Future<int?> showIncomeEditSheet(
   BuildContext context, {
   LedgerEntryRow? existing,
@@ -223,26 +226,72 @@ Future<int?> showIncomeEditSheet(
   );
 }
 
+/// Confirms one occurrence of a recurring income [template]: the sheet
+/// prefills from the template at [occurrence]'s date, the user reviews or
+/// edits freely, and saving both logs the entry and advances the template's
+/// schedule (`LedgerRepository.confirmIncome`) — the reviewed counterpart to
+/// how a recurring expense confirms in one silent tap. Reached from the
+/// Recurring screen's Income tab and from the "Add" notification action.
+Future<int?> showIncomeConfirmSheet(
+  BuildContext context, {
+  required LedgerEntryRow template,
+  required DateTime occurrence,
+}) {
+  return showModalBottomSheet<int>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
+    ),
+    builder: (_) => _IncomeEditSheet(
+      confirmTemplate: template,
+      confirmOccurrence: occurrence,
+    ),
+  );
+}
+
 class _IncomeEditSheet extends ConsumerStatefulWidget {
-  const _IncomeEditSheet({this.existing});
+  const _IncomeEditSheet({
+    this.existing,
+    this.confirmTemplate,
+    this.confirmOccurrence,
+  });
   final LedgerEntryRow? existing;
+
+  /// Both set together — see [showIncomeConfirmSheet].
+  final LedgerEntryRow? confirmTemplate;
+  final DateTime? confirmOccurrence;
 
   @override
   ConsumerState<_IncomeEditSheet> createState() => _IncomeEditSheetState();
 }
 
 class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
+  /// What to prefill from — the template being confirmed, or an existing
+  /// entry being edited. Never both; [showIncomeConfirmSheet] never passes
+  /// an [existing] alongside a template.
+  LedgerEntryRow? get _source => widget.confirmTemplate ?? widget.existing;
+
+  bool get _isConfirming => widget.confirmTemplate != null;
+
   late final _amount = TextEditingController(
-    text: widget.existing == null
-        ? ''
-        : widget.existing!.amount.major.toStringAsFixed(2),
+    text: _source == null ? '' : _source!.amount.major.toStringAsFixed(2),
   );
   late final _sourceLabel = TextEditingController(
-    text: widget.existing?.sourceLabel ?? '',
+    text: _source?.sourceLabel ?? '',
   );
-  late final _note = TextEditingController(text: widget.existing?.note ?? '');
-  late DateTime _date = widget.existing?.date ?? DateTime.now();
-  late int? _accountId = widget.existing?.accountId;
+  late final _note = TextEditingController(text: _source?.note ?? '');
+  late DateTime _date =
+      widget.confirmOccurrence ?? widget.existing?.date ?? DateTime.now();
+  late int? _accountId = _source?.accountId;
+  // A confirmed occurrence is never itself a template — recurrence is the
+  // template's own property, edited only when editing the template directly
+  // (existing != null, not confirming).
+  late Recurrence? _recurrence =
+      _isConfirming ? null : widget.existing?.recurrence;
+  late DateTime? _recurrenceEndDate =
+      _isConfirming ? null : widget.existing?.recurrenceEndDate;
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
@@ -279,6 +328,36 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
     final repo = ref.read(ledgerRepositoryProvider);
     final sourceLabel = _sourceLabel.text.trim();
     final note = _note.text.trim();
+
+    if (_isConfirming) {
+      await repo.confirmIncome(
+        widget.confirmTemplate!,
+        widget.confirmOccurrence!,
+        amount: amount,
+        date: _date,
+        accountId: _accountId,
+        sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
+        note: note.isEmpty ? null : note,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(widget.confirmTemplate!.id);
+      return;
+    }
+
+    // A changed schedule (or a template that never had a pointer, as a
+    // pre-recurring row wouldn't) earns a fresh next-due date; an unchanged
+    // one keeps its existing pointer rather than resetting it.
+    final previous = widget.existing;
+    final scheduleChanged =
+        _recurrence != previous?.recurrence ||
+        _recurrenceEndDate != previous?.recurrenceEndDate ||
+        previous?.nextDueDate == null;
+    final nextDue = _recurrence == null
+        ? null
+        : scheduleChanged
+        ? firstDueDate(_date, _recurrence, endDate: _recurrenceEndDate)
+        : previous!.nextDueDate;
+
     final int id;
     if (_isEdit) {
       id = widget.existing!.id;
@@ -290,6 +369,10 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
         clearAccount: _accountId == null,
         sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
         note: note.isEmpty ? null : note,
+        isRecurring: _recurrence != null && nextDue != null,
+        recurrence: Value(_recurrence),
+        nextDueDate: Value(nextDue),
+        recurrenceEndDate: Value(_recurrenceEndDate),
       );
     } else {
       id = await repo.addIncome(
@@ -298,6 +381,10 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
         accountId: _accountId,
         sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
         note: note.isEmpty ? null : note,
+        isRecurring: _recurrence != null && nextDue != null,
+        recurrence: _recurrence,
+        nextDueDate: nextDue,
+        recurrenceEndDate: _recurrenceEndDate,
       );
     }
     if (!mounted) return;
@@ -392,7 +479,9 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _isEdit ? 'Edit income' : 'Add income',
+                _isConfirming
+                    ? 'Confirm income'
+                    : (_isEdit ? 'Edit income' : 'Add income'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -452,6 +541,33 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
                   ),
                 ],
               ),
+              // Recurrence belongs to the template, not to one confirmed
+              // occurrence — hidden while confirming.
+              if (!_isConfirming) ...[
+                const SizedBox(height: AppSpacing.md),
+                InkWell(
+                  onTap: () => showRepeatPickerSheet(
+                    context,
+                    recurrence: _recurrence,
+                    endDate: _recurrenceEndDate,
+                    anchorDate: _date,
+                    onRecurrenceChanged: (r) => setState(() => _recurrence = r),
+                    onEndDateChanged: (d) =>
+                        setState(() => _recurrenceEndDate = d),
+                  ),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Repeat',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      _recurrence == null
+                          ? 'Does not repeat'
+                          : recurrenceLabel(_recurrence!),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.xl),
               Text(
                 'Details',

@@ -18,6 +18,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/repeat_picker.dart';
 import '../budgets/budget_repository.dart';
 import '../categories/category_repository.dart';
 import '../home/dashboard_providers.dart';
@@ -799,107 +800,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     );
   }
 
-  Future<void> _openRepeatSheet() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.card),
-        ),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          void choose(Recurrence? r) {
-            setState(() {
-              _recurrence = r;
-              _touched = true;
-              // An end date without a schedule is meaningless, and leaving a
-              // stale one behind would silently truncate the series if repeat
-              // were switched back on later.
-              if (r == null) _recurrenceEndDate = null;
-            });
-            setSheetState(() {});
-          }
-
-          return SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    AppSpacing.sm,
-                  ),
-                  child: Text(
-                    'Repeat',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                RadioGroup<Recurrence?>(
-                  groupValue: _recurrence,
-                  onChanged: choose,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      RadioListTile<Recurrence?>(
-                        value: null,
-                        title: const Text('Does not repeat'),
-                      ),
-                      for (final r in Recurrence.values)
-                        RadioListTile<Recurrence?>(
-                          value: r,
-                          title: Text(recurrenceLabel(r)),
-                        ),
-                    ],
-                  ),
-                ),
-                if (_recurrence != null)
-                  ListTile(
-                    leading: const Icon(Icons.event_busy_outlined),
-                    title: const Text('Ends'),
-                    subtitle: Text(
-                      _recurrenceEndDate == null
-                          ? 'Never — until you switch it off'
-                          : relativeDayLabel(_recurrenceEndDate!),
-                    ),
-                    trailing: _recurrenceEndDate == null
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear end date',
-                            icon: const Icon(Icons.close_rounded),
-                            onPressed: () {
-                              setState(() => _recurrenceEndDate = null);
-                              setSheetState(() {});
-                            },
-                          ),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: sheetContext,
-                        initialDate: _recurrenceEndDate ??
-                            DateTime.now().add(const Duration(days: 365)),
-                        firstDate: _selectedDate,
-                        lastDate: DateTime(DateTime.now().year + 20),
-                      );
-                      if (picked == null) return;
-                      setState(() {
-                        _recurrenceEndDate = picked;
-                        _touched = true;
-                      });
-                      setSheetState(() {});
-                    },
-                  ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
+  Future<void> _openRepeatSheet() => showRepeatPickerSheet(
+    context,
+    recurrence: _recurrence,
+    endDate: _recurrenceEndDate,
+    anchorDate: _selectedDate,
+    onRecurrenceChanged: (r) => setState(() {
+      _recurrence = r;
+      _touched = true;
+    }),
+    onEndDateChanged: (d) => setState(() {
+      _recurrenceEndDate = d;
+      _touched = true;
+    }),
+  );
 
   /// Receipt chip: "Add receipt" when nothing is attached, "Receipt added"
   /// once something is — a spinner briefly in between while an edit/copy's
