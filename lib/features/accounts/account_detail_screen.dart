@@ -7,19 +7,26 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
-import '../expenses/all_transactions_screen.dart' show groupExpensesByDay;
 import '../expenses/expense_repository.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../home/dashboard_providers.dart' show categoriesByIdProvider;
+import '../ledger/account_balance_provider.dart';
+import '../ledger/income_screen.dart' show showIncomeEditSheet;
+import '../ledger/ledger_repository.dart';
+import '../ledger/transfer_screen.dart' show showTransferEditSheet;
 import 'account_repository.dart';
 import 'accounts_screen.dart' show showAccountEditSheet;
 
 const _pageSize = 100;
 
-/// Every expense paid from one account, all-time, with a running lifetime
-/// total. Reached by tapping an account in [AccountsScreen] (edit moved to
-/// an app-bar action here, since "see the account" is the more common intent
-/// behind a tap than "edit the account").
+/// Every expense paid from one account, plus every ledger entry (income,
+/// transfer) touching it, unioned into one timeline — the one screen in the
+/// app where `Expenses` and `LedgerEntries` are ever combined (Phase 6; see
+/// the "separate ledger table" decision in
+/// `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`). Reached by
+/// tapping an account in [AccountsScreen] (edit moved to an app-bar action
+/// here, since "see the account" is the more common intent behind a tap
+/// than "edit the account").
 class AccountDetailScreen extends ConsumerStatefulWidget {
   const AccountDetailScreen({super.key, required this.account});
   final AccountRow account;
@@ -69,15 +76,23 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final range = _range;
-    final key = (widget.account.id, _limit, range);
-    final async = ref.watch(_accountExpensesProvider(key));
+    final expenseKey = (widget.account.id, _limit, range);
+    final expensesAsync = ref.watch(_accountExpensesProvider(expenseKey));
+    final ledgerAsync = ref.watch(
+      _accountLedgerProvider((widget.account.id, range)),
+    );
     final total = ref
         .watch(accountTotalsByRangeProvider(range))
         .value?[widget.account.id];
     final byId = ref.watch(categoriesByIdProvider);
+    final accountById = ref.watch(accountsByIdProvider);
     final openingBalance = widget.account.effectiveOpeningBalance(
       DateTime.now(),
     );
+    final balance = ref.watch(accountBalancesThisMonthProvider)[
+        widget.account.id];
+    final activeAccounts =
+        ref.watch(activeAccountsProvider).value ?? const <AccountRow>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -90,6 +105,15 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
             }),
             child: Text(_fullYear ? 'This month' : 'Full year'),
           ),
+          if (activeAccounts.length > 1)
+            IconButton(
+              tooltip: 'Transfer money',
+              icon: const Icon(Icons.swap_horiz),
+              onPressed: () => showTransferEditSheet(
+                context,
+                defaultFromAccountId: widget.account.id,
+              ),
+            ),
           IconButton(
             tooltip: 'Edit account',
             icon: const Icon(Icons.edit_outlined),
@@ -111,6 +135,42 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
       body: Column(
         children: [
           Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              0,
+            ),
+            child: AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Balance this month',
+                    style: TextStyle(fontSize: 13, color: palette.textDim),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    (balance ?? Money.zero).format(locale: 'en_IN'),
+                    style: const TextStyle(
+                      fontFamily: 'Sora',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  if (openingBalance.minor != 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Opening balance ${openingBalance.format(locale: 'en_IN')}',
+                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: AppCard(
               child: Column(
@@ -125,44 +185,39 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                     (total ?? Money.zero).format(locale: 'en_IN'),
                     style: const TextStyle(
                       fontFamily: 'Sora',
-                      fontSize: 28,
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (openingBalance.minor != 0) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Opening balance ${openingBalance.format(locale: 'en_IN')}',
-                      style: TextStyle(fontSize: 12, color: palette.textDim),
-                    ),
-                  ],
                 ],
               ),
             ),
           ),
           Expanded(
-            child: async.when(
+            child: expensesAsync.when(
               loading: () => const LoadingView(),
               error: (e, _) => ErrorView(
                 message: "Couldn't load transactions.",
-                onRetry: () => ref.invalidate(_accountExpensesProvider(key)),
+                onRetry: () =>
+                    ref.invalidate(_accountExpensesProvider(expenseKey)),
               ),
               data: (expenses) {
-                if (expenses.isEmpty) {
+                final ledger = ledgerAsync.value ?? const <LedgerEntryRow>[];
+                if (expenses.isEmpty && ledger.isEmpty) {
                   return const EmptyView(
                     icon: Icons.receipt_long_outlined,
-                    message: 'No transactions from this account yet.',
+                    message: 'No activity on this account yet.',
                   );
                 }
+                final groups = _groupTimelineByDay(expenses, ledger);
                 final items = <Object>[];
                 final dayTotals = <DateTime, Money>{};
-                for (final entry in groupExpensesByDay(expenses).entries) {
+                for (final entry in groups.entries) {
                   items.add(entry.key);
                   items.addAll(entry.value);
-                  dayTotals[entry.key] = entry.value.fold(
-                    Money.zero,
-                    (sum, e) => sum + e.amount,
-                  );
+                  dayTotals[entry.key] = entry.value
+                      .whereType<ExpenseRow>()
+                      .fold(Money.zero, (sum, e) => sum + e.amount);
                 }
                 return ListView.builder(
                   controller: _scrollController,
@@ -178,10 +233,16 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                     if (item is DateTime) {
                       return DayGroupHeader(item, total: dayTotals[item]!);
                     }
-                    final e = item as ExpenseRow;
-                    return ExpenseTile(
-                      expense: e,
-                      category: byId[e.categoryId],
+                    if (item is ExpenseRow) {
+                      return ExpenseTile(
+                        expense: item,
+                        category: byId[item.categoryId],
+                      );
+                    }
+                    return _LedgerTimelineTile(
+                      entry: item as LedgerEntryRow,
+                      thisAccountId: widget.account.id,
+                      accountById: accountById,
                     );
                   },
                 );
@@ -193,6 +254,128 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
     );
   }
 }
+
+/// One income or transfer row in the unioned account timeline. Read-only
+/// here (tap to edit) — delete lives in the edit sheet or, for income, the
+/// Income screen's own swipe gesture.
+class _LedgerTimelineTile extends StatelessWidget {
+  const _LedgerTimelineTile({
+    required this.entry,
+    required this.thisAccountId,
+    required this.accountById,
+  });
+
+  final LedgerEntryRow entry;
+  final int thisAccountId;
+  final Map<int, AccountRow> accountById;
+
+  bool get _isIncome => entry.kind == LedgerEntryKind.income;
+  bool get _isTransferOut => entry.kind == LedgerEntryKind.transfer &&
+      entry.accountId == thisAccountId;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final (icon, title, sign, color) = switch ((_isIncome, _isTransferOut)) {
+      (true, _) => (
+          Icons.savings_outlined,
+          entry.sourceLabel?.isNotEmpty == true ? entry.sourceLabel! : 'Income',
+          '+',
+          AppColors.primary,
+        ),
+      (false, true) => (
+          Icons.call_made,
+          'Transfer to '
+              '${accountById[entry.counterAccountId]?.name ?? 'another account'}',
+          '-',
+          Theme.of(context).colorScheme.onSurface,
+        ),
+      (false, false) => (
+          Icons.call_received,
+          'Transfer from '
+              '${accountById[entry.accountId]?.name ?? 'another account'}',
+          '+',
+          AppColors.primary,
+        ),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        onTap: () => _isIncome
+            ? showIncomeEditSheet(context, existing: entry)
+            : showTransferEditSheet(context, existing: entry),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.icon),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    relativeDayLabel(entry.date),
+                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '$sign${entry.amount.format(locale: 'en_IN')}',
+              style: TextStyle(
+                fontFamily: 'Sora',
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Merges expenses and ledger entries into day buckets, both already
+/// date-desc from their own queries — a plain merge-sort by date, then
+/// bucketed the same way `groupExpensesByDay` already does for expenses
+/// alone.
+Map<DateTime, List<Object>> _groupTimelineByDay(
+  List<ExpenseRow> expenses,
+  List<LedgerEntryRow> ledger,
+) {
+  final combined = <Object>[...expenses, ...ledger]
+    ..sort((a, b) => _dateOf(b).compareTo(_dateOf(a)));
+  final groups = <DateTime, List<Object>>{};
+  for (final item in combined) {
+    final d = _dateOf(item);
+    final day = DateTime(d.year, d.month, d.day);
+    groups.putIfAbsent(day, () => []).add(item);
+  }
+  return groups;
+}
+
+DateTime _dateOf(Object o) =>
+    o is ExpenseRow ? o.date : (o as LedgerEntryRow).date;
 
 /// Paginated expense list for one account, scoped to the current month or
 /// year-to-date per the screen's toggle.
@@ -208,5 +391,18 @@ final _accountExpensesProvider =
               limit: limit,
               accountIds: {accountId},
             );
+      },
+    );
+
+/// Every ledger entry touching one account within a range — unpaginated,
+/// since income + transfers per account per month/year are naturally few
+/// compared to expenses.
+final _accountLedgerProvider =
+    StreamProvider.family<List<LedgerEntryRow>, (int, (DateTime, DateTime))>(
+      (ref, key) {
+        final (accountId, range) = key;
+        return ref
+            .watch(ledgerRepositoryProvider)
+            .watchTouchingAccount(accountId, range.$1, range.$2);
       },
     );

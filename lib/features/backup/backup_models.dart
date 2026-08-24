@@ -607,6 +607,8 @@ class BackupLedgerEntry {
     required this.sourceLabel,
     required this.note,
     required this.externalId,
+    this.kind = LedgerEntryKind.income,
+    this.counterAccountId,
   });
 
   final int id;
@@ -617,6 +619,16 @@ class BackupLedgerEntry {
   final String? note;
   final String? externalId;
 
+  /// Additive field (schema v16) — no backup version bump, same pattern as
+  /// `openingBalanceMonth` on accounts: a pre-v16 file simply lacks the key,
+  /// which reads as [LedgerEntryKind.income] — the only kind that existed
+  /// before transfers did.
+  final LedgerEntryKind kind;
+
+  /// Destination account for a transfer (backup-file id, resolved the same
+  /// way [accountId] is). Null for income.
+  final int? counterAccountId;
+
   factory BackupLedgerEntry.fromRow(LedgerEntryRow row) => BackupLedgerEntry(
     id: row.id,
     amountMinor: row.amountMinor,
@@ -625,6 +637,8 @@ class BackupLedgerEntry {
     sourceLabel: row.sourceLabel,
     note: row.note,
     externalId: row.externalId,
+    kind: row.kind,
+    counterAccountId: row.counterAccountId,
   );
 
   factory BackupLedgerEntry.fromJson(Map<String, dynamic> j) =>
@@ -636,6 +650,11 @@ class BackupLedgerEntry {
         sourceLabel: j['sourceLabel'] as String?,
         note: j['note'] as String?,
         externalId: j['externalId'] as String?,
+        // Pre-v16 files have no "kind" key; absent = income.
+        kind: j['kind'] == null
+            ? LedgerEntryKind.income
+            : LedgerEntryKind.values.byName(j['kind'] as String),
+        counterAccountId: j['counterAccountId'] as int?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -646,28 +665,37 @@ class BackupLedgerEntry {
     'sourceLabel': sourceLabel,
     'note': note,
     'externalId': externalId,
+    'kind': kind.name,
+    'counterAccountId': counterAccountId,
   };
 
-  /// Merge: new row, id auto-assigned. [mappedAccountId] is the local
-  /// account id the backup's accountId was resolved to (null if unassigned).
-  LedgerEntriesCompanion toInsertCompanion({required int? mappedAccountId}) =>
-      LedgerEntriesCompanion.insert(
-        amountMinor: amountMinor,
-        date: date,
-        accountId: Value(mappedAccountId),
-        sourceLabel: Value(sourceLabel),
-        note: Value(note),
-        externalId: externalId == null
-            ? const Value.absent()
-            : Value(externalId),
-      );
+  /// Merge: new row, id auto-assigned. [mappedAccountId]/[mappedCounterAccountId]
+  /// are the local account ids the backup's accountId/counterAccountId were
+  /// resolved to (null if unassigned / not a transfer).
+  LedgerEntriesCompanion toInsertCompanion({
+    required int? mappedAccountId,
+    int? mappedCounterAccountId,
+  }) => LedgerEntriesCompanion.insert(
+    amountMinor: amountMinor,
+    date: date,
+    kind: Value(kind),
+    accountId: Value(mappedAccountId),
+    counterAccountId: Value(mappedCounterAccountId),
+    sourceLabel: Value(sourceLabel),
+    note: Value(note),
+    externalId: externalId == null
+        ? const Value.absent()
+        : Value(externalId),
+  );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
   LedgerEntriesCompanion toReplaceCompanion() => LedgerEntriesCompanion(
     id: Value(id),
     amountMinor: Value(amountMinor),
     date: Value(date),
+    kind: Value(kind),
     accountId: Value(accountId),
+    counterAccountId: Value(counterAccountId),
     sourceLabel: Value(sourceLabel),
     note: Value(note),
     externalId: externalId == null
@@ -677,11 +705,16 @@ class BackupLedgerEntry {
 
   /// Content fingerprint used to dedupe on Merge for entries written before
   /// this field existed or by a backup file that predates it entirely —
-  /// same role as [BackupExpense.fingerprint]. [mappedAccountId] is the
-  /// *local* account id, so fingerprints compare like for like even when the
-  /// backup's own account ids don't match this device's.
-  String fingerprint({required int? mappedAccountId}) =>
-      '$amountMinor|${date.toIso8601String()}|$mappedAccountId|$sourceLabel|$note';
+  /// same role as [BackupExpense.fingerprint]. [mappedAccountId] and
+  /// [mappedCounterAccountId] are *local* account ids, so fingerprints
+  /// compare like for like even when the backup's own account ids don't
+  /// match this device's.
+  String fingerprint({
+    required int? mappedAccountId,
+    int? mappedCounterAccountId,
+  }) =>
+      '${kind.name}|$amountMinor|${date.toIso8601String()}|'
+      '$mappedAccountId|$mappedCounterAccountId|$sourceLabel|$note';
 }
 
 class BackupSetting {

@@ -8,6 +8,7 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../accounts/account_picker_sheet.dart';
 import '../accounts/account_repository.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
 import '../expenses/widgets/expense_tile.dart' show relativeDayLabel;
@@ -331,78 +332,14 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
   }
 
   Future<void> _openAccountPicker(List<AccountRow> accounts) async {
-    final chosen = await showModalBottomSheet<int?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.card)),
-      ),
-      // Same list shape as Quick Add's account picker — one proven pattern
-      // for "pick an account", not a second one invented for this sheet.
-      builder: (sheetContext) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(sheetContext).size.height * 0.6,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(AppSpacing.lg),
-                child: Text('Account'),
-              ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: accounts.length + 1,
-                  itemBuilder: (context, i) {
-                    if (i == 0) {
-                      return ListTile(
-                        leading: const Icon(Icons.close, size: 20),
-                        title: const Text('No account'),
-                        trailing: _accountId == null
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: AppColors.primary,
-                                size: 18,
-                              )
-                            : null,
-                        onTap: () =>
-                            Navigator.of(sheetContext).pop<int?>(_noAccountChoice),
-                      );
-                    }
-                    final a = accounts[i - 1];
-                    return ListTile(
-                      leading: const Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: 20,
-                      ),
-                      title: Text(a.name),
-                      trailing: a.id == _accountId
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: AppColors.primary,
-                              size: 18,
-                            )
-                          : null,
-                      onTap: () => Navigator.of(sheetContext).pop<int?>(a.id),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final chosen = await showAccountPickerSheet(
+      context,
+      accounts: accounts,
+      selected: _accountId,
     );
     if (chosen == null || !mounted) return;
-    setState(() => _accountId = chosen == _noAccountChoice ? null : chosen);
+    setState(() => _accountId = chosen == noAccountChoice ? null : chosen);
   }
-
-  /// Sentinel distinguishing an explicit "No account" pick from a dismissed
-  /// sheet — same pattern as Quick Add's account picker.
-  static const _noAccountChoice = -1;
 
   Widget _saveButton() {
     return Semantics(

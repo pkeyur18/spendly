@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
+import '../accounts/account_repository.dart';
+import '../accounts/accounts_screen.dart';
 import '../budgets/budget_pace.dart';
 import '../budgets/budget_repository.dart';
 import '../dev/debug_data_screen.dart';
@@ -14,6 +16,7 @@ import '../expenses/expense_repository.dart';
 import '../expenses/recurring_repository.dart';
 import '../expenses/recurring_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
+import '../ledger/account_balance_provider.dart';
 import '../profile/profile_provider.dart';
 import 'dashboard_providers.dart';
 import 'widgets/spend_donut.dart';
@@ -69,6 +72,7 @@ class HomeScreen extends ConsumerWidget {
         children: [
           _greeting(context, palette, profile?.name ?? ''),
           const _HeroCard(),
+          const _BalanceCard(),
           const _DueRecurringCard(),
           const SectionTitle('Where it went'),
           const SpendDonut(),
@@ -135,6 +139,54 @@ class HomeScreen extends ConsumerWidget {
       child: Text(
         'No expenses yet — tap + to log one.',
         style: TextStyle(color: palette.textDim, fontSize: 13),
+      ),
+    );
+  }
+}
+
+/// Total balance across every active account (Phase 6) — renders nothing at
+/// all when there are no accounts, same "silent when unused" convention as
+/// [_DueRecurringCard] below, so the dashboard is unchanged for anyone not
+/// using Accounts.
+class _BalanceCard extends ConsumerWidget {
+  const _BalanceCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(activeAccountsProvider).value ?? const [];
+    if (accounts.isEmpty) return const SizedBox.shrink();
+    final total = ref.watch(totalBalanceThisMonthProvider);
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: AppCard(
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AccountsScreen())),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Balance across accounts',
+                  style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  total.format(locale: 'en_IN'),
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            Icon(Icons.chevron_right, color: palette.textDim),
+          ],
+        ),
       ),
     );
   }

@@ -3813,6 +3813,30 @@ class $LedgerEntriesTable extends LedgerEntries
       'REFERENCES accounts (id)',
     ),
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<LedgerEntryKind, String> kind =
+      GeneratedColumn<String>(
+        'kind',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('income'),
+      ).withConverter<LedgerEntryKind>($LedgerEntriesTable.$converterkind);
+  static const VerificationMeta _counterAccountIdMeta = const VerificationMeta(
+    'counterAccountId',
+  );
+  @override
+  late final GeneratedColumn<int> counterAccountId = GeneratedColumn<int>(
+    'counter_account_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES accounts (id)',
+    ),
+  );
   static const VerificationMeta _sourceLabelMeta = const VerificationMeta(
     'sourceLabel',
   );
@@ -3863,6 +3887,8 @@ class $LedgerEntriesTable extends LedgerEntries
     amountMinor,
     date,
     accountId,
+    kind,
+    counterAccountId,
     sourceLabel,
     note,
     createdAt,
@@ -3906,6 +3932,15 @@ class $LedgerEntriesTable extends LedgerEntries
       context.handle(
         _accountIdMeta,
         accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    }
+    if (data.containsKey('counter_account_id')) {
+      context.handle(
+        _counterAccountIdMeta,
+        counterAccountId.isAcceptableOrUnknown(
+          data['counter_account_id']!,
+          _counterAccountIdMeta,
+        ),
       );
     }
     if (data.containsKey('source_label')) {
@@ -3960,6 +3995,16 @@ class $LedgerEntriesTable extends LedgerEntries
         DriftSqlType.int,
         data['${effectivePrefix}account_id'],
       ),
+      kind: $LedgerEntriesTable.$converterkind.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}kind'],
+        )!,
+      ),
+      counterAccountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}counter_account_id'],
+      ),
       sourceLabel: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}source_label'],
@@ -3983,6 +4028,9 @@ class $LedgerEntriesTable extends LedgerEntries
   $LedgerEntriesTable createAlias(String alias) {
     return $LedgerEntriesTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<LedgerEntryKind, String, String> $converterkind =
+      const EnumNameConverter<LedgerEntryKind>(LedgerEntryKind.values);
 }
 
 class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
@@ -3990,11 +4038,21 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
   final int amountMinor;
   final DateTime date;
 
-  /// Which account the money landed in, or null if unassigned — same
-  /// optionality as [Expenses.accountId].
+  /// Where the money landed (income) or left FROM (transfer). Nullable only
+  /// for an unassigned income entry — always set for a transfer.
   final int? accountId;
 
-  /// Free text, e.g. "Salary", "Freelance" — purely descriptive.
+  /// income or transfer (schema v16). Existing pre-v16 rows are all income
+  /// (backfilled by the v16 migration) — this table held nothing else until
+  /// transfers existed to put in it.
+  final LedgerEntryKind kind;
+
+  /// Destination account for a transfer — money leaves [accountId] and lands
+  /// here. Null for an income entry; always set together with
+  /// `kind == transfer`.
+  final int? counterAccountId;
+
+  /// Free text, e.g. "Salary", "Freelance" — purely descriptive, income only.
   final String? sourceLabel;
   final String? note;
   final DateTime createdAt;
@@ -4006,6 +4064,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     required this.amountMinor,
     required this.date,
     this.accountId,
+    required this.kind,
+    this.counterAccountId,
     this.sourceLabel,
     this.note,
     required this.createdAt,
@@ -4019,6 +4079,14 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     map['date'] = Variable<DateTime>(date);
     if (!nullToAbsent || accountId != null) {
       map['account_id'] = Variable<int>(accountId);
+    }
+    {
+      map['kind'] = Variable<String>(
+        $LedgerEntriesTable.$converterkind.toSql(kind),
+      );
+    }
+    if (!nullToAbsent || counterAccountId != null) {
+      map['counter_account_id'] = Variable<int>(counterAccountId);
     }
     if (!nullToAbsent || sourceLabel != null) {
       map['source_label'] = Variable<String>(sourceLabel);
@@ -4041,6 +4109,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       accountId: accountId == null && nullToAbsent
           ? const Value.absent()
           : Value(accountId),
+      kind: Value(kind),
+      counterAccountId: counterAccountId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(counterAccountId),
       sourceLabel: sourceLabel == null && nullToAbsent
           ? const Value.absent()
           : Value(sourceLabel),
@@ -4062,6 +4134,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       amountMinor: serializer.fromJson<int>(json['amountMinor']),
       date: serializer.fromJson<DateTime>(json['date']),
       accountId: serializer.fromJson<int?>(json['accountId']),
+      kind: $LedgerEntriesTable.$converterkind.fromJson(
+        serializer.fromJson<String>(json['kind']),
+      ),
+      counterAccountId: serializer.fromJson<int?>(json['counterAccountId']),
       sourceLabel: serializer.fromJson<String?>(json['sourceLabel']),
       note: serializer.fromJson<String?>(json['note']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -4076,6 +4152,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       'amountMinor': serializer.toJson<int>(amountMinor),
       'date': serializer.toJson<DateTime>(date),
       'accountId': serializer.toJson<int?>(accountId),
+      'kind': serializer.toJson<String>(
+        $LedgerEntriesTable.$converterkind.toJson(kind),
+      ),
+      'counterAccountId': serializer.toJson<int?>(counterAccountId),
       'sourceLabel': serializer.toJson<String?>(sourceLabel),
       'note': serializer.toJson<String?>(note),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -4088,6 +4168,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     int? amountMinor,
     DateTime? date,
     Value<int?> accountId = const Value.absent(),
+    LedgerEntryKind? kind,
+    Value<int?> counterAccountId = const Value.absent(),
     Value<String?> sourceLabel = const Value.absent(),
     Value<String?> note = const Value.absent(),
     DateTime? createdAt,
@@ -4097,6 +4179,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     amountMinor: amountMinor ?? this.amountMinor,
     date: date ?? this.date,
     accountId: accountId.present ? accountId.value : this.accountId,
+    kind: kind ?? this.kind,
+    counterAccountId: counterAccountId.present
+        ? counterAccountId.value
+        : this.counterAccountId,
     sourceLabel: sourceLabel.present ? sourceLabel.value : this.sourceLabel,
     note: note.present ? note.value : this.note,
     createdAt: createdAt ?? this.createdAt,
@@ -4110,6 +4196,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           : this.amountMinor,
       date: data.date.present ? data.date.value : this.date,
       accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      counterAccountId: data.counterAccountId.present
+          ? data.counterAccountId.value
+          : this.counterAccountId,
       sourceLabel: data.sourceLabel.present
           ? data.sourceLabel.value
           : this.sourceLabel,
@@ -4128,6 +4218,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           ..write('amountMinor: $amountMinor, ')
           ..write('date: $date, ')
           ..write('accountId: $accountId, ')
+          ..write('kind: $kind, ')
+          ..write('counterAccountId: $counterAccountId, ')
           ..write('sourceLabel: $sourceLabel, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
@@ -4142,6 +4234,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     amountMinor,
     date,
     accountId,
+    kind,
+    counterAccountId,
     sourceLabel,
     note,
     createdAt,
@@ -4155,6 +4249,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           other.amountMinor == this.amountMinor &&
           other.date == this.date &&
           other.accountId == this.accountId &&
+          other.kind == this.kind &&
+          other.counterAccountId == this.counterAccountId &&
           other.sourceLabel == this.sourceLabel &&
           other.note == this.note &&
           other.createdAt == this.createdAt &&
@@ -4166,6 +4262,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
   final Value<int> amountMinor;
   final Value<DateTime> date;
   final Value<int?> accountId;
+  final Value<LedgerEntryKind> kind;
+  final Value<int?> counterAccountId;
   final Value<String?> sourceLabel;
   final Value<String?> note;
   final Value<DateTime> createdAt;
@@ -4175,6 +4273,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     this.amountMinor = const Value.absent(),
     this.date = const Value.absent(),
     this.accountId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.counterAccountId = const Value.absent(),
     this.sourceLabel = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -4185,6 +4285,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     required int amountMinor,
     required DateTime date,
     this.accountId = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.counterAccountId = const Value.absent(),
     this.sourceLabel = const Value.absent(),
     this.note = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -4196,6 +4298,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     Expression<int>? amountMinor,
     Expression<DateTime>? date,
     Expression<int>? accountId,
+    Expression<String>? kind,
+    Expression<int>? counterAccountId,
     Expression<String>? sourceLabel,
     Expression<String>? note,
     Expression<DateTime>? createdAt,
@@ -4206,6 +4310,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
       if (amountMinor != null) 'amount_minor': amountMinor,
       if (date != null) 'date': date,
       if (accountId != null) 'account_id': accountId,
+      if (kind != null) 'kind': kind,
+      if (counterAccountId != null) 'counter_account_id': counterAccountId,
       if (sourceLabel != null) 'source_label': sourceLabel,
       if (note != null) 'note': note,
       if (createdAt != null) 'created_at': createdAt,
@@ -4218,6 +4324,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     Value<int>? amountMinor,
     Value<DateTime>? date,
     Value<int?>? accountId,
+    Value<LedgerEntryKind>? kind,
+    Value<int?>? counterAccountId,
     Value<String?>? sourceLabel,
     Value<String?>? note,
     Value<DateTime>? createdAt,
@@ -4228,6 +4336,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
       amountMinor: amountMinor ?? this.amountMinor,
       date: date ?? this.date,
       accountId: accountId ?? this.accountId,
+      kind: kind ?? this.kind,
+      counterAccountId: counterAccountId ?? this.counterAccountId,
       sourceLabel: sourceLabel ?? this.sourceLabel,
       note: note ?? this.note,
       createdAt: createdAt ?? this.createdAt,
@@ -4249,6 +4359,14 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     }
     if (accountId.present) {
       map['account_id'] = Variable<int>(accountId.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(
+        $LedgerEntriesTable.$converterkind.toSql(kind.value),
+      );
+    }
+    if (counterAccountId.present) {
+      map['counter_account_id'] = Variable<int>(counterAccountId.value);
     }
     if (sourceLabel.present) {
       map['source_label'] = Variable<String>(sourceLabel.value);
@@ -4272,6 +4390,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
           ..write('amountMinor: $amountMinor, ')
           ..write('date: $date, ')
           ..write('accountId: $accountId, ')
+          ..write('kind: $kind, ')
+          ..write('counterAccountId: $counterAccountId, ')
           ..write('sourceLabel: $sourceLabel, ')
           ..write('note: $note, ')
           ..write('createdAt: $createdAt, ')
@@ -4849,24 +4969,6 @@ final class $$AccountsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
-
-  static MultiTypedResultKey<$LedgerEntriesTable, List<LedgerEntryRow>>
-  _ledgerEntriesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.ledgerEntries,
-    aliasName: 'accounts__id__ledger_entries__account_id',
-  );
-
-  $$LedgerEntriesTableProcessedTableManager get ledgerEntriesRefs {
-    final manager = $$LedgerEntriesTableTableManager(
-      $_db,
-      $_db.ledgerEntries,
-    ).filter((f) => f.accountId.id.sqlEquals($_itemColumn<int>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_ledgerEntriesRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
 }
 
 class $$AccountsTableFilterComposer
@@ -4935,31 +5037,6 @@ class $$AccountsTableFilterComposer
           }) => $$ExpensesTableFilterComposer(
             $db: $db,
             $table: $db.expenses,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> ledgerEntriesRefs(
-    Expression<bool> Function($$LedgerEntriesTableFilterComposer f) f,
-  ) {
-    final $$LedgerEntriesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.ledgerEntries,
-      getReferencedColumn: (t) => t.accountId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$LedgerEntriesTableFilterComposer(
-            $db: $db,
-            $table: $db.ledgerEntries,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -5085,31 +5162,6 @@ class $$AccountsTableAnnotationComposer
     );
     return f(composer);
   }
-
-  Expression<T> ledgerEntriesRefs<T extends Object>(
-    Expression<T> Function($$LedgerEntriesTableAnnotationComposer a) f,
-  ) {
-    final $$LedgerEntriesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.ledgerEntries,
-      getReferencedColumn: (t) => t.accountId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$LedgerEntriesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.ledgerEntries,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
 }
 
 class $$AccountsTableTableManager
@@ -5125,7 +5177,7 @@ class $$AccountsTableTableManager
           $$AccountsTableUpdateCompanionBuilder,
           (AccountRow, $$AccountsTableReferences),
           AccountRow,
-          PrefetchHooks Function({bool expensesRefs, bool ledgerEntriesRefs})
+          PrefetchHooks Function({bool expensesRefs})
         > {
   $$AccountsTableTableManager(_$AppDatabase db, $AccountsTable table)
     : super(
@@ -5186,63 +5238,32 @@ class $$AccountsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback:
-              ({expensesRefs = false, ledgerEntriesRefs = false}) {
-                return PrefetchHooks(
-                  db: db,
-                  explicitlyWatchedTables: [
-                    if (expensesRefs) db.expenses,
-                    if (ledgerEntriesRefs) db.ledgerEntries,
-                  ],
-                  addJoins: null,
-                  getPrefetchedDataCallback: (items) async {
-                    return [
-                      if (expensesRefs)
-                        await $_getPrefetchedData<
-                          AccountRow,
-                          $AccountsTable,
-                          ExpenseRow
-                        >(
-                          currentTable: table,
-                          referencedTable: $$AccountsTableReferences
-                              ._expensesRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$AccountsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).expensesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.accountId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                      if (ledgerEntriesRefs)
-                        await $_getPrefetchedData<
-                          AccountRow,
-                          $AccountsTable,
-                          LedgerEntryRow
-                        >(
-                          currentTable: table,
-                          referencedTable: $$AccountsTableReferences
-                              ._ledgerEntriesRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$AccountsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).ledgerEntriesRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.accountId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                    ];
-                  },
-                );
+          prefetchHooksCallback: ({expensesRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (expensesRefs) db.expenses],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (expensesRefs)
+                    await $_getPrefetchedData<
+                      AccountRow,
+                      $AccountsTable,
+                      ExpenseRow
+                    >(
+                      currentTable: table,
+                      referencedTable: $$AccountsTableReferences
+                          ._expensesRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$AccountsTableReferences(db, table, p0).expensesRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.accountId == item.id),
+                      typedResults: items,
+                    ),
+                ];
               },
+            );
+          },
         ),
       );
 }
@@ -5259,7 +5280,7 @@ typedef $$AccountsTableProcessedTableManager =
       $$AccountsTableUpdateCompanionBuilder,
       (AccountRow, $$AccountsTableReferences),
       AccountRow,
-      PrefetchHooks Function({bool expensesRefs, bool ledgerEntriesRefs})
+      PrefetchHooks Function({bool expensesRefs})
     >;
 typedef $$TagsTableCreateCompanionBuilder =
     TagsCompanion Function({
@@ -7279,6 +7300,8 @@ typedef $$LedgerEntriesTableCreateCompanionBuilder =
       required int amountMinor,
       required DateTime date,
       Value<int?> accountId,
+      Value<LedgerEntryKind> kind,
+      Value<int?> counterAccountId,
       Value<String?> sourceLabel,
       Value<String?> note,
       Value<DateTime> createdAt,
@@ -7290,6 +7313,8 @@ typedef $$LedgerEntriesTableUpdateCompanionBuilder =
       Value<int> amountMinor,
       Value<DateTime> date,
       Value<int?> accountId,
+      Value<LedgerEntryKind> kind,
+      Value<int?> counterAccountId,
       Value<String?> sourceLabel,
       Value<String?> note,
       Value<DateTime> createdAt,
@@ -7320,6 +7345,23 @@ final class $$LedgerEntriesTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static $AccountsTable _counterAccountIdTable(_$AppDatabase db) => db.accounts
+      .createAlias('ledger_entries__counter_account_id__accounts__id');
+
+  $$AccountsTableProcessedTableManager? get counterAccountId {
+    final $_column = $_itemColumn<int>('counter_account_id');
+    if ($_column == null) return null;
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_counterAccountIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 }
 
 class $$LedgerEntriesTableFilterComposer
@@ -7344,6 +7386,12 @@ class $$LedgerEntriesTableFilterComposer
   ColumnFilters<DateTime> get date => $composableBuilder(
     column: $table.date,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<LedgerEntryKind, LedgerEntryKind, String>
+  get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnFilters<String> get sourceLabel => $composableBuilder(
@@ -7388,6 +7436,29 @@ class $$LedgerEntriesTableFilterComposer
     );
     return composer;
   }
+
+  $$AccountsTableFilterComposer get counterAccountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.counterAccountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LedgerEntriesTableOrderingComposer
@@ -7411,6 +7482,11 @@ class $$LedgerEntriesTableOrderingComposer
 
   ColumnOrderings<DateTime> get date => $composableBuilder(
     column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7456,6 +7532,29 @@ class $$LedgerEntriesTableOrderingComposer
     );
     return composer;
   }
+
+  $$AccountsTableOrderingComposer get counterAccountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.counterAccountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LedgerEntriesTableAnnotationComposer
@@ -7477,6 +7576,9 @@ class $$LedgerEntriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LedgerEntryKind, String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
 
   GeneratedColumn<String> get sourceLabel => $composableBuilder(
     column: $table.sourceLabel,
@@ -7516,6 +7618,29 @@ class $$LedgerEntriesTableAnnotationComposer
     );
     return composer;
   }
+
+  $$AccountsTableAnnotationComposer get counterAccountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.counterAccountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$LedgerEntriesTableTableManager
@@ -7531,7 +7656,7 @@ class $$LedgerEntriesTableTableManager
           $$LedgerEntriesTableUpdateCompanionBuilder,
           (LedgerEntryRow, $$LedgerEntriesTableReferences),
           LedgerEntryRow,
-          PrefetchHooks Function({bool accountId})
+          PrefetchHooks Function({bool accountId, bool counterAccountId})
         > {
   $$LedgerEntriesTableTableManager(_$AppDatabase db, $LedgerEntriesTable table)
     : super(
@@ -7550,6 +7675,8 @@ class $$LedgerEntriesTableTableManager
                 Value<int> amountMinor = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<int?> accountId = const Value.absent(),
+                Value<LedgerEntryKind> kind = const Value.absent(),
+                Value<int?> counterAccountId = const Value.absent(),
                 Value<String?> sourceLabel = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -7559,6 +7686,8 @@ class $$LedgerEntriesTableTableManager
                 amountMinor: amountMinor,
                 date: date,
                 accountId: accountId,
+                kind: kind,
+                counterAccountId: counterAccountId,
                 sourceLabel: sourceLabel,
                 note: note,
                 createdAt: createdAt,
@@ -7570,6 +7699,8 @@ class $$LedgerEntriesTableTableManager
                 required int amountMinor,
                 required DateTime date,
                 Value<int?> accountId = const Value.absent(),
+                Value<LedgerEntryKind> kind = const Value.absent(),
+                Value<int?> counterAccountId = const Value.absent(),
                 Value<String?> sourceLabel = const Value.absent(),
                 Value<String?> note = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -7579,6 +7710,8 @@ class $$LedgerEntriesTableTableManager
                 amountMinor: amountMinor,
                 date: date,
                 accountId: accountId,
+                kind: kind,
+                counterAccountId: counterAccountId,
                 sourceLabel: sourceLabel,
                 note: note,
                 createdAt: createdAt,
@@ -7592,47 +7725,65 @@ class $$LedgerEntriesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({accountId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (accountId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.accountId,
-                                referencedTable: $$LedgerEntriesTableReferences
-                                    ._accountIdTable(db),
-                                referencedColumn: $$LedgerEntriesTableReferences
-                                    ._accountIdTable(db)
-                                    .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({accountId = false, counterAccountId = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (accountId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.accountId,
+                                    referencedTable:
+                                        $$LedgerEntriesTableReferences
+                                            ._accountIdTable(db),
+                                    referencedColumn:
+                                        $$LedgerEntriesTableReferences
+                                            ._accountIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (counterAccountId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.counterAccountId,
+                                    referencedTable:
+                                        $$LedgerEntriesTableReferences
+                                            ._counterAccountIdTable(db),
+                                    referencedColumn:
+                                        $$LedgerEntriesTableReferences
+                                            ._counterAccountIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -7649,7 +7800,7 @@ typedef $$LedgerEntriesTableProcessedTableManager =
       $$LedgerEntriesTableUpdateCompanionBuilder,
       (LedgerEntryRow, $$LedgerEntriesTableReferences),
       LedgerEntryRow,
-      PrefetchHooks Function({bool accountId})
+      PrefetchHooks Function({bool accountId, bool counterAccountId})
     >;
 
 class $AppDatabaseManager {

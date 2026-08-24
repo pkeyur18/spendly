@@ -870,5 +870,57 @@ void main() {
       expect(await db.select(db.expenses).get(), hasLength(1));
       expect(await db.select(db.ledgerEntries).get(), isEmpty);
     });
+
+    test('merge attaches a transfer to both newly-inserted accounts under '
+        'their new local ids', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceA = await AccountRepository(
+        sourceDb,
+      ).create(name: 'Cash', type: AccountType.cash);
+      final sourceB = await AccountRepository(
+        sourceDb,
+      ).create(name: 'Bank', type: AccountType.bank);
+      await LedgerRepository(sourceDb).addTransfer(
+        amount: Money.parse('300'),
+        date: DateTime(2026, 7, 5),
+        fromAccountId: sourceA,
+        toAccountId: sourceB,
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload); // into the fresh 8-default db
+
+      final accounts = await db.select(db.accounts).get();
+      final entry = (await db.select(db.ledgerEntries).get()).single;
+      final localA = accounts.firstWhere((a) => a.name == 'Cash');
+      final localB = accounts.firstWhere((a) => a.name == 'Bank');
+      expect(entry.kind, LedgerEntryKind.transfer);
+      expect(entry.accountId, localA.id);
+      expect(entry.counterAccountId, localB.id);
+    });
+
+    test('export then replace preserves a transfer\'s kind and both accounts',
+        () async {
+      final accountRepo = AccountRepository(db);
+      final a = await accountRepo.create(name: 'Cash', type: AccountType.cash);
+      final b = await accountRepo.create(name: 'Bank', type: AccountType.bank);
+      await LedgerRepository(db).addTransfer(
+        amount: Money.parse('300'),
+        date: DateTime(2026, 7, 5),
+        fromAccountId: a,
+        toAccountId: b,
+      );
+
+      final payload = await repo.exportAll();
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final entry = (await freshDb.select(freshDb.ledgerEntries).get()).single;
+      expect(entry.kind, LedgerEntryKind.transfer);
+      expect(entry.accountId, a);
+      expect(entry.counterAccountId, b);
+    });
   });
 }

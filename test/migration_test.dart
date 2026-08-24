@@ -54,7 +54,7 @@ const _v1Schema = [
 ];
 
 void main() {
-  test('v1 -> v15 upgrade produces a working schema with backfilled data', () async {
+  test('v1 -> v16 upgrade produces a working schema with backfilled data', () async {
     final db = AppDatabase(
       NativeDatabase.memory(
         setup: (rawDb) {
@@ -253,5 +253,13 @@ void main() {
     )..where((t) => t.id.equals(entryId))).getSingle();
     expect(entry.amountMinor, 50000);
     expect(entry.externalId, isNotNull);
+
+    // from<16: this same v1-start upgrade already created ledger_entries at
+    // from<15 (via m.createTable, which always emits the CURRENT — v16 —
+    // definition), so kind/counter_account_id exist from that single
+    // createTable call. A fresh insert with no kind specified defaults to
+    // income, same as every row that existed before transfers did.
+    expect(entry.kind, LedgerEntryKind.income);
+    expect(entry.counterAccountId, isNull);
   });
 }

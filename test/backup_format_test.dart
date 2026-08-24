@@ -363,6 +363,64 @@ void main() {
     expect(decoded.sourceLabel, 'Salary');
     expect(decoded.note, 'July payout');
     expect(decoded.externalId, 'inc-1');
+    expect(decoded.kind, LedgerEntryKind.income);
+    expect(decoded.counterAccountId, isNull);
+  });
+
+  test('a transfer ledger entry (schema v16) round-trips kind and '
+      'counterAccountId', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            amountMinor: 30000,
+            date: DateTime(2026, 7, 15),
+            accountId: 1,
+            sourceLabel: null,
+            note: 'Move to savings',
+            externalId: 'xfer-1',
+            kind: LedgerEntryKind.transfer,
+            counterAccountId: 2,
+          ),
+        ],
+      ),
+    );
+    final decoded = (await decodePayload(envelope)).ledgerEntries.single;
+    expect(decoded.kind, LedgerEntryKind.transfer);
+    expect(decoded.accountId, 1);
+    expect(decoded.counterAccountId, 2);
+  });
+
+  test('a pre-v16 ledger entry (no "kind" key) decodes as income', () async {
+    final v9Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 9,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['ledgerEntries'] = [
+          {
+            'id': 1,
+            'amountMinor': 50000,
+            'date': DateTime(2026, 7, 1).toIso8601String(),
+            'accountId': null,
+            'sourceLabel': 'Salary',
+            'note': null,
+            'externalId': 'inc-1',
+            // No "kind" or "counterAccountId" key at all.
+          },
+        ],
+    });
+    final decoded = (await decodePayload(v9Json)).ledgerEntries.single;
+    expect(decoded.kind, LedgerEntryKind.income);
+    expect(decoded.counterAccountId, isNull);
   });
 
   test('a pre-v9 file (no ledgerEntries key) decodes with no ledger entries '

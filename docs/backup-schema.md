@@ -452,6 +452,28 @@ the account id map).
 A pre-v9 file has no `ledgerEntries` key at all. `BackupPayload.fromJson` reads it as `[]` —
 same additive, no-destructive-branch pattern as every new array before it.
 
+## Additive fields — `kind` and `counterAccountId` on ledger entries (schema v16)
+
+Transfers (Phase 6) reuse the same `ledgerEntries` array v9 introduced rather than adding a
+new one — an entry is now either `"kind": "income"` (the only kind that existed before) or
+`"kind": "transfer"`, and a transfer additionally carries `counterAccountId`: the backup
+file's id for the destination account, resolved the same way `accountId` already is (Replace
+verbatim, Merge through the account id map). No version bump, same additive pattern as
+`openingBalanceMonth` on accounts: a pre-v16 file simply lacks both keys, and
+`BackupLedgerEntry.fromJson` reads a missing `kind` as `income` and a missing
+`counterAccountId` as `null` — exactly what every pre-transfer entry already was.
+
+- **Replace** restores both fields verbatim, same as every other ledger entry field.
+- **Merge** resolves `counterAccountId` through the same account id map `accountId` uses. A
+  transfer whose either end can't be mapped to a real local account (should never happen on a
+  well-formed payload — every transfer's accounts appear in the same payload's `accounts`
+  array) is skipped entirely rather than inserted half-mapped, same orphan-safety reasoning
+  as `_mergeExpenses`'s category check.
+- The Merge dedupe fingerprint now includes `kind` and `counterAccountId` alongside the
+  existing amount/date/account/sourceLabel/note terms, so two transfers that happen to share
+  every other field but move money between different account pairs are never treated as
+  duplicates of each other.
+
 ## Merge algorithm (`externalId` first, natural-key fallback)
 
 - **Categories** — matched by `externalId` first when both the backup row and a local row

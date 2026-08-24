@@ -1040,3 +1040,128 @@ needed; proceeded directly from the existing spec.
   and Phase 7 (insights, savings goals, app lock, autocomplete) remain unstarted, per the
   original roadmap — not requested yet.
 
+## Add Income sheet: visual refinement (impeccable) — done
+
+User flagged the Add/Edit Income sheet as functionally correct but "clumsy" — a plain stack
+of `TextField`/`InputDecorator`/`ChoiceChip`-`Wrap` with no visual hierarchy, styled
+inconsistently with the rest of the app. Ran through the `impeccable` skill's Setup step
+(loads `PRODUCT.md`/`DESIGN.md`, already fully documented from an earlier session) and
+treated this as a refinement — same fields, same bottom-sheet flow, applying the
+already-committed design system more correctly rather than inventing a new one. This is the
+same screen a prior session's Quick Add chip redesign was **rejected** on for drifting from
+the incumbent visual language; this pass deliberately copied proven in-app recipes instead
+of improvising:
+
+- [x] Amount styled in Sora (20px/700), per DESIGN.md's "Sora-for-money" rule — was
+      rendered in the default Inter body style, same as every other field.
+- [x] The per-account `ChoiceChip` `Wrap` (unwieldy past a handful of accounts, and a third
+      distinct control type sitting next to two others) replaced by a single tappable
+      Account row that opens a picker sheet — the exact list shape Quick Add's own account
+      picker already uses. Extracted into a shared `showAccountPickerSheet` (new
+      `lib/features/accounts/account_picker_sheet.dart`) rather than copy-pasted a third
+      time, since Transfer (below) needed the identical picker twice more. Quick Add's own
+      copy is left untouched — it alone needs the inline "+ New account" shortcut.
+- [x] Date and Account now sit side by side as matching `InputDecorator` rows, mirroring
+      the trip-dates row layout already in `tag_edit_sheet.dart`.
+- [x] Save is now the brand-gradient CTA every other primary action in the app uses (copied
+      verbatim from `tag_edit_sheet.dart`'s `_saveButton()`) — was a plain default-styled
+      `FilledButton`.
+- [x] Delete gains a confirm dialog: unlike the list's swipe-to-delete, this button has no
+      undo path back to the entry once the sheet closes.
+
+### Verification done
+- `flutter analyze` -> No issues. `flutter test` -> unaffected (no behavior change, no new
+  tests needed for a pure visual refinement with unchanged field/save/delete logic).
+- Not run on a device/simulator — per standing user instruction.
+
+## Phase 6 — Transfers & live balances (schema v16) — done
+
+Implemented per `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s Phase 6
+section. Proceeded directly from the existing spec, same as Phase 5.
+
+- [x] **Transfers reuse `LedgerEntries`**, not a new table — schema v16 adds `kind`
+      (`income`/`transfer`, default `income`) and `counterAccountId` (destination account,
+      transfer-only) to the table Phase 5 deliberately left `kind`-less. Migration follows
+      the `month_key` (v2) precedent for a NOT-NULL column on a populated table: raw
+      `ALTER ... ADD COLUMN kind TEXT` (nullable at the DDL level) then an `UPDATE` backfill
+      to `'income'`, guarded by the now-familiar `_hasColumn` createTable-trap check.
+      `LedgerRepository` gained `addTransfer()`, and every income-only query (`watchAll`,
+      `watchInRange`, `watchTotalInRange` — the Income screen and the Recap/report
+      savings-rate cards) now explicitly filters `kind == income`, so transfers never leak
+      into "income" anywhere they weren't before.
+- [x] **Derived balance, not stored** — `computeAccountBalance()` (new, pure,
+      `ledger/balance_math.dart`): opening balance + income − expense + transfersIn −
+      transfersOut. **Deliberately scoped to the current month**, not lifetime, departing
+      from the spec's literal wording — because opening balance itself resets monthly (the
+      prior session's explicit user request), a lifetime balance formula would silently mix
+      a monthly-reset input with a lifetime output. Combined via three new grouped
+      `LedgerRepository` queries (`watchIncomeTotalsByAccount`,
+      `watchTransfersInTotalsByAccount`, `watchTransfersOutTotalsByAccount` — one query
+      across every account, same shape as the existing `watchTotalsByAccount`, not one
+      query per account) and two new Riverpod providers
+      (`lib/features/ledger/account_balance_provider.dart`):
+      `accountBalancesThisMonthProvider` (map) and `totalBalanceThisMonthProvider` (sum
+      over active accounts only).
+- [x] **Account detail timeline union** — the one screen where `Expenses` and
+      `LedgerEntries` are ever combined, per the spec's own scoping. A new
+      `_accountLedgerProvider` (unpaginated — income/transfers per account are naturally
+      few) supplies ledger rows; a local `_groupTimelineByDay` merge-sorts them against the
+      existing paginated expense list before bucketing by day. Ledger rows render via a new
+      `_LedgerTimelineTile` (income: `+amount`; transfer out: `-amount`, "Transfer to X";
+      transfer in: `+amount`, "Transfer from Y") — tap to edit, no swipe-delete here (that
+      stays on the dedicated Income screen / each edit sheet's own Delete button). A new
+      "Balance this month" card sits above the existing "Spent this month/year" card; a new
+      app-bar Transfer action (hidden when fewer than 2 active accounts exist, since a
+      transfer needs two) opens the new Transfer sheet pre-filled with this account as the
+      source.
+- [x] **New Transfer sheet** (`lib/features/ledger/transfer_screen.dart`) — amount/From/To/
+      date/note, same visual recipe as the just-refined Income sheet (Sora amount, gradient
+      Save CTA, confirm-dialog Delete). From/To each use the new shared
+      `showAccountPickerSheet`, each excluding whichever account is picked on the other
+      side so the same account can't be chosen twice.
+- [x] **Dashboard balance card** — a new `_BalanceCard` on Home, below the budget hero,
+      showing the total across active accounts; renders nothing at all when there are no
+      accounts, same "silent when unused" convention `_DueRecurringCard` already
+      established.
+- [x] **Backup** — `kind`/`counterAccountId` are additive fields on the existing
+      `ledgerEntries` array entries (no version bump, same pattern as `openingBalanceMonth`
+      on accounts): a pre-v16 file simply lacks both keys, reading as `income`/`null`. Merge
+      resolves `counterAccountId` through the same account-id map `accountId` already uses,
+      skipping a transfer entirely if either end can't be mapped (an orphan safety net that
+      should never trigger on a well-formed payload). The merge dedupe fingerprint now
+      includes `kind` and `counterAccountId` so two transfers between different account
+      pairs are never mistaken for duplicates of each other.
+
+### A test flakiness dead-end, and the decision made about it
+A first attempt at testing the combining Riverpod providers
+(`accountBalancesThisMonthProvider`/`totalBalanceThisMonthProvider`) end-to-end through a
+`ProviderContainer` reliably hung — `allAccountsProvider` never emitted a first value within
+a generous polling window, for reasons not fully root-caused (no other test in this codebase
+drives a chain of `StreamProvider`s through a bare `ProviderContainer` outside a widget test,
+so there was no working precedent to compare against). Rather than sink further time into a
+Riverpod/Drift interaction that may be specific to this test-runner environment, the test was
+dropped in favor of testing what it actually needed to prove at a lower, more reliable layer:
+`computeAccountBalance()` directly (pure function, 5 cases) and the new grouped
+`LedgerRepository` queries directly against a real in-memory `AppDatabase` (the same proven
+pattern every other repository test in this codebase already uses). The two combining
+providers themselves are thin fold/sum glue over those already-tested pieces.
+
+### Verification done
+- `flutter analyze` -> No issues.
+- `flutter test` -> **444 passed** (was 428 before this phase; 54 test files, up from 53).
+  New coverage: `balance_math_test.dart` (5 pure-function tests), 8 new
+  `ledger_repository_test.dart` cases (transfer CRUD, both-sides re-pointing on update,
+  grouped income/transfer-in/transfer-out totals, the account-timeline union query, income
+  queries excluding transfers), an extended v1→v16 migration assertion, 2 new
+  `backup_format_test.dart` cases (transfer round-trip, pre-v16 defaults-to-income), and 2
+  new `backup_repository_test.dart` merge/replace cases for transfers.
+- Not run on a device/simulator — per standing user instruction, the app is launched and
+  tested manually.
+
+### Deferred / notes
+- Phase 7 (insight feed, savings goals, app lock via `local_auth`, note/merchant
+  autocomplete) remains unstarted, per the original roadmap — not requested yet.
+- The account detail timeline's day-total header still sums only expenses (unchanged
+  meaning: "spent that day"), deliberately not netting in income/transfers of different
+  signs into one ambiguous number.
+

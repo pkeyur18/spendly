@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v15, backup format v9, 428 passing tests (53 test
+> Recap feature. Drift schema v16, backup format v9, 444 passing tests (54 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -79,6 +79,12 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   by construction rather than by an opt-out guard someone could forget. Once any income is
   logged for a month, Monthly Recap and the monthly/custom reports additionally show net
   cashflow and savings rate — silent (unchanged) for the many users who never touch Income.
+- **Transfers & balances** — move money between two of your own accounts (never counted as
+  spend or income); each account's detail screen unions its expenses and ledger entries
+  (income landed in it, transfers either side of it) into one timeline, the only place those
+  two tables are ever combined. A derived balance — opening balance + income − expenses ±
+  transfers, this month only, matching opening balance's own monthly reset — shows on every
+  account and totals up into a dashboard card, both computed fresh on read, never stored.
 - **Widgets** — iOS WidgetKit (Today, Quick Add, This Month, Lock Screen) + one adaptive
   Android Glance widget. Quick-add tiles deep-link into a pre-filled Quick Add
   (`spendly://quickadd?category=<id>`); read-only widgets refresh after any expense.
@@ -101,7 +107,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 |---|---|
 | UI / framework | Flutter (Dart) |
 | State | Riverpod (`flutter_riverpod`) |
-| Local DB | Drift (SQLite), schema v15 — money as integer minor units |
+| Local DB | Drift (SQLite), schema v16 — money as integer minor units |
 | Charts | `fl_chart` |
 | Notifications | `flutter_local_notifications` + `timezone` / `flutter_timezone` |
 | Reports/export | `pdf`, `excel`, `share_plus` |

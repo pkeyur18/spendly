@@ -391,9 +391,10 @@ class BackupRepository {
     };
     final fingerprints = <String>{
       for (final e in existing)
-        BackupLedgerEntry.fromRow(
-          e,
-        ).fingerprint(mappedAccountId: e.accountId),
+        BackupLedgerEntry.fromRow(e).fingerprint(
+          mappedAccountId: e.accountId,
+          mappedCounterAccountId: e.counterAccountId,
+        ),
     };
 
     final toInsert = <LedgerEntriesCompanion>[];
@@ -404,9 +405,28 @@ class BackupRepository {
       final mappedAccountId = e.accountId == null
           ? null
           : accountIdMap[e.accountId];
-      final fp = e.fingerprint(mappedAccountId: mappedAccountId);
+      final mappedCounterAccountId = e.counterAccountId == null
+          ? null
+          : accountIdMap[e.counterAccountId];
+      // A transfer needs both ends mapped to a real local account — an
+      // orphan safety net, same reasoning as _mergeExpenses's category
+      // check. Should never trigger on a well-formed payload (every
+      // transfer's accounts appear in the same payload's accounts array).
+      if (e.kind == LedgerEntryKind.transfer &&
+          (mappedAccountId == null || mappedCounterAccountId == null)) {
+        continue;
+      }
+      final fp = e.fingerprint(
+        mappedAccountId: mappedAccountId,
+        mappedCounterAccountId: mappedCounterAccountId,
+      );
       if (!fingerprints.add(fp)) continue; // already present (or dup in file)
-      toInsert.add(e.toInsertCompanion(mappedAccountId: mappedAccountId));
+      toInsert.add(
+        e.toInsertCompanion(
+          mappedAccountId: mappedAccountId,
+          mappedCounterAccountId: mappedCounterAccountId,
+        ),
+      );
     }
     if (toInsert.isNotEmpty) {
       await _db.batch((batch) => batch.insertAll(_db.ledgerEntries, toInsert));

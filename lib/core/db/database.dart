@@ -255,15 +255,16 @@ class Settings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-/// Income entries (schema v15) — money coming IN, deliberately a separate
-/// table rather than a `kind` column on [Expenses]. See
+/// Non-expense money movement (schema v15, `kind` added v16) — income AND
+/// transfers, deliberately a separate table rather than a `kind` column on
+/// [Expenses] itself. See
 /// `docs/superpowers/specs/2026-08-23-ux-and-ledger-design.md`'s "separate
 /// ledger table" decision: roughly fourteen existing queries over `Expenses`
-/// would each need an opt-out guard to exclude income if it lived there — a
-/// single missed one silently inflates spend. Keeping income structurally
-/// apart means every one of those queries is correct by construction, with
-/// nothing to remember. No `kind` column yet — this table holds only income
-/// today; Phase 6 (transfers) adds one when a second kind actually exists.
+/// would each need an opt-out guard to exclude this if it lived there — a
+/// single missed one silently inflates spend. Keeping it structurally apart
+/// means every one of those queries is correct by construction.
+enum LedgerEntryKind { income, transfer }
+
 @DataClassName('LedgerEntryRow')
 @TableIndex(name: 'idx_ledger_entries_date', columns: {#date})
 class LedgerEntries extends Table {
@@ -271,11 +272,23 @@ class LedgerEntries extends Table {
   IntColumn get amountMinor => integer()();
   DateTimeColumn get date => dateTime()();
 
-  /// Which account the money landed in, or null if unassigned — same
-  /// optionality as [Expenses.accountId].
+  /// Where the money landed (income) or left FROM (transfer). Nullable only
+  /// for an unassigned income entry — always set for a transfer.
   IntColumn get accountId => integer().nullable().references(Accounts, #id)();
 
-  /// Free text, e.g. "Salary", "Freelance" — purely descriptive.
+  /// income or transfer (schema v16). Existing pre-v16 rows are all income
+  /// (backfilled by the v16 migration) — this table held nothing else until
+  /// transfers existed to put in it.
+  TextColumn get kind =>
+      textEnum<LedgerEntryKind>().withDefault(const Constant('income'))();
+
+  /// Destination account for a transfer — money leaves [accountId] and lands
+  /// here. Null for an income entry; always set together with
+  /// `kind == transfer`.
+  IntColumn get counterAccountId =>
+      integer().nullable().references(Accounts, #id)();
+
+  /// Free text, e.g. "Salary", "Freelance" — purely descriptive, income only.
   TextColumn get sourceLabel => text().nullable()();
   TextColumn get note => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -312,7 +325,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -471,6 +484,26 @@ class AppDatabase extends _$AppDatabase {
         // Whole new table — no populated-table hazard, same as
         // expenseReceipts/accounts were at their own introduction.
         await m.createTable(ledgerEntries);
+      }
+      if (from < 16) {
+        // Same createTable trap as every prior column added to a table also
+        // created in this same onUpgrade pass: an install jumping from below
+        // v15 already created ledger_entries via m.createTable at from<15,
+        // which emits the CURRENT (later) definition — already including
+        // kind/counter_account_id — so both additions below must guard.
+        if (!await _hasColumn('ledger_entries', 'kind')) {
+          // Raw ALTER, not m.addColumn: same NOT-NULL-on-a-populated-table
+          // restriction as month_key (from<2) hit first — nullable at the
+          // DDL level, immediately backfilled to the only kind that existed
+          // before this migration.
+          await customStatement('ALTER TABLE ledger_entries ADD COLUMN kind TEXT');
+          await customStatement(
+            "UPDATE ledger_entries SET kind = 'income' WHERE kind IS NULL",
+          );
+        }
+        if (!await _hasColumn('ledger_entries', 'counter_account_id')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.counterAccountId);
+        }
       }
     },
   );

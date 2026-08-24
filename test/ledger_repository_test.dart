@@ -140,4 +140,176 @@ void main() {
         .first;
     expect(total, Money.zero);
   });
+
+  test('watchTotalInRange excludes transfers — moving money isn\'t income',
+      () async {
+    final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+    final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+    await ledger.addIncome(amount: Money.parse('500'), date: DateTime(2026, 6, 5));
+    await ledger.addTransfer(
+      amount: Money.parse('300'),
+      date: DateTime(2026, 6, 6),
+      fromAccountId: a,
+      toAccountId: b,
+    );
+    final total = await ledger
+        .watchTotalInRange(DateTime(2026, 6, 1), DateTime(2026, 7, 1))
+        .first;
+    expect(total, Money.parse('500'));
+  });
+
+  test('watchAll (Income screen) excludes transfers', () async {
+    final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+    final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+    await ledger.addIncome(amount: Money.parse('500'), date: DateTime(2026, 6, 5));
+    await ledger.addTransfer(
+      amount: Money.parse('300'),
+      date: DateTime(2026, 6, 6),
+      fromAccountId: a,
+      toAccountId: b,
+    );
+    final rows = await ledger.watchAll().first;
+    expect(rows, hasLength(1));
+    expect(rows.single.kind, LedgerEntryKind.income);
+  });
+
+  group('transfers', () {
+    test('addTransfer then read back exact fields', () async {
+      final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+      final id = await ledger.addTransfer(
+        amount: Money.parse('750'),
+        date: DateTime(2026, 6, 10),
+        fromAccountId: a,
+        toAccountId: b,
+        note: 'Moved savings',
+      );
+      final row = await (db.select(
+        db.ledgerEntries,
+      )..where((t) => t.id.equals(id))).getSingle();
+      expect(row.kind, LedgerEntryKind.transfer);
+      expect(row.accountId, a);
+      expect(row.counterAccountId, b);
+      expect(row.amountMinor, Money.parse('750').minor);
+      expect(row.note, 'Moved savings');
+    });
+
+    test('update can re-point both accounts on a transfer', () async {
+      final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+      final c = await accounts.create(name: 'Wallet', type: AccountType.wallet);
+      final id = await ledger.addTransfer(
+        amount: Money.parse('100'),
+        date: DateTime(2026, 6, 10),
+        fromAccountId: a,
+        toAccountId: b,
+      );
+      await ledger.update(id, accountId: c, counterAccountId: a);
+      final row = await (db.select(
+        db.ledgerEntries,
+      )..where((t) => t.id.equals(id))).getSingle();
+      expect(row.accountId, c);
+      expect(row.counterAccountId, a);
+    });
+
+    test('watchIncomeTotalsByAccount is grouped and excludes transfers',
+        () async {
+      final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+      await ledger.addIncome(
+        amount: Money.parse('500'),
+        date: DateTime(2026, 6, 5),
+        accountId: a,
+      );
+      await ledger.addIncome(
+        amount: Money.parse('200'),
+        date: DateTime(2026, 6, 6),
+        accountId: a,
+      );
+      await ledger.addIncome(
+        amount: Money.parse('100'),
+        date: DateTime(2026, 6, 7),
+        accountId: b,
+      );
+      await ledger.addTransfer(
+        amount: Money.parse('999'),
+        date: DateTime(2026, 6, 8),
+        fromAccountId: a,
+        toAccountId: b,
+      );
+      final totals = await ledger
+          .watchIncomeTotalsByAccount(DateTime(2026, 6, 1), DateTime(2026, 7, 1))
+          .first;
+      expect(totals[a], Money.parse('700'));
+      expect(totals[b], Money.parse('100'));
+    });
+
+    test('watchTransfersOutTotalsByAccount / watchTransfersInTotalsByAccount '
+        'attribute the right side to the right account', () async {
+      final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+      await ledger.addTransfer(
+        amount: Money.parse('300'),
+        date: DateTime(2026, 6, 6),
+        fromAccountId: a,
+        toAccountId: b,
+      );
+      await ledger.addTransfer(
+        amount: Money.parse('50'),
+        date: DateTime(2026, 6, 7),
+        fromAccountId: a,
+        toAccountId: b,
+      );
+      final range = (DateTime(2026, 6, 1), DateTime(2026, 7, 1));
+      final out = await ledger
+          .watchTransfersOutTotalsByAccount(range.$1, range.$2)
+          .first;
+      final into = await ledger
+          .watchTransfersInTotalsByAccount(range.$1, range.$2)
+          .first;
+      expect(out[a], Money.parse('350'));
+      expect(out.containsKey(b), isFalse);
+      expect(into[b], Money.parse('350'));
+      expect(into.containsKey(a), isFalse);
+    });
+
+    test('watchTouchingAccount unions income landed in it and transfers on '
+        'either side of it', () async {
+      final a = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final b = await accounts.create(name: 'Bank', type: AccountType.bank);
+      final c = await accounts.create(name: 'Wallet', type: AccountType.wallet);
+      final incomeId = await ledger.addIncome(
+        amount: Money.parse('500'),
+        date: DateTime(2026, 6, 1),
+        accountId: a,
+      );
+      final transferOutId = await ledger.addTransfer(
+        amount: Money.parse('100'),
+        date: DateTime(2026, 6, 2),
+        fromAccountId: a,
+        toAccountId: b,
+      );
+      final transferInId = await ledger.addTransfer(
+        amount: Money.parse('50'),
+        date: DateTime(2026, 6, 3),
+        fromAccountId: c,
+        toAccountId: a,
+      );
+      // Doesn't touch account a at all — must not appear.
+      await ledger.addTransfer(
+        amount: Money.parse('999'),
+        date: DateTime(2026, 6, 4),
+        fromAccountId: b,
+        toAccountId: c,
+      );
+
+      final rows = await ledger
+          .watchTouchingAccount(a, DateTime(2026, 6, 1), DateTime(2026, 7, 1))
+          .first;
+      expect(
+        rows.map((r) => r.id).toSet(),
+        {incomeId, transferOutId, transferInId},
+      );
+    });
+  });
 }
