@@ -16,10 +16,11 @@ The app is redesigned to a single dark "glass premium" visual language and
 **light mode is removed entirely** — no theme toggle, no `ThemeMode.system`
 following. This covers every in-app surface: screens, shared components,
 SnackBars, AlertDialogs, native date/time pickers, loading/error/empty
-states, and the once-a-month Recap hero. It does not cover OS-level surfaces
-Flutter's theme system can't reach — system push-notification banner
-styling, the `home_widget` home-screen widget, or the app icon/splash screen
-— those are out of scope; flag separately if wanted later.
+states, and the once-a-month Recap hero. It does not cover OS-level surfaces Flutter's theme system can't reach — system
+push-notification banner styling or the app icon/splash screen; those stay
+out of scope. The home-screen widget **is** in scope (added per user
+request) and is covered in its own section below since it's native
+platform code, not Flutter.
 
 ## Direction: Dark Premium
 
@@ -133,6 +134,33 @@ layout/spacing polish, no bespoke mockup): `AccountDetailScreen`,
 `DebugDataScreen` (`lib/features/dev/`) is `kDebugMode`-gated dev-only
 tooling — excluded from the redesign.
 
+## Home-screen widget (native, not Flutter)
+
+`home_widget` bridges the app to a fully **native** widget UI — Dart only
+writes string/number data (`lib/features/widgets/widget_snapshot.dart`,
+`WidgetBridge.write`); colors and layout live entirely in platform code.
+Restyling it means editing native Swift/Kotlin, not Dart:
+
+- **iOS**: `ios/SpendlyWidget/SpendlyWidget.swift` (249 lines, 4 widget
+  kinds: Today/QuickAdd/Month/Lock). Brand colors are two local constants
+  (`:10-11`, indigo `#6366F1` / pink `#EC4899`) composed into
+  `brandGradient` and used as each widget's `containerBackgroundCompat`
+  (`:98,122,158`); a few `Color.white.opacity(0.18)` glass chips already
+  exist for inner elements. Swap the two constants for the gold/violet Dark
+  Premium accent pair; the existing white-glass chip treatment already
+  matches the new direction and likely needs no change.
+- **Android**: `android/app/src/main/kotlin/com/spendly/spendly/widget/SpendlyGlanceWidget.kt`
+  (103 lines, Jetpack Glance). One `indigo` `ColorProvider` (`:39`) used as
+  the widget's `.background()` (`:57`). Same swap.
+- No changes to `widget_snapshot.dart`, `WidgetKeys`, the app-group id, or
+  any Dart-side data/refresh logic — this is a native-file color/gradient
+  edit only, same "restyle, don't restructure" rule as the rest of the
+  spec.
+- Verification is manual (add the widget to an iOS/Android home screen and
+  look at it) since there's no golden-image tooling in this repo for native
+  widget surfaces — call this out explicitly when this piece is done rather
+  than claiming it verified by `flutter analyze`/tests.
+
 ## Rollout order
 
 1. Theme foundation + shared components — recolors ~80% of the app
@@ -142,6 +170,8 @@ tooling — excluded from the redesign.
 3. Chart screens (palette-only `fl_chart` recolor).
 4. Monthly Recap.
 5. Remaining ~16 list/detail/form screens.
+6. Home-screen widget (native iOS/Android, independent of the Flutter work —
+   can slot in anytime after the palette is finalized in step 1).
 
 Each batch should be independently shippable and testable — the
 implementation plan (next step, via writing-plans) will turn this into
@@ -149,9 +179,10 @@ concrete phases with file-level tasks.
 
 ## Out of scope / explicit non-goals
 
-- No backend, schema, repository, or business-logic changes anywhere.
-- No OS-level theming (push notification banners, home-screen widget, app
-  icon/splash).
+- No backend, schema, repository, or business-logic changes anywhere,
+  Flutter or native.
+- No OS-level theming beyond the home-screen widget — push notification
+  banners and app icon/splash stay out of scope.
 - `DebugDataScreen` untouched.
 - Category swatch colors (user-chosen per category/account) unchanged —
   only theme chrome (surfaces, accents, nav, buttons) changes.
