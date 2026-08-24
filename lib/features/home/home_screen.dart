@@ -155,7 +155,7 @@ class _BalanceCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(activeAccountsProvider).value ?? const [];
     if (accounts.isEmpty) return const SizedBox.shrink();
-    final total = ref.watch(totalBalanceThisMonthProvider);
+    final total = ref.watch(totalBalanceProvider);
     final palette = Theme.of(context).extension<AppPalette>()!;
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.md),

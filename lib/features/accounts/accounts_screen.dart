@@ -225,10 +225,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
   late final _openingBalance = TextEditingController(
     text: widget.existing == null
         ? ''
-        : widget.existing!
-              .effectiveOpeningBalance(DateTime.now())
-              .major
-              .toStringAsFixed(2),
+        : widget.existing!.openingBalance.major.toStringAsFixed(2),
   );
   late AccountType _type = widget.existing?.type ?? AccountType.cash;
   bool _saving = false;

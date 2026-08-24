@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v17, backup format v10, 483 passing tests (57 test
+> Recap feature. Drift schema v17, backup format v10, 482 passing tests (57 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -64,9 +64,9 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   account can be marked the default (the first one you add becomes it automatically),
   prefilled on every fresh expense and still changeable per-entry. Tap an account under
   Profile for this month's transaction history and total spent by default, with a
-  top-right toggle to switch to the full calendar year. Opening balance resets to zero
-  every month — the figure shown and used is only whatever was entered *this* month; the
-  user re-enters it monthly, nothing is deleted from history. Never hard-deleted —
+  top-right toggle to switch to the full calendar year. Opening balance is a one-time
+  starting point set at account creation (editable any time) that carries forward
+  forever — it never resets on its own. Never hard-deleted —
   archived like categories/tags, so history and exports stay intact (archiving the default
   account clears the flag rather than silently picking a replacement). The free-text
   `paymentMethod` field expenses already carried is migrated into real accounts
@@ -82,9 +82,9 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 - **Transfers & balances** — move money between two of your own accounts (never counted as
   spend or income); each account's detail screen unions its expenses and ledger entries
   (income landed in it, transfers either side of it) into one timeline, the only place those
-  two tables are ever combined. A derived balance — opening balance + income − expenses ±
-  transfers, this month only, matching opening balance's own monthly reset — shows on every
-  account and totals up into a dashboard card, both computed fresh on read, never stored.
+  two tables are ever combined. A derived running balance — opening balance + every income,
+  expense and transfer ever recorded against it — shows on every account and totals up into
+  a dashboard card, both computed fresh on read, never stored.
 - **Insights** — pure derived math over existing history, no schema of its own: categories
   whose current-month spend moved at least 30% against their trailing 3-month average
   (filtered to a minimum absolute amount so a tiny category's swing isn't noise), plus the

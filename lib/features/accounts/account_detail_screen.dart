@@ -86,11 +86,8 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         .value?[widget.account.id];
     final byId = ref.watch(categoriesByIdProvider);
     final accountById = ref.watch(accountsByIdProvider);
-    final openingBalance = widget.account.effectiveOpeningBalance(
-      DateTime.now(),
-    );
-    final balance = ref.watch(accountBalancesThisMonthProvider)[
-        widget.account.id];
+    final openingBalance = widget.account.openingBalance;
+    final balance = ref.watch(accountBalancesProvider)[widget.account.id];
     final activeAccounts =
         ref.watch(activeAccountsProvider).value ?? const <AccountRow>[];
 
@@ -144,7 +141,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Balance this month',
+                          'Balance',
                           style: TextStyle(fontSize: 13, color: palette.textDim),
                         ),
                         const SizedBox(height: 4),

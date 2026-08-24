@@ -401,13 +401,12 @@ reads a missing key as `false`.
 
 ## Additive field — `openingBalanceMonth` on accounts (schema v14)
 
-Opening balance is a monthly concept: `AccountRow.effectiveOpeningBalance` reads the stored
-`openingBalanceMinor` only when `openingBalanceMonth` (a `'YYYY-MM'` stamp) matches the
-current month, otherwise it reads as zero — the row itself is never wiped, only display and
-totals treat it as reset. Carried in the payload as a plain new nullable key on each
-`accounts` entry, no version bump, same additive pattern as `isDefault`: a pre-v14 file
-simply lacks the key, and `BackupAccount.fromJson` reads a missing key as `null` (already
-"not set this month" everywhere it's read).
+Unused by the app today. Originally backed a monthly-reset display rule for opening
+balance (the stored `openingBalanceMinor` only counted when this `'YYYY-MM'` stamp
+matched the current month); that rule has since been removed — opening balance is now a
+one-time starting point that carries forward forever, read directly off
+`openingBalanceMinor`. The column and this backup field are kept, not dropped, purely so
+old backup files with this key still round-trip cleanly; no version bump either way.
 
 - **Replace** restores it verbatim, same as every other account field.
 - **Merge** restores it verbatim too on a newly-inserted account — unlike `isDefault`,

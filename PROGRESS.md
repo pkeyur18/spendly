@@ -1244,7 +1244,43 @@ spec, same as Phases 5–6.
   No further phases are planned; any next feature work starts a new spec.
 - Insights' 30%-threshold/₹500-floor/3-month-window constants are not user-configurable —
   a reasonable v1 default per the "pure derived math" framing in the spec, not a gap.
-- App Lock has no separate "require immediately" vs "require after N minutes" grace-period
-  setting — every backgrounding re-locks, full stop. Simpler and safer default; a grace
-  period is easy to add later if it turns out to be annoying in practice.
+- App Lock originally re-locked on every backgrounding; per user feedback (see "Post-Phase-7
+  fixes" below) it now unlocks for the whole app session instead, re-locking only on a fresh
+  process. No separate "require immediately" vs "require after N minutes" grace-period
+  setting exists on top of that — a per-session unlock already covers the common case.
+
+## Post-Phase-7 fixes — App Lock over-relocking, opening balance no longer resets — done
+
+User-reported after manually testing Phase 7 on-device (2026-08-23/24):
+
+- [x] **App Lock re-locked on ordinary in-app navigation, not just backgrounding** —
+      `didChangeAppLifecycleState` relocked on every `AppLifecycleState.paused`, which fires
+      for more than "the user left the app" (screen timeout, keyboard/system UI, briefly
+      switching apps), so unlocking, editing an account, and navigating back asked to unlock
+      again. User's explicit ask: unlock should persist for the whole session, and only
+      re-lock when the app is actually closed. Fix: dropped the re-lock-on-`paused` branch
+      in `app.dart` entirely — cold start already re-locks on its own, since
+      `appUnlockedProvider` (`app_lock_provider.dart`) is a plain in-memory `Notifier` that
+      rebuilds to `false` on every fresh process. Commit `0af0b02`.
+- [x] **Account balance silently reset to zero every month** — `AccountRow.effectiveOpeningBalance`
+      (added in the "Accounts follow-up" work) treated opening balance as a monthly concept:
+      the stored `openingBalanceMinor` only counted when `openingBalanceMonth` matched the
+      current month, otherwise it read as zero until the user manually re-entered it — by
+      design at the time, but the user reported it as wrong: a savings balance should carry
+      forward, never reset to 0 on its own. Root cause was two-fold, both removed:
+      1. `effectiveOpeningBalance`'s month-stamp check (`row_extensions.dart`) — opening
+         balance now reads as the raw `openingBalanceMinor` unconditionally.
+      2. `accountBalancesThisMonthProvider` (`account_balance_provider.dart`) scoped its
+         income/expense/transfer terms to the current calendar month, matching the
+         (now-removed) monthly-reset framing — it's now `accountBalancesProvider`, computed
+         over an all-time range (`DateTime(2000)` through tomorrow, same convention as
+         `all_transactions_screen.dart`'s search range) so every transaction ever recorded
+         against an account counts toward its running balance, forever.
+      `openingBalanceMonth` stamping in `AccountRepository.create`/`update` was removed too
+      (nothing reads it any more); the DB column and backup field are left in place, unused,
+      purely so old backup files with the key still round-trip. UI copy: the account detail
+      screen's "Balance this month" tile is now just "Balance". Rewrote
+      `account_repository_test.dart`'s opening-balance group and one `migration_test.dart`
+      assertion that exercised the retired monthly-reset behavior; `flutter analyze` clean,
+      482 tests passing (483 minus the one now-removed monthly-reset-specific test).
 

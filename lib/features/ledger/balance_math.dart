@@ -1,10 +1,9 @@
 import '../../core/money/money.dart';
 
-/// An account's derived balance for one window (the current month, matching
-/// [AccountRow.effectiveOpeningBalance]'s own monthly-reset scope — there is
-/// no lifetime balance in this app, only "this month's" one). Never stored:
-/// always recomputed from opening balance plus this window's activity,
-/// matching the app's existing preference for computed over persisted state.
+/// An account's running balance: opening balance plus every income, expense,
+/// and transfer ever recorded against it — it carries forward, never resets.
+/// Never stored: always recomputed, matching the app's existing preference
+/// for computed over persisted state.
 Money computeAccountBalance({
   required Money openingBalance,
   required Money income,

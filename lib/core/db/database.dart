@@ -83,13 +83,11 @@ class Accounts extends Table {
   IntColumn get openingBalanceMinor =>
       integer().withDefault(const Constant(0))();
 
-  /// 'YYYY-MM' stamp of the month [openingBalanceMinor] was last set
-  /// (schema v14). Null on accounts created before this column existed.
-  /// Opening balance is a monthly concept — read it through
-  /// `AccountRow.effectiveOpeningBalanceMinor`, never this raw column
-  /// directly: a stamp from an earlier month means the balance has rolled
-  /// over to zero for display purposes even though the row itself is left
-  /// untouched (no background job zeroes it out on the 1st).
+  /// Unused (schema v14). Originally stamped the month
+  /// [openingBalanceMinor] was last set, backing a monthly-reset display
+  /// rule that has since been removed — opening balance is now a one-time
+  /// starting point that carries forward forever. Column kept, not dropped,
+  /// so old backup files with this key still round-trip cleanly.
   TextColumn get openingBalanceMonth => text().nullable()();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
 

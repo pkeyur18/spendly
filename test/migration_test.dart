@@ -230,13 +230,9 @@ void main() {
     final reloadedAccounts = await db.select(db.accounts).get();
     expect(reloadedAccounts.single.isDefault, isTrue);
 
-    // from<14: the migrated account never had an opening balance entered, so
-    // it gets no month stamp — same as a fresh zero-balance create() would.
+    // from<14: the migrated account never had an opening balance entered.
     expect(reloadedAccounts.single.openingBalanceMonth, isNull);
-    expect(
-      reloadedAccounts.single.effectiveOpeningBalance(DateTime.now()),
-      Money.zero,
-    );
+    expect(reloadedAccounts.single.openingBalance, Money.zero);
 
     // from<15: ledger_entries is a whole new table (no populated-table
     // hazard), queryable right away.
