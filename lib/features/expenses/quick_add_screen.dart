@@ -723,10 +723,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         ),
                         onTap: () async {
                           Navigator.of(sheetContext).pop();
-                          final newId = await showAccountEditSheet(context);
-                          if (newId != null && mounted) {
+                          final result = await showAccountEditSheet(context);
+                          if (result != null && mounted) {
                             setState(() {
-                              _accountId = newId;
+                              _accountId = result.id;
                               _touched = true;
                             });
                           }

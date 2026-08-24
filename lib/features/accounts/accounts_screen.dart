@@ -193,15 +193,17 @@ class _AccountTile extends ConsumerWidget {
 }
 
 /// Create (no [existing]) or edit an account: name, type, opening balance,
-/// archive toggle. Resolves to the created/edited account's id (null if
-/// dismissed without saving) — lets a caller like Quick Add's account picker
-/// auto-select a freshly created account, same as the trip picker already
-/// does for [showTagEditSheet].
-Future<int?> showAccountEditSheet(
+/// archive toggle. Resolves to the created/edited account's id and whether
+/// this call archived it (null if dismissed without saving) — the id lets a
+/// caller like Quick Add's account picker auto-select a freshly created
+/// account, same as the trip picker already does for [showTagEditSheet];
+/// `archived` lets the account detail screen tell "saved, stay here" apart
+/// from "archived, nothing left to show".
+Future<({int id, bool archived})?> showAccountEditSheet(
   BuildContext context, {
   AccountRow? existing,
 }) {
-  return showModalBottomSheet<int>(
+  return showModalBottomSheet<({int id, bool archived})>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -258,14 +260,14 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
       id = await repo.create(name: name, type: _type, openingBalance: balance);
     }
     if (!mounted) return;
-    Navigator.of(context).pop(id);
+    Navigator.of(context).pop((id: id, archived: false));
   }
 
   Future<void> _archive(bool archived) async {
     final id = widget.existing!.id;
     await ref.read(accountRepositoryProvider).setArchived(id, archived);
     if (!mounted) return;
-    Navigator.of(context).pop(id);
+    Navigator.of(context).pop((id: id, archived: archived));
   }
 
   @override

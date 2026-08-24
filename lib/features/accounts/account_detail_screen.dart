@@ -86,14 +86,18 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
         .value?[widget.account.id];
     final byId = ref.watch(categoriesByIdProvider);
     final accountById = ref.watch(accountsByIdProvider);
-    final openingBalance = widget.account.openingBalance;
+    // Reads through the live provider so a save from the edit sheet below
+    // reflects immediately without leaving this screen — widget.account is
+    // just the snapshot passed in at navigation time.
+    final account = accountById[widget.account.id] ?? widget.account;
+    final openingBalance = account.openingBalance;
     final balance = ref.watch(accountBalancesProvider)[widget.account.id];
     final activeAccounts =
         ref.watch(activeAccountsProvider).value ?? const <AccountRow>[];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.account.name),
+        title: Text(account.name),
         actions: [
           TextButton(
             onPressed: () => setState(() {
@@ -117,12 +121,12 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
             onPressed: () async {
               final result = await showAccountEditSheet(
                 context,
-                existing: widget.account,
+                existing: account,
               );
-              // The sheet may have archived this account (setArchived pops
-              // with the id too) — leave the detail screen either way, since
-              // there is nothing useful left to show for an archived one.
-              if (result != null && context.mounted) {
+              // A plain save stays right here, reading updated values off
+              // the live provider watch below. Archiving leaves — there is
+              // nothing useful left to show for an archived account.
+              if (result != null && result.archived && context.mounted) {
                 Navigator.of(context).pop();
               }
             },
