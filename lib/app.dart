@@ -10,7 +10,10 @@ import 'features/backup/backup_providers.dart';
 import 'features/budgets/budget_nudge_provider.dart';
 import 'features/expenses/quick_add_screen.dart';
 import 'features/expenses/recurring_repository.dart';
+import 'features/expenses/recurring_schedule.dart';
 import 'features/home/app_shell.dart';
+import 'features/ledger/income_screen.dart' show showIncomeConfirmSheet;
+import 'features/ledger/ledger_repository.dart';
 import 'features/onboarding/welcome_screen.dart';
 import 'features/profile/profile_provider.dart';
 import 'features/recap/recap_providers.dart';
@@ -44,6 +47,11 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
     });
     HomeWidget.widgetClicked.listen(_handleWidgetUri);
+    // The notification "Add" action for recurring income routes back into
+    // the app through this callback — see NotificationService's own doc
+    // comment for why it's a plain callback rather than a Riverpod dependency.
+    ref.read(notificationServiceProvider).onIncomeConfirmAction =
+        _handleIncomeConfirmAction;
     ref.read(widgetRefreshHookProvider); // arms the on-write refresh hook once
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(refreshWidgetsActionProvider)();
@@ -76,6 +84,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
       ref.invalidate(monthlyRecapCheckProvider);
       ref.invalidate(budgetNudgeCheckProvider);
       ref.invalidate(recurringReminderCheckProvider);
+      ref.invalidate(incomeRecurringReminderCheckProvider);
       ref.read(refreshWidgetsActionProvider)();
     }
   }
@@ -87,6 +96,28 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     final id = int.tryParse(uri.queryParameters['category'] ?? '');
     final context = appNavigatorKey.currentContext;
     if (context != null) openQuickAddScreen(context, initialCategoryId: id);
+  }
+
+  /// The recurring-income notification's "Add" action: looks the template
+  /// up fresh (nothing else could have changed it between the notification
+  /// firing and being tapped) and opens the reviewable confirm sheet for
+  /// its oldest still-pending occurrence. A silent no-op if the template
+  /// was deleted, un-recurred, or already fully confirmed/skipped since —
+  /// there's nothing left to confirm.
+  Future<void> _handleIncomeConfirmAction(int templateId) async {
+    final template = await ref.read(ledgerRepositoryProvider).byId(templateId);
+    if (template == null) return;
+    final pending = pendingOccurrences(
+      nextDueDate: template.nextDueDate,
+      recurrence: template.recurrence,
+      endDate: template.recurrenceEndDate,
+      anchorDay: template.date.day,
+      now: DateTime.now(),
+    );
+    if (pending.isEmpty) return;
+    final context = appNavigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    showIncomeConfirmSheet(context, template: template, occurrence: pending.first);
   }
 
   @override
@@ -101,6 +132,7 @@ class _SpendlyAppState extends ConsumerState<SpendlyApp>
     // Re-arms recurring due-date reminders; no background job exists, so the
     // schedule is rebuilt while the app is open.
     ref.watch(recurringReminderCheckProvider);
+    ref.watch(incomeRecurringReminderCheckProvider);
     // Falls back to system while the persisted value loads.
     final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
     final profileAsync = ref.watch(profileProvider);

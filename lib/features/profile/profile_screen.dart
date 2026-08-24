@@ -175,8 +175,8 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 _MenuRow(
                   icon: Icons.repeat_rounded,
-                  title: 'Recurring expenses',
-                  subtitle: 'Rent, EMIs and subscriptions you track',
+                  title: 'Recurring',
+                  subtitle: 'Rent, EMIs, subscriptions, salary and more',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const RecurringScreen()),
                   ),

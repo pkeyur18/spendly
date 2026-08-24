@@ -8,6 +8,14 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../features/expenses/recurring_screen.dart';
 import '../../features/reports/monthly_report_screen.dart';
 
+/// Callback set once by `app.dart`: given the id of a recurring income
+/// template, opens the reviewable confirm sheet for its oldest pending
+/// occurrence. Kept as a settable callback rather than a direct dependency
+/// so [NotificationService] never has to import Riverpod or reach into the
+/// provider tree itself — same reasoning as [appNavigatorKey] letting a
+/// notification navigate without a BuildContext.
+typedef IncomeConfirmActionHandler = void Function(int templateId);
+
 /// Lets a tapped notification navigate without a BuildContext. Wired to
 /// [MaterialApp.navigatorKey] in app.dart.
 final appNavigatorKey = GlobalKey<NavigatorState>();
@@ -27,11 +35,23 @@ class NotificationService {
   static const _reportNotificationId = 424242; // stable id for the repeat
   static const _recurringChannelId = 'recurring_due';
   static const _recurringChannelName = 'Recurring expenses';
+  static const _incomeRecurringChannelId = 'income_recurring_due';
+  static const _incomeRecurringChannelName = 'Recurring income';
+  static const _incomeDuePayloadPrefix = 'income_due:';
+  static const _addIncomeActionId = 'add_income';
 
   /// Recurring reminders are keyed by `_recurringIdBase + expense id`, so
   /// re-scheduling one replaces its own slot instead of stacking duplicates,
-  /// and no id can collide with the monthly report's.
+  /// and no id can collide with the monthly report's. Income reminders get
+  /// their own disjoint range above it, for the same reason.
   static const _recurringIdBase = 500000;
+  static const _incomeRecurringIdBase = 600000;
+
+  /// Set from `app.dart` once, before any notification could plausibly be
+  /// tapped. Null (a no-op) is only reachable if a reminder somehow fired
+  /// before the app finished starting, which `init()` being awaited in
+  /// `main()` before the first frame rules out in practice.
+  IncomeConfirmActionHandler? onIncomeConfirmAction;
 
   /// Call once in `main()` before `runApp`. Sets up channels, the timezone db
   /// (needed by `zonedSchedule`) and permissions, and the tap handler.
@@ -42,13 +62,30 @@ class NotificationService {
     );
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const darwin = DarwinInitializationSettings(
+    final darwin = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: false,
       requestSoundPermission: true,
+      // Registers the "Add" action button for iOS — Android actions are
+      // declared per-notification instead (see scheduleIncomeRecurringReminders).
+      notificationCategories: [
+        DarwinNotificationCategory(
+          _incomeRecurringChannelId,
+          actions: [
+            DarwinNotificationAction.plain(
+              _addIncomeActionId,
+              'Add',
+              // foreground: tapping it must open the app, same as a plain
+              // tap — there's no background execution in this app to log
+              // anything silently (see local_auto_backup.dart).
+              options: {DarwinNotificationActionOption.foreground},
+            ),
+          ],
+        ),
+      ],
     );
     await _plugin.initialize(
-      settings: const InitializationSettings(android: android, iOS: darwin),
+      settings: InitializationSettings(android: android, iOS: darwin),
       onDidReceiveNotificationResponse: _onTap,
     );
     await _plugin
@@ -61,6 +98,23 @@ class NotificationService {
   /// A monthly report notification opens the previous month's report (computed
   /// at tap time so a repeating notification always points at the right month).
   void _onTap(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload != null && payload.startsWith(_incomeDuePayloadPrefix)) {
+      final templateId = int.parse(
+        payload.substring(_incomeDuePayloadPrefix.length),
+      );
+      if (response.actionId == _addIncomeActionId) {
+        // The action button: straight to the reviewable confirm sheet.
+        onIncomeConfirmAction?.call(templateId);
+      } else {
+        // A plain tap on the notification body: same as expenses, just open
+        // the list (the Income tab) rather than jump straight into a sheet.
+        appNavigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const RecurringScreen()),
+        );
+      }
+      return;
+    }
     if (response.payload == _recurringChannelId) {
       appNavigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => const RecurringScreen()),
@@ -137,8 +191,13 @@ class NotificationService {
   Future<void> scheduleRecurringReminders(
     List<({int id, String title, DateTime dueAt})> reminders,
   ) async {
+    // Upper-bounded so this never cancels income reminders too — the two
+    // ranges are disjoint but adjacent (_recurringIdBase, _incomeRecurringIdBase).
     for (final pending in await _plugin.pendingNotificationRequests()) {
-      if (pending.id >= _recurringIdBase) await _plugin.cancel(id: pending.id);
+      if (pending.id >= _recurringIdBase &&
+          pending.id < _incomeRecurringIdBase) {
+        await _plugin.cancel(id: pending.id);
+      }
     }
     final now = tz.TZDateTime.now(tz.local);
     for (final reminder in reminders) {
@@ -166,6 +225,63 @@ class NotificationService {
             priority: Priority.defaultPriority,
           ),
           iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+        ),
+      );
+    }
+  }
+
+  /// Re-arms the due-date reminder for every scheduled recurring income
+  /// template — income's twin of [scheduleRecurringReminders], with one
+  /// addition: an "Add" action button that opens the reviewable confirm
+  /// sheet directly (see [onIncomeConfirmAction]), rather than only
+  /// tap-to-open-the-list like expenses. The payload carries the template's
+  /// id (`_onTap` parses it back out) since the action needs to know which
+  /// template to confirm, not just which screen to open.
+  Future<void> scheduleIncomeRecurringReminders(
+    List<({int id, String title, DateTime dueAt})> reminders,
+  ) async {
+    for (final pending in await _plugin.pendingNotificationRequests()) {
+      if (pending.id >= _incomeRecurringIdBase) {
+        await _plugin.cancel(id: pending.id);
+      }
+    }
+    final now = tz.TZDateTime.now(tz.local);
+    for (final reminder in reminders) {
+      final at = tz.TZDateTime(
+        tz.local,
+        reminder.dueAt.year,
+        reminder.dueAt.month,
+        reminder.dueAt.day,
+        9,
+      );
+      if (!at.isAfter(now)) continue;
+      await _plugin.zonedSchedule(
+        id: _incomeRecurringIdBase + reminder.id,
+        title: '${reminder.title} is due',
+        body: 'Tap Add to log it, or open the app to review.',
+        payload: '$_incomeDuePayloadPrefix${reminder.id}',
+        scheduledDate: at,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _incomeRecurringChannelId,
+            _incomeRecurringChannelName,
+            channelDescription: 'Reminders for income you told us repeats',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            actions: [
+              const AndroidNotificationAction(
+                _addIncomeActionId,
+                'Add',
+                showsUserInterface: true,
+              ),
+            ],
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentSound: true,
+            categoryIdentifier: _incomeRecurringChannelId,
+          ),
         ),
       );
     }

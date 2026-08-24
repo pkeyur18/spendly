@@ -17,6 +17,7 @@ import '../expenses/recurring_repository.dart';
 import '../expenses/recurring_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../ledger/account_balance_provider.dart';
+import '../ledger/ledger_repository.dart' show dueIncomeRecurringProvider;
 import '../ledger/transfer_screen.dart' show showTransferEditSheet;
 import '../profile/profile_provider.dart';
 import 'dashboard_providers.dart';
@@ -220,16 +221,37 @@ class _DueRecurringCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final due = ref.watch(dueRecurringProvider);
-    if (due.isEmpty) return const SizedBox.shrink();
+    final dueExpenses = ref.watch(dueRecurringProvider);
+    final dueIncome = ref.watch(dueIncomeRecurringProvider);
+    if (dueExpenses.isEmpty && dueIncome.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     final palette = Theme.of(context).extension<AppPalette>()!;
-    final occurrences = due.fold<int>(0, (n, s) => n + s.pending.length);
-    final first = due.first;
+    final occurrences =
+        dueExpenses.fold<int>(0, (n, s) => n + s.pending.length) +
+        dueIncome.fold<int>(0, (n, s) => n + s.pending.length);
+    final seriesCount = dueExpenses.length + dueIncome.length;
+
+    // Whichever kind's oldest pending occurrence is actually earliest names
+    // the card — not just whichever kind happens to be non-empty first.
     final byId = ref.watch(categoriesByIdProvider);
-    final title = first.template.note?.isNotEmpty == true
-        ? first.template.note!
-        : (byId[first.template.categoryId]?.name ?? 'An expense');
+    final earliestExpense = dueExpenses.isEmpty ? null : dueExpenses.first;
+    final earliestIncome = dueIncome.isEmpty ? null : dueIncome.first;
+    final expenseIsEarliest =
+        earliestExpense != null &&
+        (earliestIncome == null ||
+            earliestExpense.pending.first.isBefore(
+              earliestIncome.pending.first,
+            ));
+    final title = expenseIsEarliest
+        ? (earliestExpense.template.note?.isNotEmpty == true
+              ? earliestExpense.template.note!
+              : (byId[earliestExpense.template.categoryId]?.name ??
+                    'An expense'))
+        : (earliestIncome!.template.sourceLabel?.isNotEmpty == true
+              ? earliestIncome.template.sourceLabel!
+              : 'Income');
 
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
@@ -269,9 +291,9 @@ class _DueRecurringCard extends ConsumerWidget {
                     ),
                   ),
                   Text(
-                    due.length == 1
+                    seriesCount == 1
                         ? title
-                        : '$title and ${due.length - 1} more',
+                        : '$title and ${seriesCount - 1} more',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: palette.textDim),

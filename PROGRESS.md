@@ -1297,11 +1297,12 @@ approval, smallest/lowest-risk first:
 2. **Debit/credit account nature (liability accounts start negative) — done.** [x]
 3. **Custom account types with icon/color (per-account, not a reusable type registry — user's
    explicit choice over a Categories-style type table) — done.** [x]
-4. Recurring income + actionable notification (salary, meal card reload) — not started, and
-   the biggest piece: `LedgerEntries` has no recurrence columns today (unlike `Expenses`,
-   which already carries `isRecurring`/`recurrence`/`nextDueDate`), and no notification in
-   this app has ever used an action button — every one today is tap-to-open only. Agreed
-   home: the existing Recurring screen gets an income tab rather than a new screen.
+4. **Recurring income + actionable notification (salary, meal card reload) — done.** [x]
+   The biggest piece: `LedgerEntries` had no recurrence columns before this (unlike
+   `Expenses`), and no notification in this app had ever used an action button before this
+   — every one before this was tap-to-open only. Built in four stages, each committed and
+   verified independently (see below). Agreed home: the existing Recurring screen gained
+   an income tab rather than a new screen.
 
 ### Sub-project 1 — net worth inclusion toggle (schema v18) — done
 
@@ -1393,4 +1394,101 @@ approval, smallest/lowest-risk first:
       2 new `backup_format_test.dart` round-trip cases, 2 new `backup_repository_test.dart`
       merge/replace cases, and a new `test/account_type_label_test.dart` (4 cases) for the
       new pure function. `flutter analyze` clean, 512 tests passing (58 test files).
+
+### Sub-project 4 — recurring income + actionable notification (schema v21) — done
+
+The biggest and last of the four sub-projects, built and committed in four independently
+verified stages rather than one large change.
+
+**Stage 1 — schema + repository (commit `d8caed8`).**
+- [x] `LedgerEntries` gains the same four recurrence columns `Expenses` already has
+      (`isRecurring`/`recurrence`/`nextDueDate`/`recurrenceEndDate`), only ever meaningful
+      on a `kind: income` row. Additive migration (`if (from < 21)`).
+      `recurring_schedule.dart`'s `pendingOccurrences`/`nextDueAfter`/`firstDueDate` are
+      pure and schema-agnostic (they take primitives, not a row type) — reused for income
+      completely unchanged.
+- [x] `LedgerRepository` gains `byId`, `watchIncomeTemplates`, `watchIncomeSeries`,
+      `confirmIncome`, `skipIncome`, `cancelIncomeRecurrence`. `confirmIncome` is the one
+      real behavioral fork from expenses: an expense confirm (`RecurringRepository.confirm`)
+      silently logs the template's exact values in one tap; income confirm always takes
+      explicit (possibly edited) fields from the caller rather than blindly copying the
+      template — a raise or a late payday shouldn't be blocked by the schedule math, which
+      still advances off the *occurrence* date regardless of what the logged date ends up
+      being. `update()` gains `Value<T?>`-style recurrence params, mirroring
+      `ExpenseRepository.update`'s existing shape exactly (not the `updateCustomType`-flag
+      shape used for accounts in sub-project 3 — different repository, no need to
+      retrofit).
+- [x] Backup: `BackupLedgerEntry` gains the same four fields, additive, no version bump.
+- [x] Tests: new `test/ledger_recurring_test.dart` (13 cases, mirroring
+      `recurring_repository_test.dart`'s structure), one `migration_test.dart` assertion,
+      2 `backup_format_test.dart` cases, 2 `backup_repository_test.dart` cases.
+
+**Stage 2 — Income sheet UI (commit `201dd50`).**
+- [x] Extracted Quick Add's "Repeat" bottom sheet (schedule radios + end-date picker,
+      previously a `_QuickAddScreenState` method reaching into its own `_recurrence`/
+      `_recurrenceEndDate` fields) into `core/widgets/repeat_picker.dart` as a standalone
+      `showRepeatPickerSheet` function — same extraction move as sub-project 3's
+      `IconColorPicker`. Quick Add's own behavior is unchanged; the sheet still stays open
+      after a choice so setting an end date is one visit, not two.
+- [x] Income's edit sheet gains a "Repeat" row (hidden while confirming an occurrence,
+      since recurrence is the template's property, not one confirmed instance's) and a new
+      confirming mode: `showIncomeConfirmSheet(context, {template, occurrence})` prefills
+      from the template at the occurrence's date, and saving routes through
+      `confirmIncome` instead of `addIncome`/`update`.
+
+**Stage 3 — Recurring screen tabs (commit `77becad`).**
+- [x] `RecurringScreen` becomes a two-tab screen (`DefaultTabController`, "Expenses" /
+      "Income"); the Expenses tab is the pre-existing screen body, relocated unchanged.
+      New Income tab mirrors the "Waiting for you / Scheduled" layout —
+      `_IncomeDueCard`'s Confirm opens the reviewable sheet, Skip stays a direct one-tap
+      action; `_IncomeScheduledTile` edits the template and offers "Stop repeating".
+
+**Stage 4 — notifications + Home card (this commit).**
+- [x] `NotificationService` gains `scheduleIncomeRecurringReminders`, a twin of
+      `scheduleRecurringReminders` with one addition: an `AndroidNotificationAction`
+      (Android) / `DarwinNotificationCategory` registered at `init()` time (iOS) labeled
+      "Add", `showsUserInterface: true` / `foreground` — the app's first notification
+      action button anywhere; every notification before this was tap-to-open only. The
+      payload carries the template's id (`income_due:<id>`) since the action needs to know
+      *which* template to confirm, not just which screen to open. Own id range
+      (600000+) disjoint from expense reminders (500000+) — fixed a latent bug in the
+      process: the expense method's stale-reminder cleanup loop was unbounded above
+      (`id >= _recurringIdBase`), which would have also wiped every income reminder on
+      its next run; now bounded to `< _incomeRecurringIdBase`.
+- [x] `NotificationService.onIncomeConfirmAction` — a settable callback, not a Riverpod
+      dependency, so the notification layer stays plain (same reasoning as
+      `appNavigatorKey` letting a tap navigate without a `BuildContext`). Wired once in
+      `app.dart`'s `initState`, mirroring the existing widget-quick-add deep link
+      (`_handleWidgetUri`): on the action tap, `_handleIncomeConfirmAction` reads the
+      template fresh, recomputes its oldest pending occurrence, and opens the confirm
+      sheet — a silent no-op if nothing's pending any more (deleted, un-recurred, or
+      already resolved through the app itself since the notification fired).
+- [x] `incomeRecurringReminderCheckProvider` (income's twin of
+      `recurringReminderCheckProvider`) wired into `app.dart` exactly like the expense one
+      — watched in `build()` for the cold-start check, invalidated on resume.
+- [x] Home's `_DueRecurringCard` becomes kind-agnostic: combined occurrence count and
+      series count across both `dueRecurringProvider` and the new
+      `dueIncomeRecurringProvider`, titled off whichever kind's oldest pending occurrence
+      is actually earliest (not just whichever kind happens to be non-empty first). Opens
+      `RecurringScreen` either way — lands on the Expenses tab by default, same as a plain
+      notification tap does.
+- [x] Profile's menu row renamed "Recurring expenses" → "Recurring" (subtitle updated to
+      mention salary too) — the screen now covers both kinds, and the old label would have
+      undersold what tapping it opens.
+- [x] No new native dependency (this is new Dart-side API usage of `flutter_local_notifications`,
+      already integrated) — skipped the native-build verification step per this project's
+      own stated trigger for it (a *new* dependency), consistent with how sub-project 3's
+      `flutter_colorpicker` reuse was handled.
+- [x] `flutter analyze` clean, 528 tests passing (59 test files) — no new tests this stage
+      specifically (notification scheduling and the app.dart wiring are integration glue
+      with no new pure logic; the actual schedule math and repository behavior this stage
+      calls into were already covered in stage 1).
+
+**On-device testing needed** (flagged, not yet done — notifications and native action
+buttons can't be verified without a real device): enable a recurring income entry, background
+the app past its due date, confirm the notification appears with an "Add" button distinct from
+the notification body; tap "Add" and confirm it opens the confirm sheet prefilled correctly
+(not just the app); tap the notification body itself (not the button) and confirm it opens the
+Recurring screen instead; confirm iOS shows the same "Add" button (requires the category
+registration to have taken on a real device — untestable in this environment).
 

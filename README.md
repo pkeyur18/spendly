@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v20, backup format v10, 512 passing tests (58 test
+> Recap feature. Drift schema v21, backup format v10, 528 passing tests (59 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -48,12 +48,20 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   falling-emoji confetti overlay, "you went over budget" in amber, or a plain total if no
   budget is set) plus a top-3 spending categories card. Also reachable any time via a
   permanent "Monthly recap" row in Profile.
-- **Recurring expenses** — mark any expense daily/weekly/monthly with an optional end
-  date; the app reminds on the due date and the user confirms, never auto-logs (FR-7).
-  Occurrences missed while the app was closed are all recovered, each confirmed or
-  skipped on its own, and a month-end series stays pinned to its day instead of drifting
-  onto the 28th after February. A "payments to confirm" card appears on Home only when
-  something is due; a permanent "Recurring expenses" row in Profile manages every series.
+- **Recurring expenses and income** — mark any expense, or any income entry (schema
+  v21), daily/weekly/monthly with an optional end date; the app reminds on the due date
+  and the user confirms, never auto-logs (FR-7). Occurrences missed while the app was
+  closed are all recovered, each confirmed or skipped on its own, and a month-end series
+  stays pinned to its day instead of drifting onto the 28th after February. A combined
+  "payments to confirm" card appears on Home only when something (either kind) is due;
+  a permanent "Recurring" row in Profile opens a two-tab screen (Expenses / Income)
+  managing every series. Confirming an expense is one silent tap; confirming income
+  always opens the entry prefilled for review — salary or a meal-card reload can vary,
+  so the amount, date, account and note are all still editable before saving, and saving
+  both logs the entry and advances the schedule together. The recurring-income
+  notification carries an "Add" action button (Android + iOS) that jumps straight into
+  that same prefilled sheet without opening the app to a list first — the app's first
+  notification with an action button, everywhere else is tap-to-open only.
 - **Receipt photos** — attach a photo (camera or library) to any expense from Quick Add;
   view, replace, or remove it any time. Stored in its own table, separate from the
   expense row itself, so browsing transactions never has to load photo bytes it isn't

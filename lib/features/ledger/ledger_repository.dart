@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/db/database.dart';
 import '../../core/db/providers.dart';
 import '../../core/money/money.dart';
+import '../../core/notify/notifications.dart';
 import '../expenses/recurring_schedule.dart';
 import '../reports/report_providers.dart' show DateRange;
 
@@ -420,4 +421,28 @@ final dueIncomeRecurringProvider = Provider<List<IncomeRecurringSeries>>((
   ];
   due.sort((a, b) => a.pending.first.compareTo(b.pending.first));
   return due;
+});
+
+/// Re-arms every recurring income reminder, on cold start and on resume —
+/// income's twin of `recurring_repository.dart`'s
+/// `recurringReminderCheckProvider`, same "watched not read" reasoning.
+final incomeRecurringReminderCheckProvider = FutureProvider<void>((ref) async {
+  final series = ref.watch(incomeRecurringSeriesProvider).value;
+  if (series == null) return;
+
+  final reminders = <({int id, String title, DateTime dueAt})>[];
+  for (final s in series) {
+    final due = s.template.nextDueDate;
+    if (due == null) continue;
+    reminders.add((
+      id: s.template.id,
+      title: s.template.sourceLabel?.isNotEmpty == true
+          ? s.template.sourceLabel!
+          : 'Income',
+      dueAt: due,
+    ));
+  }
+  await ref
+      .read(notificationServiceProvider)
+      .scheduleIncomeRecurringReminders(reminders);
 });

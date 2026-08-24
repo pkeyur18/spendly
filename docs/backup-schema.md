@@ -546,6 +546,25 @@ protect, same reasoning as `includeInNetWorth`/`isLiability`).
 A pre-v20 file has no custom-type keys at all. `BackupAccount.fromJson` reads all three as
 `null` — matching every pre-v20 account, none of which could be custom-typed.
 
+## Additive fields — `isRecurring`/`recurrence`/`nextDueDate`/`recurrenceEndDate` on ledger entries (schema v21)
+
+Recurring income reuses the same four columns `Expenses` already carries for recurring
+expenses, added to `ledgerEntries` array entries the same way `kind`/`counterAccountId`
+were at schema v16 — additive, no version bump. Only ever meaningful on a `kind: "income"`
+entry; a transfer never recurs.
+
+- **Replace** restores all four verbatim, same as every other ledger entry field.
+- **Merge** restores them verbatim too on a newly-inserted entry — no "at most one"
+  invariant to protect, same reasoning as `includeInNetWorth`/`isLiability` on accounts.
+  A matched (already-present) entry isn't touched by merge at all.
+- Not included in the Merge dedupe fingerprint: a recurring template always carries an
+  `externalId` (schema v21 postdates `externalId` becoming universal at v7), so the
+  fingerprint fallback path can never actually apply to one.
+
+A pre-v21 file has no recurrence keys at all. `BackupLedgerEntry.fromJson` reads
+`isRecurring` as `false` and the other three as `null` — matching every pre-v21 entry,
+none of which could recur.
+
 ## App Lock is never in the payload
 
 Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export
