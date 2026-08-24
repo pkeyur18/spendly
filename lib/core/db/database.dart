@@ -17,8 +17,10 @@ enum Recurrence { daily, weekly, monthly }
 enum BudgetPeriod { monthly }
 
 /// How an account is held. Purely descriptive (an icon/grouping hint) — none
-/// of the money math treats one type differently from another.
-enum AccountType { cash, bank, card, wallet }
+/// of the money math treats one type differently from another. [custom]
+/// (schema v20) carries its own name/icon/color on the account row itself
+/// rather than a reusable type — see `Accounts.customTypeName` and friends.
+enum AccountType { cash, bank, card, wallet, custom }
 
 /// 'YYYY-MM' key a budget row is scoped to (also the family key for budget
 /// providers — a String avoids DateTime equality footguns across rebuilds).
@@ -114,6 +116,20 @@ class Accounts extends Table {
   /// any other account. Defaults false (an asset), matching every account
   /// that existed before this column did.
   BoolColumn get isLiability => boolean().withDefault(const Constant(false))();
+
+  /// Only set when [type] is [AccountType.custom] (schema v20) — a per-
+  /// account type, not a reusable one: two accounts can both be "Loan" with
+  /// no relation to each other, same as two accounts can both be named
+  /// "Cash". Null for every built-in type.
+  TextColumn get customTypeName => text().nullable()();
+
+  /// Emoji glyph, same convention as [Categories.icon]. Only set alongside
+  /// [customTypeName].
+  TextColumn get customTypeIcon => text().nullable()();
+
+  /// ARGB int, same convention as [Categories.colorValue]. Only set
+  /// alongside [customTypeName].
+  IntColumn get customTypeColorValue => integer().nullable()();
 
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
@@ -362,7 +378,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -554,6 +570,17 @@ class AppDatabase extends _$AppDatabase {
       if (from < 19) {
         if (!await _hasColumn('accounts', 'is_liability')) {
           await m.addColumn(accounts, accounts.isLiability);
+        }
+      }
+      if (from < 20) {
+        if (!await _hasColumn('accounts', 'custom_type_name')) {
+          await m.addColumn(accounts, accounts.customTypeName);
+        }
+        if (!await _hasColumn('accounts', 'custom_type_icon')) {
+          await m.addColumn(accounts, accounts.customTypeIcon);
+        }
+        if (!await _hasColumn('accounts', 'custom_type_color_value')) {
+          await m.addColumn(accounts, accounts.customTypeColorValue);
         }
       }
     },

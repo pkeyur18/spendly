@@ -697,6 +697,38 @@ class $AccountsTable extends Accounts
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _customTypeNameMeta = const VerificationMeta(
+    'customTypeName',
+  );
+  @override
+  late final GeneratedColumn<String> customTypeName = GeneratedColumn<String>(
+    'custom_type_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customTypeIconMeta = const VerificationMeta(
+    'customTypeIcon',
+  );
+  @override
+  late final GeneratedColumn<String> customTypeIcon = GeneratedColumn<String>(
+    'custom_type_icon',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _customTypeColorValueMeta =
+      const VerificationMeta('customTypeColorValue');
+  @override
+  late final GeneratedColumn<int> customTypeColorValue = GeneratedColumn<int>(
+    'custom_type_color_value',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _externalIdMeta = const VerificationMeta(
     'externalId',
   );
@@ -720,6 +752,9 @@ class $AccountsTable extends Accounts
     isDefault,
     includeInNetWorth,
     isLiability,
+    customTypeName,
+    customTypeIcon,
+    customTypeColorValue,
     externalId,
   ];
   @override
@@ -793,6 +828,33 @@ class $AccountsTable extends Accounts
         ),
       );
     }
+    if (data.containsKey('custom_type_name')) {
+      context.handle(
+        _customTypeNameMeta,
+        customTypeName.isAcceptableOrUnknown(
+          data['custom_type_name']!,
+          _customTypeNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_type_icon')) {
+      context.handle(
+        _customTypeIconMeta,
+        customTypeIcon.isAcceptableOrUnknown(
+          data['custom_type_icon']!,
+          _customTypeIconMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_type_color_value')) {
+      context.handle(
+        _customTypeColorValueMeta,
+        customTypeColorValue.isAcceptableOrUnknown(
+          data['custom_type_color_value']!,
+          _customTypeColorValueMeta,
+        ),
+      );
+    }
     if (data.containsKey('external_id')) {
       context.handle(
         _externalIdMeta,
@@ -846,6 +908,18 @@ class $AccountsTable extends Accounts
         DriftSqlType.bool,
         data['${effectivePrefix}is_liability'],
       )!,
+      customTypeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_type_name'],
+      ),
+      customTypeIcon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_type_icon'],
+      ),
+      customTypeColorValue: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}custom_type_color_value'],
+      ),
       externalId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
@@ -904,6 +978,20 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// that existed before this column did.
   final bool isLiability;
 
+  /// Only set when [type] is [AccountType.custom] (schema v20) — a per-
+  /// account type, not a reusable one: two accounts can both be "Loan" with
+  /// no relation to each other, same as two accounts can both be named
+  /// "Cash". Null for every built-in type.
+  final String? customTypeName;
+
+  /// Emoji glyph, same convention as [Categories.icon]. Only set alongside
+  /// [customTypeName].
+  final String? customTypeIcon;
+
+  /// ARGB int, same convention as [Categories.colorValue]. Only set
+  /// alongside [customTypeName].
+  final int? customTypeColorValue;
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
   const AccountRow({
@@ -916,6 +1004,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     required this.isDefault,
     required this.includeInNetWorth,
     required this.isLiability,
+    this.customTypeName,
+    this.customTypeIcon,
+    this.customTypeColorValue,
     this.externalId,
   });
   @override
@@ -934,6 +1025,15 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     map['is_default'] = Variable<bool>(isDefault);
     map['include_in_net_worth'] = Variable<bool>(includeInNetWorth);
     map['is_liability'] = Variable<bool>(isLiability);
+    if (!nullToAbsent || customTypeName != null) {
+      map['custom_type_name'] = Variable<String>(customTypeName);
+    }
+    if (!nullToAbsent || customTypeIcon != null) {
+      map['custom_type_icon'] = Variable<String>(customTypeIcon);
+    }
+    if (!nullToAbsent || customTypeColorValue != null) {
+      map['custom_type_color_value'] = Variable<int>(customTypeColorValue);
+    }
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
@@ -953,6 +1053,15 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       isDefault: Value(isDefault),
       includeInNetWorth: Value(includeInNetWorth),
       isLiability: Value(isLiability),
+      customTypeName: customTypeName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customTypeName),
+      customTypeIcon: customTypeIcon == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customTypeIcon),
+      customTypeColorValue: customTypeColorValue == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customTypeColorValue),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
@@ -980,6 +1089,11 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       includeInNetWorth: serializer.fromJson<bool>(json['includeInNetWorth']),
       isLiability: serializer.fromJson<bool>(json['isLiability']),
+      customTypeName: serializer.fromJson<String?>(json['customTypeName']),
+      customTypeIcon: serializer.fromJson<String?>(json['customTypeIcon']),
+      customTypeColorValue: serializer.fromJson<int?>(
+        json['customTypeColorValue'],
+      ),
       externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
@@ -998,6 +1112,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       'isDefault': serializer.toJson<bool>(isDefault),
       'includeInNetWorth': serializer.toJson<bool>(includeInNetWorth),
       'isLiability': serializer.toJson<bool>(isLiability),
+      'customTypeName': serializer.toJson<String?>(customTypeName),
+      'customTypeIcon': serializer.toJson<String?>(customTypeIcon),
+      'customTypeColorValue': serializer.toJson<int?>(customTypeColorValue),
       'externalId': serializer.toJson<String?>(externalId),
     };
   }
@@ -1012,6 +1129,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     bool? isDefault,
     bool? includeInNetWorth,
     bool? isLiability,
+    Value<String?> customTypeName = const Value.absent(),
+    Value<String?> customTypeIcon = const Value.absent(),
+    Value<int?> customTypeColorValue = const Value.absent(),
     Value<String?> externalId = const Value.absent(),
   }) => AccountRow(
     id: id ?? this.id,
@@ -1025,6 +1145,15 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     isDefault: isDefault ?? this.isDefault,
     includeInNetWorth: includeInNetWorth ?? this.includeInNetWorth,
     isLiability: isLiability ?? this.isLiability,
+    customTypeName: customTypeName.present
+        ? customTypeName.value
+        : this.customTypeName,
+    customTypeIcon: customTypeIcon.present
+        ? customTypeIcon.value
+        : this.customTypeIcon,
+    customTypeColorValue: customTypeColorValue.present
+        ? customTypeColorValue.value
+        : this.customTypeColorValue,
     externalId: externalId.present ? externalId.value : this.externalId,
   );
   AccountRow copyWithCompanion(AccountsCompanion data) {
@@ -1048,6 +1177,15 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       isLiability: data.isLiability.present
           ? data.isLiability.value
           : this.isLiability,
+      customTypeName: data.customTypeName.present
+          ? data.customTypeName.value
+          : this.customTypeName,
+      customTypeIcon: data.customTypeIcon.present
+          ? data.customTypeIcon.value
+          : this.customTypeIcon,
+      customTypeColorValue: data.customTypeColorValue.present
+          ? data.customTypeColorValue.value
+          : this.customTypeColorValue,
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
@@ -1066,6 +1204,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('isDefault: $isDefault, ')
           ..write('includeInNetWorth: $includeInNetWorth, ')
           ..write('isLiability: $isLiability, ')
+          ..write('customTypeName: $customTypeName, ')
+          ..write('customTypeIcon: $customTypeIcon, ')
+          ..write('customTypeColorValue: $customTypeColorValue, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -1082,6 +1223,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     isDefault,
     includeInNetWorth,
     isLiability,
+    customTypeName,
+    customTypeIcon,
+    customTypeColorValue,
     externalId,
   );
   @override
@@ -1097,6 +1241,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.isDefault == this.isDefault &&
           other.includeInNetWorth == this.includeInNetWorth &&
           other.isLiability == this.isLiability &&
+          other.customTypeName == this.customTypeName &&
+          other.customTypeIcon == this.customTypeIcon &&
+          other.customTypeColorValue == this.customTypeColorValue &&
           other.externalId == this.externalId);
 }
 
@@ -1110,6 +1257,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<bool> isDefault;
   final Value<bool> includeInNetWorth;
   final Value<bool> isLiability;
+  final Value<String?> customTypeName;
+  final Value<String?> customTypeIcon;
+  final Value<int?> customTypeColorValue;
   final Value<String?> externalId;
   const AccountsCompanion({
     this.id = const Value.absent(),
@@ -1121,6 +1271,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.isDefault = const Value.absent(),
     this.includeInNetWorth = const Value.absent(),
     this.isLiability = const Value.absent(),
+    this.customTypeName = const Value.absent(),
+    this.customTypeIcon = const Value.absent(),
+    this.customTypeColorValue = const Value.absent(),
     this.externalId = const Value.absent(),
   });
   AccountsCompanion.insert({
@@ -1133,6 +1286,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.isDefault = const Value.absent(),
     this.includeInNetWorth = const Value.absent(),
     this.isLiability = const Value.absent(),
+    this.customTypeName = const Value.absent(),
+    this.customTypeIcon = const Value.absent(),
+    this.customTypeColorValue = const Value.absent(),
     this.externalId = const Value.absent(),
   }) : name = Value(name),
        type = Value(type);
@@ -1146,6 +1302,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<bool>? isDefault,
     Expression<bool>? includeInNetWorth,
     Expression<bool>? isLiability,
+    Expression<String>? customTypeName,
+    Expression<String>? customTypeIcon,
+    Expression<int>? customTypeColorValue,
     Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
@@ -1160,6 +1319,10 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       if (isDefault != null) 'is_default': isDefault,
       if (includeInNetWorth != null) 'include_in_net_worth': includeInNetWorth,
       if (isLiability != null) 'is_liability': isLiability,
+      if (customTypeName != null) 'custom_type_name': customTypeName,
+      if (customTypeIcon != null) 'custom_type_icon': customTypeIcon,
+      if (customTypeColorValue != null)
+        'custom_type_color_value': customTypeColorValue,
       if (externalId != null) 'external_id': externalId,
     });
   }
@@ -1174,6 +1337,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<bool>? isDefault,
     Value<bool>? includeInNetWorth,
     Value<bool>? isLiability,
+    Value<String?>? customTypeName,
+    Value<String?>? customTypeIcon,
+    Value<int?>? customTypeColorValue,
     Value<String?>? externalId,
   }) {
     return AccountsCompanion(
@@ -1186,6 +1352,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       isDefault: isDefault ?? this.isDefault,
       includeInNetWorth: includeInNetWorth ?? this.includeInNetWorth,
       isLiability: isLiability ?? this.isLiability,
+      customTypeName: customTypeName ?? this.customTypeName,
+      customTypeIcon: customTypeIcon ?? this.customTypeIcon,
+      customTypeColorValue: customTypeColorValue ?? this.customTypeColorValue,
       externalId: externalId ?? this.externalId,
     );
   }
@@ -1224,6 +1393,17 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     if (isLiability.present) {
       map['is_liability'] = Variable<bool>(isLiability.value);
     }
+    if (customTypeName.present) {
+      map['custom_type_name'] = Variable<String>(customTypeName.value);
+    }
+    if (customTypeIcon.present) {
+      map['custom_type_icon'] = Variable<String>(customTypeIcon.value);
+    }
+    if (customTypeColorValue.present) {
+      map['custom_type_color_value'] = Variable<int>(
+        customTypeColorValue.value,
+      );
+    }
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
@@ -1242,6 +1422,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('isDefault: $isDefault, ')
           ..write('includeInNetWorth: $includeInNetWorth, ')
           ..write('isLiability: $isLiability, ')
+          ..write('customTypeName: $customTypeName, ')
+          ..write('customTypeIcon: $customTypeIcon, ')
+          ..write('customTypeColorValue: $customTypeColorValue, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -5526,6 +5709,9 @@ typedef $$AccountsTableCreateCompanionBuilder =
       Value<bool> isDefault,
       Value<bool> includeInNetWorth,
       Value<bool> isLiability,
+      Value<String?> customTypeName,
+      Value<String?> customTypeIcon,
+      Value<int?> customTypeColorValue,
       Value<String?> externalId,
     });
 typedef $$AccountsTableUpdateCompanionBuilder =
@@ -5539,6 +5725,9 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<bool> isDefault,
       Value<bool> includeInNetWorth,
       Value<bool> isLiability,
+      Value<String?> customTypeName,
+      Value<String?> customTypeIcon,
+      Value<int?> customTypeColorValue,
       Value<String?> externalId,
     });
 
@@ -5617,6 +5806,21 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<bool> get isLiability => $composableBuilder(
     column: $table.isLiability,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get customTypeIcon => $composableBuilder(
+    column: $table.customTypeIcon,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get customTypeColorValue => $composableBuilder(
+    column: $table.customTypeColorValue,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5705,6 +5909,21 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get customTypeIcon => $composableBuilder(
+    column: $table.customTypeIcon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get customTypeColorValue => $composableBuilder(
+    column: $table.customTypeColorValue,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get externalId => $composableBuilder(
     column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
@@ -5754,6 +5973,21 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<bool> get isLiability => $composableBuilder(
     column: $table.isLiability,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get customTypeName => $composableBuilder(
+    column: $table.customTypeName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get customTypeIcon => $composableBuilder(
+    column: $table.customTypeIcon,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get customTypeColorValue => $composableBuilder(
+    column: $table.customTypeColorValue,
     builder: (column) => column,
   );
 
@@ -5825,6 +6059,9 @@ class $$AccountsTableTableManager
                 Value<bool> isDefault = const Value.absent(),
                 Value<bool> includeInNetWorth = const Value.absent(),
                 Value<bool> isLiability = const Value.absent(),
+                Value<String?> customTypeName = const Value.absent(),
+                Value<String?> customTypeIcon = const Value.absent(),
+                Value<int?> customTypeColorValue = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
@@ -5836,6 +6073,9 @@ class $$AccountsTableTableManager
                 isDefault: isDefault,
                 includeInNetWorth: includeInNetWorth,
                 isLiability: isLiability,
+                customTypeName: customTypeName,
+                customTypeIcon: customTypeIcon,
+                customTypeColorValue: customTypeColorValue,
                 externalId: externalId,
               ),
           createCompanionCallback:
@@ -5849,6 +6089,9 @@ class $$AccountsTableTableManager
                 Value<bool> isDefault = const Value.absent(),
                 Value<bool> includeInNetWorth = const Value.absent(),
                 Value<bool> isLiability = const Value.absent(),
+                Value<String?> customTypeName = const Value.absent(),
+                Value<String?> customTypeIcon = const Value.absent(),
+                Value<int?> customTypeColorValue = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
@@ -5860,6 +6103,9 @@ class $$AccountsTableTableManager
                 isDefault: isDefault,
                 includeInNetWorth: includeInNetWorth,
                 isLiability: isLiability,
+                customTypeName: customTypeName,
+                customTypeIcon: customTypeIcon,
+                customTypeColorValue: customTypeColorValue,
                 externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0

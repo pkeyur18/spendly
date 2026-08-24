@@ -1295,8 +1295,8 @@ approval, smallest/lowest-risk first:
 
 1. **Net worth inclusion toggle — done.** [x]
 2. **Debit/credit account nature (liability accounts start negative) — done.** [x]
-3. Custom account types with icon/color (per-account, not a reusable type registry — user's
-   explicit choice over a Categories-style type table) — not started.
+3. **Custom account types with icon/color (per-account, not a reusable type registry — user's
+   explicit choice over a Categories-style type table) — done.** [x]
 4. Recurring income + actionable notification (salary, meal card reload) — not started, and
    the biggest piece: `LedgerEntries` has no recurrence columns today (unlike `Expenses`,
    which already carries `isRecurring`/`recurrence`/`nextDueDate`), and no notification in
@@ -1354,4 +1354,43 @@ approval, smallest/lowest-risk first:
       ternary in the edit sheet's `_save()` is trivial enough (one line) to skip a dedicated
       test for, per this project's "trivial one-liners need no test" convention — covered
       instead by on-device verification. `flutter analyze` clean, 499 tests passing.
+
+### Sub-project 3 — custom account types with icon/color (schema v20) — done
+
+- [x] **Shared picker extraction** — `category_edit_sheet.dart`'s icon-picker-sheet,
+      color-picker-sheet, custom-color dialog, and "preview strip + overflow chip"
+      interaction (previously ~320 lines tightly coupled to `_CategoryEditSheetState`'s own
+      fields) pulled out into `core/widgets/icon_color_picker.dart` as a controlled
+      `IconColorPicker` widget (selection lives in the caller, reported back via
+      `onIconChanged`/`onColorChanged`) plus the standalone `previewStripItems` function.
+      `category_edit_sheet.dart` refactored to call it — same visual behavior, ~250 fewer
+      lines. `test/category_edit_strip_test.dart`'s import updated to the new location;
+      no other change to that test, since the function itself didn't change.
+- [x] **`AccountType.custom`** — new enum value. Three new nullable columns on `Accounts`:
+      `customTypeName`, `customTypeIcon` (emoji), `customTypeColorValue` (ARGB int), same
+      convention as `Categories.icon`/`colorValue`, only ever set together on a custom
+      account. Additive migration (`if (from < 20)`).
+      `AccountRepository.create`/`update` gain the three params; `update` also gains
+      `updateCustomType` (default false) to opt into overwriting — including clearing —
+      all three together, since `null` on these three specifically means "not custom"
+      rather than "leave unchanged" like every other `update` param.
+- [x] **Account edit sheet** — a 5th "Custom" chip. Selecting it reveals a required "Type
+      name" field plus an `IconColorPicker` using a new curated emoji set themed for
+      account types (🏦💳💰🪙📈… — 30 icons) and the same `AppColors.swatchPalette` colors
+      Categories already uses. `_save()` validates a non-empty type name when custom,
+      same pattern as the existing empty-account-name check.
+- [x] **List display** — `accountTypeLabel(AccountRow)` (new pure function, tested
+      directly) resolves a tile's own label: the account's `customTypeName` for a custom
+      account, the fixed built-in label otherwise. Section grouping still uses the
+      type-only `_typeLabel`, so every custom account collapses into one shared "Custom"
+      heading (per the user's explicit choice) while each tile still shows its own name.
+      New `_AccountTypeIcon` widget renders a custom account's own emoji+color instead of
+      the fixed Material icon.
+- [x] **Backup** — three additive nullable fields on `BackupAccount`, same shape as
+      `isLiability`; no version bump.
+- [x] Tests: 5 new `account_repository_test.dart` cases (persist, update-together, leave-
+      alone-without-the-flag, clear-on-type-switch), one `migration_test.dart` assertion,
+      2 new `backup_format_test.dart` round-trip cases, 2 new `backup_repository_test.dart`
+      merge/replace cases, and a new `test/account_type_label_test.dart` (4 cases) for the
+      new pure function. `flutter analyze` clean, 512 tests passing (58 test files).
 

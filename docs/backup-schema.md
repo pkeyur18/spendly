@@ -536,6 +536,16 @@ additive pattern as `includeInNetWorth`.
 A pre-v19 file has no `isLiability` key. `BackupAccount.fromJson` reads a missing key as
 `false` — an asset, matching what every pre-v19 account already was.
 
+## Additive fields — `customTypeName`/`customTypeIcon`/`customTypeColorValue` on accounts (schema v20)
+
+A custom account type's own name, emoji icon and ARGB color — only ever non-null together,
+and only on an `AccountType.custom` account. Same additive, no-version-bump shape as
+`isLiability`, restored verbatim by both Replace and Merge (no "at most one" invariant to
+protect, same reasoning as `includeInNetWorth`/`isLiability`).
+
+A pre-v20 file has no custom-type keys at all. `BackupAccount.fromJson` reads all three as
+`null` — matching every pre-v20 account, none of which could be custom-typed.
+
 ## App Lock is never in the payload
 
 Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export

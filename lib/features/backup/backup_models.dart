@@ -119,6 +119,9 @@ class BackupAccount {
     this.openingBalanceMonth,
     this.includeInNetWorth = true,
     this.isLiability = false,
+    this.customTypeName,
+    this.customTypeIcon,
+    this.customTypeColorValue,
   });
 
   final int id;
@@ -141,6 +144,16 @@ class BackupAccount {
   /// reasoning. A pre-v19 file simply lacks the key, which reads as `false`
   /// (an asset, matching what every pre-v19 account already was).
   final bool isLiability;
+
+  /// Additive fields (schema v20), only ever non-null together on a
+  /// `AccountType.custom` account — same additive, no-version-bump pattern
+  /// as `isLiability`. Restored verbatim by both Merge and Replace: a
+  /// per-account custom type has no "at most one" invariant to protect
+  /// either. A pre-v20 file simply lacks the keys, all three reading as
+  /// null, matching every pre-v20 account (none of which were custom).
+  final String? customTypeName;
+  final String? customTypeIcon;
+  final int? customTypeColorValue;
 
   /// Additive field (schema v14) — no backup version bump, same pattern as
   /// [isDefault]. Restored verbatim by both Merge and Replace: unlike
@@ -170,6 +183,9 @@ class BackupAccount {
     openingBalanceMonth: row.openingBalanceMonth,
     includeInNetWorth: row.includeInNetWorth,
     isLiability: row.isLiability,
+    customTypeName: row.customTypeName,
+    customTypeIcon: row.customTypeIcon,
+    customTypeColorValue: row.customTypeColorValue,
   );
 
   factory BackupAccount.fromJson(Map<String, dynamic> j) => BackupAccount(
@@ -188,6 +204,10 @@ class BackupAccount {
     includeInNetWorth: j['includeInNetWorth'] as bool? ?? true,
     // Pre-v19 files have no "isLiability" key; absent = false.
     isLiability: j['isLiability'] as bool? ?? false,
+    // Pre-v20 files have no custom-type keys at all; absent = null.
+    customTypeName: j['customTypeName'] as String?,
+    customTypeIcon: j['customTypeIcon'] as String?,
+    customTypeColorValue: j['customTypeColorValue'] as int?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -201,6 +221,9 @@ class BackupAccount {
     'openingBalanceMonth': openingBalanceMonth,
     'includeInNetWorth': includeInNetWorth,
     'isLiability': isLiability,
+    'customTypeName': customTypeName,
+    'customTypeIcon': customTypeIcon,
+    'customTypeColorValue': customTypeColorValue,
   };
 
   /// Merge: new row, id auto-assigned. [asDefault] is computed by the caller
@@ -219,6 +242,9 @@ class BackupAccount {
         isDefault: Value(asDefault),
         includeInNetWorth: Value(includeInNetWorth),
         isLiability: Value(isLiability),
+        customTypeName: Value(customTypeName),
+        customTypeIcon: Value(customTypeIcon),
+        customTypeColorValue: Value(customTypeColorValue),
         externalId: externalId == null
             ? const Value.absent()
             : Value(externalId),
@@ -238,6 +264,9 @@ class BackupAccount {
     isDefault: Value(isDefault),
     includeInNetWorth: Value(includeInNetWorth),
     isLiability: Value(isLiability),
+    customTypeName: Value(customTypeName),
+    customTypeIcon: Value(customTypeIcon),
+    customTypeColorValue: Value(customTypeColorValue),
     externalId: externalId == null ? const Value.absent() : Value(externalId),
   );
 }

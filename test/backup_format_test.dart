@@ -425,6 +425,65 @@ void main() {
     expect(decoded.isLiability, isFalse);
   });
 
+  test('a custom-type account round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        accounts: const [
+          BackupAccount(
+            id: 1,
+            name: 'Car loan',
+            type: AccountType.custom,
+            openingBalanceMinor: -1000000000,
+            isArchived: false,
+            externalId: 'acc-1',
+            customTypeName: 'Loan',
+            customTypeIcon: '🏦',
+            customTypeColorValue: 0xFF00FF00,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).accounts.single;
+    expect(decoded.type, AccountType.custom);
+    expect(decoded.customTypeName, 'Loan');
+    expect(decoded.customTypeIcon, '🏦');
+    expect(decoded.customTypeColorValue, 0xFF00FF00);
+  });
+
+  test('a pre-v20 account (no custom-type keys) decodes with none set',
+      () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['accounts'] = [
+          {
+            'id': 1,
+            'name': 'Cash',
+            'type': 'cash',
+            'openingBalanceMinor': 0,
+            'isArchived': false,
+            'externalId': null,
+            // No custom-type keys at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v8Json)).accounts.single;
+    expect(decoded.customTypeName, isNull);
+    expect(decoded.customTypeIcon, isNull);
+    expect(decoded.customTypeColorValue, isNull);
+  });
+
   test('a pre-v8 file (no accounts key) decodes with no accounts at all',
       () async {
     final v7Json = jsonEncode({

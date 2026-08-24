@@ -716,6 +716,50 @@ void main() {
       expect(restored.openingBalance, Money.parse('-1000000'));
     });
 
+    test('merge carries a custom type over to a newly-inserted account',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await AccountRepository(sourceDb).create(
+        name: 'Car loan',
+        type: AccountType.custom,
+        customTypeName: 'Loan',
+        customTypeIcon: '🏦',
+        customTypeColorValue: 0xFF00FF00,
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      final account = (await db.select(db.accounts).get()).single;
+      expect(account.type, AccountType.custom);
+      expect(account.customTypeName, 'Loan');
+      expect(account.customTypeIcon, '🏦');
+      expect(account.customTypeColorValue, 0xFF00FF00);
+    });
+
+    test('replace restores a custom type verbatim', () async {
+      final accountRepo = AccountRepository(db);
+      await accountRepo.create(
+        name: 'Car loan',
+        type: AccountType.custom,
+        customTypeName: 'Loan',
+        customTypeIcon: '🏦',
+        customTypeColorValue: 0xFF00FF00,
+      );
+      final payload = await repo.exportAll();
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restored = (await freshDb.select(freshDb.accounts).get()).single;
+      expect(restored.type, AccountType.custom);
+      expect(restored.customTypeName, 'Loan');
+      expect(restored.customTypeIcon, '🏦');
+      expect(restored.customTypeColorValue, 0xFF00FF00);
+    });
+
     group('default account', () {
       test('replace restores the backup default verbatim', () async {
         final accountRepo = AccountRepository(db);

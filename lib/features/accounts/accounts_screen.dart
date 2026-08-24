@@ -7,23 +7,82 @@ import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
+import '../../core/widgets/category_glyph.dart';
+import '../../core/widgets/icon_color_picker.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
 import 'account_detail_screen.dart';
 import 'account_repository.dart';
 
+/// Curated emoji set for a custom account type's icon (schema v20) — themed
+/// for what an account IS (a loan, a goal, a fund), not what it's spent on
+/// like Categories' set is. No emoji-keyboard dependency, same reasoning as
+/// `category_edit_sheet.dart`'s own list.
+const _accountIconChoices = [
+  '🏦',
+  '💳',
+  '💰',
+  '🪙',
+  '📈',
+  '📉',
+  '🏠',
+  '🚗',
+  '🎓',
+  '🛡️',
+  '💼',
+  '👴',
+  '🎯',
+  '🔑',
+  '📦',
+  '🌱',
+  '♻️',
+  '🧾',
+  '💸',
+  '🏆',
+  '🎁',
+  '👶',
+  '🐷',
+  '⚡',
+  '🏥',
+  '✈️',
+  '📱',
+  '🌍',
+  '🔒',
+  '🏢',
+];
+
+/// Section-heading label per type — fixed per built-in type, or a single
+/// shared "Custom" bucket for every custom-type account regardless of its
+/// own individual name (see [accountTypeLabel] for that).
 String _typeLabel(AccountType t) => switch (t) {
   AccountType.cash => 'Cash',
   AccountType.bank => 'Bank',
   AccountType.card => 'Card',
   AccountType.wallet => 'Wallet',
+  AccountType.custom => 'Custom',
 };
 
+/// Fallback Material icon per built-in type. Never actually shown for a
+/// custom account — [_AccountTile] renders its own emoji/color instead —
+/// but every enum value still needs a case for [AccountType.values] to stay
+/// exhaustive.
 IconData _typeIcon(AccountType t) => switch (t) {
   AccountType.cash => Icons.payments_outlined,
   AccountType.bank => Icons.account_balance_outlined,
   AccountType.card => Icons.credit_card_outlined,
   AccountType.wallet => Icons.account_balance_wallet_outlined,
+  AccountType.custom => Icons.category_outlined,
 };
+
+/// The label to show for one specific account — unlike [_typeLabel], this
+/// reads the account's own [AccountRow.customTypeName] for a custom account
+/// instead of collapsing every custom account to the same "Custom" text, so
+/// individual accounts don't lose that detail just because they share a
+/// section heading.
+String accountTypeLabel(AccountRow account) {
+  if (account.type != AccountType.custom) return _typeLabel(account.type);
+  final name = account.customTypeName;
+  return name != null && name.isNotEmpty ? name : 'Custom';
+}
 
 /// Accounts: where money is held or spent from (schema v12). Lists every
 /// account with its spend this month; tap to rename/reclassify/archive.
@@ -112,20 +171,7 @@ class _AccountTile extends ConsumerWidget {
           opacity: account.isArchived ? 0.5 : 1,
           child: Row(
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppRadius.icon),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  _typeIcon(account.type),
-                  size: 20,
-                  color: AppColors.primary,
-                ),
-              ),
+              _AccountTypeIcon(account: account),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -139,8 +185,8 @@ class _AccountTile extends ConsumerWidget {
                     ),
                     Text(
                       account.isDefault
-                          ? '${_typeLabel(account.type)} · Default'
-                          : _typeLabel(account.type),
+                          ? '${accountTypeLabel(account)} · Default'
+                          : accountTypeLabel(account),
                       style: TextStyle(fontSize: 12, color: palette.textDim),
                     ),
                   ],
@@ -192,6 +238,45 @@ class _AccountTile extends ConsumerWidget {
   }
 }
 
+/// The icon box on an account tile — a built-in type's fixed Material icon
+/// on the app's primary color, or a custom account's own emoji on its own
+/// color (falling back to the primary-color box if either is somehow unset,
+/// which the edit sheet never actually leaves happen).
+class _AccountTypeIcon extends StatelessWidget {
+  const _AccountTypeIcon({required this.account});
+
+  final AccountRow account;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = account.customTypeIcon;
+    final colorValue = account.customTypeColorValue;
+    if (account.type == AccountType.custom && icon != null && colorValue != null) {
+      final color = Color(colorValue);
+      return Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppRadius.icon),
+        ),
+        alignment: Alignment.center,
+        child: CategoryGlyph(icon, size: 20),
+      );
+    }
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.icon),
+      ),
+      alignment: Alignment.center,
+      child: Icon(_typeIcon(account.type), size: 20, color: AppColors.primary),
+    );
+  }
+}
+
 /// Create (no [existing]) or edit an account: name, type, opening balance,
 /// archive toggle. Resolves to the created/edited account's id and whether
 /// this call archived it (null if dismissed without saving) — the id lets a
@@ -235,6 +320,14 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
   late AccountType _type = widget.existing?.type ?? AccountType.cash;
   late bool _includeInNetWorth = widget.existing?.includeInNetWorth ?? true;
   late bool _isLiability = widget.existing?.isLiability ?? false;
+  late final _customTypeName = TextEditingController(
+    text: widget.existing?.customTypeName ?? '',
+  );
+  late String _customTypeIcon =
+      widget.existing?.customTypeIcon ?? _accountIconChoices.first;
+  late int _customTypeColorValue =
+      widget.existing?.customTypeColorValue ??
+      AppColors.swatchPalette.first.toARGB32();
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
@@ -243,6 +336,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
   void dispose() {
     _name.dispose();
     _openingBalance.dispose();
+    _customTypeName.dispose();
     super.dispose();
   }
 
@@ -254,12 +348,22 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
       ).showSnackBar(const SnackBar(content: Text('Enter an account name')));
       return;
     }
+    final isCustom = _type == AccountType.custom;
+    final customName = isCustom ? _customTypeName.text.trim() : null;
+    if (isCustom && (customName == null || customName.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a name for this custom type')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     final repo = ref.read(accountRepositoryProvider);
     // The field is always a magnitude; nature decides the stored sign, so
     // toggling it re-signs the balance on save regardless of what was typed.
     final magnitude = Money.parse(_openingBalance.text).abs();
     final balance = _isLiability ? magnitude * -1 : magnitude;
+    final customIcon = isCustom ? _customTypeIcon : null;
+    final customColor = isCustom ? _customTypeColorValue : null;
     final int id;
     if (_isEdit) {
       id = widget.existing!.id;
@@ -270,6 +374,10 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         openingBalance: balance,
         includeInNetWorth: _includeInNetWorth,
         isLiability: _isLiability,
+        updateCustomType: true,
+        customTypeName: customName,
+        customTypeIcon: customIcon,
+        customTypeColorValue: customColor,
       );
     } else {
       id = await repo.create(
@@ -278,6 +386,9 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         openingBalance: balance,
         includeInNetWorth: _includeInNetWorth,
         isLiability: _isLiability,
+        customTypeName: customName,
+        customTypeIcon: customIcon,
+        customTypeColorValue: customColor,
       );
     }
     if (!mounted) return;
@@ -331,6 +442,28 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
                   ),
               ],
             ),
+            if (_type == AccountType.custom) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _customTypeName,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Type name',
+                  hintText: 'e.g. Loan, Gold, Investment',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              IconColorPicker(
+                iconChoices: _accountIconChoices,
+                selectedIcon: _customTypeIcon,
+                onIconChanged: (v) => setState(() => _customTypeIcon = v),
+                colorChoices: AppColors.swatchPalette,
+                selectedColor: _customTypeColorValue,
+                onColorChanged: (v) =>
+                    setState(() => _customTypeColorValue = v),
+              ),
+            ],
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('This is money I owe'),

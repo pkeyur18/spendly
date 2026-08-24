@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:spendly/features/categories/category_edit_sheet.dart';
+import 'package:spendly/core/widgets/icon_color_picker.dart';
 
 void main() {
   const all = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];

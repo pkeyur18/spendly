@@ -281,5 +281,12 @@ void main() {
     // from<19: same createTable trap again — is_liability defaults false,
     // same as any pre-v19 account (an asset) would read once upgraded.
     expect(reloadedAccounts.single.isLiability, isFalse);
+
+    // from<20: same createTable trap once more — the custom-type columns
+    // default to null, same as any pre-v20 account (none of which were
+    // custom) would read once upgraded.
+    expect(reloadedAccounts.single.customTypeName, isNull);
+    expect(reloadedAccounts.single.customTypeIcon, isNull);
+    expect(reloadedAccounts.single.customTypeColorValue, isNull);
   });
 }

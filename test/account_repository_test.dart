@@ -313,4 +313,87 @@ void main() {
       expect((await accounts.byId(id))!.isLiability, isTrue);
     });
   });
+
+  group('custom account type', () {
+    test('create persists name, icon and color', () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.custom,
+        customTypeName: 'Loan',
+        customTypeIcon: '🏦',
+        customTypeColorValue: 0xFF00FF00,
+      );
+      final row = (await accounts.byId(id))!;
+      expect(row.type, AccountType.custom);
+      expect(row.customTypeName, 'Loan');
+      expect(row.customTypeIcon, '🏦');
+      expect(row.customTypeColorValue, 0xFF00FF00);
+    });
+
+    test('a built-in type has no custom fields set', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final row = (await accounts.byId(id))!;
+      expect(row.customTypeName, isNull);
+      expect(row.customTypeIcon, isNull);
+      expect(row.customTypeColorValue, isNull);
+    });
+
+    test('update with updateCustomType changes all three together', () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.custom,
+        customTypeName: 'Loan',
+        customTypeIcon: '🏦',
+        customTypeColorValue: 0xFF00FF00,
+      );
+      await accounts.update(
+        id,
+        updateCustomType: true,
+        customTypeName: 'Auto loan',
+        customTypeIcon: '🚗',
+        customTypeColorValue: 0xFFFF0000,
+      );
+      final row = (await accounts.byId(id))!;
+      expect(row.customTypeName, 'Auto loan');
+      expect(row.customTypeIcon, '🚗');
+      expect(row.customTypeColorValue, 0xFFFF0000);
+    });
+
+    test('update without updateCustomType leaves the custom fields alone',
+        () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.custom,
+        customTypeName: 'Loan',
+        customTypeIcon: '🏦',
+        customTypeColorValue: 0xFF00FF00,
+      );
+      await accounts.update(id, name: 'Car loan (Axis)');
+      final row = (await accounts.byId(id))!;
+      expect(row.name, 'Car loan (Axis)');
+      expect(row.customTypeName, 'Loan');
+    });
+
+    test('switching type away from custom clears the fields when '
+        'updateCustomType is passed', () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.custom,
+        customTypeName: 'Loan',
+        customTypeIcon: '🏦',
+        customTypeColorValue: 0xFF00FF00,
+      );
+      await accounts.update(
+        id,
+        type: AccountType.bank,
+        updateCustomType: true,
+        // customTypeName/Icon/ColorValue omitted -> null, clearing them.
+      );
+      final row = (await accounts.byId(id))!;
+      expect(row.type, AccountType.bank);
+      expect(row.customTypeName, isNull);
+      expect(row.customTypeIcon, isNull);
+      expect(row.customTypeColorValue, isNull);
+    });
+  });
 }

@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v19, backup format v10, 499 passing tests (57 test
+> Recap feature. Drift schema v20, backup format v10, 512 passing tests (58 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -81,7 +81,12 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   debt from day one and every later expense/income/transfer against it works exactly as it
   does for any other account. A liability account still in debt shows "You owe ₹X" on its
   detail screen instead of "Balance ₹X", in red; paid off or overpaid, it reads like any
-  other account's balance again.
+  other account's balance again. Beyond the four built-in types, an account can pick
+  "Custom" (schema v20) and name its own type (e.g. "Loan", "Gold") with its own emoji icon
+  and color, chosen from the same icon/color-picker widget Categories uses (extracted into
+  `core/widgets/icon_color_picker.dart` so both features share one implementation) — every
+  custom-type account groups under one "Custom" section on the manage screen, though each
+  tile still shows its own individual type name, icon, and color.
 - **Income & savings rate** — log income (amount, date, optional account, source label,
   note) from a dedicated Income screen under Profile; swipe to delete with undo, same as
   expenses. Kept in its own table, never mixed into `Expenses` — see

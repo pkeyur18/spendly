@@ -47,6 +47,9 @@ class AccountRepository {
     Money openingBalance = Money.zero,
     bool includeInNetWorth = true,
     bool isLiability = false,
+    String? customTypeName,
+    String? customTypeIcon,
+    int? customTypeColorValue,
   }) async {
     final countExpr = _db.accounts.id.count();
     final count = await (_db.selectOnly(
@@ -63,6 +66,9 @@ class AccountRepository {
             isDefault: Value(isFirst),
             includeInNetWorth: Value(includeInNetWorth),
             isLiability: Value(isLiability),
+            customTypeName: Value(customTypeName),
+            customTypeIcon: Value(customTypeIcon),
+            customTypeColorValue: Value(customTypeColorValue),
           ),
         );
   }
@@ -80,6 +86,11 @@ class AccountRepository {
     });
   }
 
+  /// [updateCustomType] opts into overwriting the three custom-type fields
+  /// together, including clearing them to null — unlike every other param
+  /// here, `null` on `customTypeName`/`customTypeIcon`/`customTypeColorValue`
+  /// is a meaningful value (switching away from [AccountType.custom]), not
+  /// "leave unchanged", so a plain nullable param can't express both.
   Future<void> update(
     int id, {
     String? name,
@@ -87,6 +98,10 @@ class AccountRepository {
     Money? openingBalance,
     bool? includeInNetWorth,
     bool? isLiability,
+    bool updateCustomType = false,
+    String? customTypeName,
+    String? customTypeIcon,
+    int? customTypeColorValue,
   }) {
     return (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
       AccountsCompanion(
@@ -101,6 +116,15 @@ class AccountRepository {
         isLiability: isLiability == null
             ? const Value.absent()
             : Value(isLiability),
+        customTypeName: updateCustomType
+            ? Value(customTypeName)
+            : const Value.absent(),
+        customTypeIcon: updateCustomType
+            ? Value(customTypeIcon)
+            : const Value.absent(),
+        customTypeColorValue: updateCustomType
+            ? Value(customTypeColorValue)
+            : const Value.absent(),
       ),
     );
   }
