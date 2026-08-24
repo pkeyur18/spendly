@@ -135,62 +135,63 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.lg,
-              0,
-            ),
-            child: AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Balance this month',
-                    style: TextStyle(fontSize: 13, color: palette.textDim),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    (balance ?? Money.zero).format(locale: 'en_IN'),
-                    style: const TextStyle(
-                      fontFamily: 'Sora',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  if (openingBalance.minor != 0) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Opening balance ${openingBalance.format(locale: 'en_IN')}',
-                      style: TextStyle(fontSize: 12, color: palette.textDim),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            child: AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _fullYear ? 'Spent this year' : 'Spent this month',
-                    style: TextStyle(fontSize: 13, color: palette.textDim),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    (total ?? Money.zero).format(locale: 'en_IN'),
-                    style: const TextStyle(
-                      fontFamily: 'Sora',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Balance this month',
+                          style: TextStyle(fontSize: 13, color: palette.textDim),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          (balance ?? Money.zero).format(locale: 'en_IN'),
+                          style: const TextStyle(
+                            fontFamily: 'Sora',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        if (openingBalance.minor != 0) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Opening ${openingBalance.format(locale: 'en_IN')}',
+                            style: TextStyle(fontSize: 11, color: palette.textDim),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _fullYear ? 'Spent this year' : 'Spent this month',
+                          style: TextStyle(fontSize: 13, color: palette.textDim),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          (total ?? Money.zero).format(locale: 'en_IN'),
+                          style: const TextStyle(
+                            fontFamily: 'Sora',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
