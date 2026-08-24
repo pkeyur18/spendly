@@ -3,6 +3,14 @@
 Date: 2026-08-24
 Status: Presented to user, pending review before implementation plan.
 
+**Revision (same day):** the original plan removed light mode and repainted
+the app's brand colors to gold/violet. User reversed that after seeing
+Phase 1 implemented — theme (light+dark toggle, indigo/pink brand colors,
+Profile's Theme setting) is **restored exactly as it was**; see the "Theme
+foundation" section below, now much smaller. The glass-card visual
+treatment and every per-screen layout change are kept, just built on top of
+the existing two-theme system instead of replacing it.
+
 ## Scope
 
 **UI/UX only.** No schema, repository, provider, or business-logic changes.
@@ -12,70 +20,76 @@ see below) and the one explicitly-approved UI-layer feature (Income
 month/year toggle, see below) — both are presentation-layer only, no new
 persistence or query beyond an existing unused repository method.
 
-The app is redesigned to a single dark "glass premium" visual language and
-**light mode is removed entirely** — no theme toggle, no `ThemeMode.system`
-following. This covers every in-app surface: screens, shared components,
-SnackBars, AlertDialogs, native date/time pickers, loading/error/empty
-states, and the once-a-month Recap hero. It does not cover OS-level surfaces Flutter's theme system can't reach — system
-push-notification banner styling or the app icon/splash screen; those stay
-out of scope. The home-screen widget **is** in scope (added per user
-request) and is covered in its own section below since it's native
-platform code, not Flutter.
+The app keeps its **existing light and dark themes and the theme-mode
+toggle**, unchanged. What's redesigned is the component/layout language on
+top: glass/frosted cards, revised spacing and hierarchy, and the per-screen
+layout changes below — applied consistently across both themes. This
+covers every in-app surface: screens, shared components, SnackBars,
+AlertDialogs, native date/time pickers, loading/error/empty states, and the
+once-a-month Recap hero — each themed correctly in both light and dark. It
+does not cover OS-level surfaces Flutter's theme system can't reach —
+system push-notification banner styling or the app icon/splash screen;
+those stay out of scope. The home-screen widget is discussed in its own
+section below — see that section for why it now needs little to no change.
 
-## Direction: Dark Premium
+## Direction: Glass, on both themes
 
 Established during brainstorming as one of four comparable mockup
-directions (see `redesign-board` artifact), picked by user for all 8
-originally-scoped screens and now extended app-wide.
+directions (see `redesign-board` artifact, "Dark Premium" / Direction D),
+picked by user for all 8 originally-scoped screens and extended app-wide —
+**with its color identity reverted to the app's existing indigo/pink
+brand** rather than the gold/violet built for the dark-only version.
 
-- **Surface**: near-black base (`#0B0B10`), frosted/translucent glass cards
-  (`rgba(255,255,255,.06)` + backdrop blur, `rgba(255,255,255,.12)` hairline
-  border) rather than flat opaque cards.
-- **Accent**: gold/champagne (`#D8B26A`) + violet (`#7C5CFF`) gradient,
-  replacing today's indigo/pink `brandGradient`. Category swatch palette
-  (`AppColors` teal/red/green/etc.) is unaffected — those are user-facing
-  category colors, not theme chrome.
-- **Type**: Sora (headings/money, tight tracking) + Inter (body) — same
-  families as today, so no new font assets; weight/scale tuned for the
-  darker, higher-contrast ground.
-- **Radius/shadow**: slightly larger corner radius than today's tokens,
-  soft deep shadows (`0 18-24px 40-50px rgba(0,0,0,.5)`) for elevation on a
-  dark ground where a light drop-shadow would be invisible.
+- **Surface**: cards become translucent/frosted rather than flat opaque —
+  a low-opacity tint of the theme's existing card color plus backdrop blur,
+  over the theme's existing background, not a new fixed dark ground. In
+  dark theme this looks like the original mockup (frosted glass over
+  near-black); in light theme it's the same technique over the light
+  background — frosted glass over `#F5F5F7`, still legible, less "premium
+  moody," more "soft glass." Both are real, both get equal polish.
+- **Accent**: unchanged — `AppColors.primary` (indigo `#6366F1`) /
+  `AppColors.pink` (`#EC4899`) and the existing `brandGradient`/
+  `heroGradient`. No new brand colors. Category swatch palette is
+  unaffected either way — those are user-facing category colors, not
+  theme chrome.
+- **Type**: Sora (headings/money) + Inter (body) — unchanged, no new font
+  assets.
+- **Radius/shadow**: slightly larger corner radius than today's tokens
+  (kept from the original mockup direction), shadow tuned per theme — a
+  soft dark shadow reads fine on light, but needs to be a glow/lighter
+  border-emphasis on dark where a black drop-shadow disappears.
 
 ## Theme foundation (`lib/core/theme/`)
 
-Audit confirmed this is a clean, contained change — zero scattered
-light-only reads outside the theme files themselves.
+**Nothing here is deleted.** `AppColors`, `AppPalette.light`/`.dark`,
+`AppTheme.light()`/`.dark()`, the `themeModeProvider` toggle, and Profile's
+Theme setting all stay exactly as they are today — reverted back after
+Phase 1 was tried and reversed.
 
-- `tokens.dart`: delete `AppPalette.light`; replace `AppPalette.dark`'s
-  values with the Dark Premium palette above. `AppColors` brand-independent
-  constants (category swatches, `heroGradient`/`brandGradient`) updated to
-  the new accent gradient; category swatch colors unchanged.
-- `app_theme.dart`: `_build(Brightness)` collapses to a single build path
-  (brightness argument removed or hardcoded). `AppTheme.light()` deleted;
-  `AppTheme.dark()` is the one surviving factory (may rename to
-  `AppTheme.premium()` — implementation plan's call).
-- Add explicit `SnackBarThemeData`, `DialogThemeData`, and
-  `DatePickerThemeData`/`TimePickerThemeData` to the built `ThemeData` so
-  SnackBars, AlertDialogs, and native pickers pick up glass/dark styling
-  automatically rather than falling back to Material defaults — this is
-  what makes "toasts and messages uniform too" true by construction instead
-  of per-call-site work.
-- `lib/app.dart`: `MaterialApp(theme: AppTheme.dark())`; drop `darkTheme:`
-  and `themeMode:` params, and the `AnimatedTheme` brightness-crossfade
-  wrapper (dead once there is one theme). Drop the `ThemeMode.system`
-  fallback reference near the profile-async watch.
-- Delete `lib/features/settings/theme_mode_provider.dart`. Remove the one
-  stray reference: `delete_all_data_flow.dart:36`
-  (`ref.invalidate(themeModeProvider)`).
-- `profile_screen.dart:141-150` (Theme menu row) and `:259-306`
-  (`_themeLabel`/`_openThemePicker`) deleted — this is the only
-  user-facing settings UI affected by the light-mode removal.
-- `SettingsRepository.themeModeKey` persistence key becomes dead; drop it
-  as part of cleanup (low risk, no migration needed — an unread key is
-  harmless either way, but leaving it is untidy).
-- `test/app_theme_test.dart`: delete the light-dialog test case (`:6-13`),
-  point the remaining case at the surviving factory.
+What's *added*, additively, on both `AppPalette.light` and
+`AppPalette.dark`:
+
+- New `AppPalette` fields for the glass treatment — a translucent card
+  color (existing card color at low opacity, tuned separately per theme
+  since the right opacity for "frosted" differs on a white vs. near-black
+  ground) and a hairline glass-border color. Implementation plan decides
+  exact field names/values; the two existing static consts (`.light`/
+  `.dark`) each grow these new fields, nothing removed.
+- A shared blur-sigma constant for `BackdropFilter` (same value both
+  themes — blur amount doesn't need to differ, only the tint under it
+  does).
+- `SnackBarThemeData`, `DialogThemeData` (already exists, unchanged
+  structurally), and `DatePickerThemeData`/`TimePickerThemeData` added to
+  `_build(Brightness)` for **both** branches, each themed against that
+  branch's own palette — this is what makes "toasts and messages uniform
+  too" true in both light and dark, by construction rather than
+  per-call-site work.
+- `AppRadius.card`/`AppRadius.button` bumped slightly larger (brightness-
+  independent, no light/dark split needed there).
+
+No files are deleted in this phase. `test/app_theme_test.dart` gains cases
+for the new light+dark SnackBar/DatePicker/TimePicker theming; its existing
+light/dark dialog cases are untouched.
 
 ## Shared components (restyle once, most of the app inherits it)
 
@@ -119,8 +133,8 @@ palette; layout otherwise inherits from shared components): Home dashboard
 `CustomReportScreen`, `TagReportScreen`/`TagDetailScreen` (all reuse
 `ReportHero`/donut in `report_widgets.dart`), `InsightsScreen`.
 
-**Monthly Recap** (`monthly_recap_screen.dart`) — reskinned to the Dark
-Premium accent palette, per user's explicit call; animation/confetti
+**Monthly Recap** (`monthly_recap_screen.dart`) — reskinned to the glass
+treatment (both themes), per user's explicit call; animation/confetti
 behavior unchanged.
 
 **Remaining screens** (inherit shared-component styling; touched mainly for
@@ -134,55 +148,58 @@ layout/spacing polish, no bespoke mockup): `AccountDetailScreen`,
 `DebugDataScreen` (`lib/features/dev/`) is `kDebugMode`-gated dev-only
 tooling — excluded from the redesign.
 
-## Home-screen widget (native, not Flutter)
+## Home-screen widget (native, not Flutter) — mostly a no-op now
 
 `home_widget` bridges the app to a fully **native** widget UI — Dart only
 writes string/number data (`lib/features/widgets/widget_snapshot.dart`,
 `WidgetBridge.write`); colors and layout live entirely in platform code.
-Restyling it means editing native Swift/Kotlin, not Dart:
 
-- **iOS**: `ios/SpendlyWidget/SpendlyWidget.swift` (249 lines, 4 widget
-  kinds: Today/QuickAdd/Month/Lock). Brand colors are two local constants
-  (`:10-11`, indigo `#6366F1` / pink `#EC4899`) composed into
-  `brandGradient` and used as each widget's `containerBackgroundCompat`
-  (`:98,122,158`); a few `Color.white.opacity(0.18)` glass chips already
-  exist for inner elements. Swap the two constants for the gold/violet Dark
-  Premium accent pair; the existing white-glass chip treatment already
-  matches the new direction and likely needs no change.
-- **Android**: `android/app/src/main/kotlin/com/spendly/spendly/widget/SpendlyGlanceWidget.kt`
-  (103 lines, Jetpack Glance). One `indigo` `ColorProvider` (`:39`) used as
-  the widget's `.background()` (`:57`). Same swap.
-- No changes to `widget_snapshot.dart`, `WidgetKeys`, the app-group id, or
-  any Dart-side data/refresh logic — this is a native-file color/gradient
-  edit only, same "restyle, don't restructure" rule as the rest of the
-  spec.
-- Verification is manual (add the widget to an iOS/Android home screen and
-  look at it) since there's no golden-image tooling in this repo for native
-  widget surfaces — call this out explicitly when this piece is done rather
-  than claiming it verified by `flutter analyze`/tests.
+- **iOS**: `ios/SpendlyWidget/SpendlyWidget.swift:10-11` — the brand colors
+  are indigo `#6366F1` / pink `#EC4899`, composed into a `brandGradient`
+  used as each widget's background. **These already match the app's
+  (unchanged) brand colors** — since the accent reverted to indigo/pink
+  instead of moving to gold/violet, no color edit is needed here.
+- **Android**: `android/app/src/main/kotlin/com/spendly/spendly/widget/SpendlyGlanceWidget.kt:39` —
+  same situation, the `indigo` `ColorProvider` already matches.
+- Optional, not required: if a frosted/glass look is wanted on the widget's
+  inner elements to visually rhyme with the in-app glass cards, both files
+  already have a `Color.white.opacity(0.18)` translucent-chip treatment for
+  inner elements (`SpendlyWidget.swift`) — leave as-is unless asked for
+  more. WidgetKit/Glance materials (native blur) are a platform-specific
+  can of worms disproportionate to the payoff here; not recommended.
+- **Net effect: this item drops out of the rollout as a required task.**
+  Revisit only if, after seeing the in-app glass cards, the native widget
+  looks visually behind — that's a call to make by eye once the rest is
+  built, not something to plan blind now.
 
 ## Rollout order
 
-1. Theme foundation + shared components — recolors ~80% of the app
-   immediately, before any per-screen layout work starts.
+1. Theme foundation (glass tokens, both themes) + shared components — gives
+   ~80% of the app the glass look immediately, in both light and dark,
+   before any per-screen layout work starts.
 2. The 8 mockup'd screens (includes the one pattern change and the income
-   toggle).
-3. Chart screens (palette-only `fl_chart` recolor).
+   toggle), each verified in both themes.
+3. Chart screens (`fl_chart` colors already match brand — mainly checking
+   the new card/surface treatment reads correctly behind charts in both
+   themes).
 4. Monthly Recap.
 5. Remaining ~16 list/detail/form screens.
-6. Home-screen widget (native iOS/Android, independent of the Flutter work —
-   can slot in anytime after the palette is finalized in step 1).
 
-Each batch should be independently shippable and testable — the
-implementation plan (next step, via writing-plans) will turn this into
-concrete phases with file-level tasks.
+Home-screen widget dropped from the required rollout — see its section
+above.
+
+Each batch should be independently shippable and testable, **and each must
+be checked in both light and dark** (this doubles the manual-verification
+surface per phase compared to the dark-only plan — worth calling out
+explicitly since it's the main cost of this revision).
 
 ## Out of scope / explicit non-goals
 
-- No backend, schema, repository, or business-logic changes anywhere,
-  Flutter or native.
-- No OS-level theming beyond the home-screen widget — push notification
-  banners and app icon/splash stay out of scope.
+- No backend, schema, repository, or business-logic changes anywhere.
+- No OS-level theming — push notification banners, app icon/splash, and
+  (per the section above) the home-screen widget's colors stay untouched.
 - `DebugDataScreen` untouched.
 - Category swatch colors (user-chosen per category/account) unchanged —
   only theme chrome (surfaces, accents, nav, buttons) changes.
+- No brand color change — indigo/pink stays; the gold/violet Dark Premium
+  palette from the original plan is abandoned.

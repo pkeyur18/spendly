@@ -1,3 +1,10 @@
+> **SUPERSEDED (2026-08-24, same day):** Implemented, then reverted at the
+> user's request — light mode and the original indigo/pink brand colors
+> are kept. See the "Revision" note at the top of
+> `docs/superpowers/specs/2026-08-24-dark-premium-redesign-design.md` for
+> the current direction (glass treatment on top of both existing themes).
+> Kept here for history; do not execute this plan as written.
+
 # Dark Premium Redesign — Phase 1: Theme Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
