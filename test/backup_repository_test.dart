@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/providers.dart';
+import 'package:spendly/core/db/row_extensions.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/backup/backup_format.dart';
 import 'package:spendly/features/backup/backup_models.dart';
@@ -675,6 +676,44 @@ void main() {
 
       final restored = (await freshDb.select(freshDb.accounts).get()).single;
       expect(restored.includeInNetWorth, isFalse);
+    });
+
+    test('merge carries isLiability and its negative balance over to a '
+        'newly-inserted account', () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await AccountRepository(sourceDb).create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        openingBalance: Money.parse('-1000000'),
+        isLiability: true,
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      final account = (await db.select(db.accounts).get()).single;
+      expect(account.isLiability, isTrue);
+      expect(account.openingBalance, Money.parse('-1000000'));
+    });
+
+    test('replace restores isLiability verbatim', () async {
+      final accountRepo = AccountRepository(db);
+      await accountRepo.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        openingBalance: Money.parse('-1000000'),
+        isLiability: true,
+      );
+      final payload = await repo.exportAll();
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restored = (await freshDb.select(freshDb.accounts).get()).single;
+      expect(restored.isLiability, isTrue);
+      expect(restored.openingBalance, Money.parse('-1000000'));
     });
 
     group('default account', () {

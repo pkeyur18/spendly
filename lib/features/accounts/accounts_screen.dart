@@ -224,13 +224,17 @@ class _AccountEditSheet extends ConsumerStatefulWidget {
 
 class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
+  // Always the magnitude, regardless of sign — a liability's stored balance
+  // is negative, but the field itself is where you type "10,00,000", not
+  // "-10,00,000".
   late final _openingBalance = TextEditingController(
     text: widget.existing == null
         ? ''
-        : widget.existing!.openingBalance.major.toStringAsFixed(2),
+        : widget.existing!.openingBalance.abs().major.toStringAsFixed(2),
   );
   late AccountType _type = widget.existing?.type ?? AccountType.cash;
   late bool _includeInNetWorth = widget.existing?.includeInNetWorth ?? true;
+  late bool _isLiability = widget.existing?.isLiability ?? false;
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
@@ -252,7 +256,10 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
     }
     setState(() => _saving = true);
     final repo = ref.read(accountRepositoryProvider);
-    final balance = Money.parse(_openingBalance.text);
+    // The field is always a magnitude; nature decides the stored sign, so
+    // toggling it re-signs the balance on save regardless of what was typed.
+    final magnitude = Money.parse(_openingBalance.text).abs();
+    final balance = _isLiability ? magnitude * -1 : magnitude;
     final int id;
     if (_isEdit) {
       id = widget.existing!.id;
@@ -262,6 +269,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         type: _type,
         openingBalance: balance,
         includeInNetWorth: _includeInNetWorth,
+        isLiability: _isLiability,
       );
     } else {
       id = await repo.create(
@@ -269,6 +277,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         type: _type,
         openingBalance: balance,
         includeInNetWorth: _includeInNetWorth,
+        isLiability: _isLiability,
       );
     }
     if (!mounted) return;
@@ -322,16 +331,26 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
                   ),
               ],
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('This is money I owe'),
+              subtitle: const Text(
+                'Loan, credit card debt — opening balance below is stored '
+                'as a negative running balance',
+              ),
+              value: _isLiability,
+              onChanged: (v) => setState(() => _isLiability = v),
+            ),
             const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _openingBalance,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(
-                labelText: 'Opening balance',
+              decoration: InputDecoration(
+                labelText: _isLiability ? 'Amount owed' : 'Opening balance',
                 prefixText: '₹ ',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
             SwitchListTile(

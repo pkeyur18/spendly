@@ -682,6 +682,21 @@ class $AccountsTable extends Accounts
     ),
     defaultValue: const Constant(true),
   );
+  static const VerificationMeta _isLiabilityMeta = const VerificationMeta(
+    'isLiability',
+  );
+  @override
+  late final GeneratedColumn<bool> isLiability = GeneratedColumn<bool>(
+    'is_liability',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_liability" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _externalIdMeta = const VerificationMeta(
     'externalId',
   );
@@ -704,6 +719,7 @@ class $AccountsTable extends Accounts
     isArchived,
     isDefault,
     includeInNetWorth,
+    isLiability,
     externalId,
   ];
   @override
@@ -768,6 +784,15 @@ class $AccountsTable extends Accounts
         ),
       );
     }
+    if (data.containsKey('is_liability')) {
+      context.handle(
+        _isLiabilityMeta,
+        isLiability.isAcceptableOrUnknown(
+          data['is_liability']!,
+          _isLiabilityMeta,
+        ),
+      );
+    }
     if (data.containsKey('external_id')) {
       context.handle(
         _externalIdMeta,
@@ -817,6 +842,10 @@ class $AccountsTable extends Accounts
         DriftSqlType.bool,
         data['${effectivePrefix}include_in_net_worth'],
       )!,
+      isLiability: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_liability'],
+      )!,
       externalId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
@@ -865,6 +894,16 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// out (a car loan, a credit card's running debt) from its edit sheet.
   final bool includeInNetWorth;
 
+  /// True for a liability (a loan, a credit card's running debt) rather than
+  /// an asset (schema v19). Purely a display/sign convention — nothing else
+  /// in the schema branches on it: [openingBalanceMinor] is stored negative
+  /// for a liability account so the running balance in `balance_math.dart`
+  /// (unchanged, nature-agnostic) reads as debt from day one, and every
+  /// later expense/income/transfer against it works exactly as it does for
+  /// any other account. Defaults false (an asset), matching every account
+  /// that existed before this column did.
+  final bool isLiability;
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
   const AccountRow({
@@ -876,6 +915,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     required this.isArchived,
     required this.isDefault,
     required this.includeInNetWorth,
+    required this.isLiability,
     this.externalId,
   });
   @override
@@ -893,6 +933,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     map['is_archived'] = Variable<bool>(isArchived);
     map['is_default'] = Variable<bool>(isDefault);
     map['include_in_net_worth'] = Variable<bool>(includeInNetWorth);
+    map['is_liability'] = Variable<bool>(isLiability);
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
@@ -911,6 +952,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       isArchived: Value(isArchived),
       isDefault: Value(isDefault),
       includeInNetWorth: Value(includeInNetWorth),
+      isLiability: Value(isLiability),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
@@ -937,6 +979,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
       includeInNetWorth: serializer.fromJson<bool>(json['includeInNetWorth']),
+      isLiability: serializer.fromJson<bool>(json['isLiability']),
       externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
@@ -954,6 +997,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       'isArchived': serializer.toJson<bool>(isArchived),
       'isDefault': serializer.toJson<bool>(isDefault),
       'includeInNetWorth': serializer.toJson<bool>(includeInNetWorth),
+      'isLiability': serializer.toJson<bool>(isLiability),
       'externalId': serializer.toJson<String?>(externalId),
     };
   }
@@ -967,6 +1011,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     bool? isArchived,
     bool? isDefault,
     bool? includeInNetWorth,
+    bool? isLiability,
     Value<String?> externalId = const Value.absent(),
   }) => AccountRow(
     id: id ?? this.id,
@@ -979,6 +1024,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     isArchived: isArchived ?? this.isArchived,
     isDefault: isDefault ?? this.isDefault,
     includeInNetWorth: includeInNetWorth ?? this.includeInNetWorth,
+    isLiability: isLiability ?? this.isLiability,
     externalId: externalId.present ? externalId.value : this.externalId,
   );
   AccountRow copyWithCompanion(AccountsCompanion data) {
@@ -999,6 +1045,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       includeInNetWorth: data.includeInNetWorth.present
           ? data.includeInNetWorth.value
           : this.includeInNetWorth,
+      isLiability: data.isLiability.present
+          ? data.isLiability.value
+          : this.isLiability,
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
@@ -1016,6 +1065,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
           ..write('includeInNetWorth: $includeInNetWorth, ')
+          ..write('isLiability: $isLiability, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -1031,6 +1081,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     isArchived,
     isDefault,
     includeInNetWorth,
+    isLiability,
     externalId,
   );
   @override
@@ -1045,6 +1096,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.isArchived == this.isArchived &&
           other.isDefault == this.isDefault &&
           other.includeInNetWorth == this.includeInNetWorth &&
+          other.isLiability == this.isLiability &&
           other.externalId == this.externalId);
 }
 
@@ -1057,6 +1109,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<bool> isArchived;
   final Value<bool> isDefault;
   final Value<bool> includeInNetWorth;
+  final Value<bool> isLiability;
   final Value<String?> externalId;
   const AccountsCompanion({
     this.id = const Value.absent(),
@@ -1067,6 +1120,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.includeInNetWorth = const Value.absent(),
+    this.isLiability = const Value.absent(),
     this.externalId = const Value.absent(),
   });
   AccountsCompanion.insert({
@@ -1078,6 +1132,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
     this.includeInNetWorth = const Value.absent(),
+    this.isLiability = const Value.absent(),
     this.externalId = const Value.absent(),
   }) : name = Value(name),
        type = Value(type);
@@ -1090,6 +1145,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<bool>? isArchived,
     Expression<bool>? isDefault,
     Expression<bool>? includeInNetWorth,
+    Expression<bool>? isLiability,
     Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
@@ -1103,6 +1159,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       if (isArchived != null) 'is_archived': isArchived,
       if (isDefault != null) 'is_default': isDefault,
       if (includeInNetWorth != null) 'include_in_net_worth': includeInNetWorth,
+      if (isLiability != null) 'is_liability': isLiability,
       if (externalId != null) 'external_id': externalId,
     });
   }
@@ -1116,6 +1173,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<bool>? isArchived,
     Value<bool>? isDefault,
     Value<bool>? includeInNetWorth,
+    Value<bool>? isLiability,
     Value<String?>? externalId,
   }) {
     return AccountsCompanion(
@@ -1127,6 +1185,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       isArchived: isArchived ?? this.isArchived,
       isDefault: isDefault ?? this.isDefault,
       includeInNetWorth: includeInNetWorth ?? this.includeInNetWorth,
+      isLiability: isLiability ?? this.isLiability,
       externalId: externalId ?? this.externalId,
     );
   }
@@ -1162,6 +1221,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     if (includeInNetWorth.present) {
       map['include_in_net_worth'] = Variable<bool>(includeInNetWorth.value);
     }
+    if (isLiability.present) {
+      map['is_liability'] = Variable<bool>(isLiability.value);
+    }
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
@@ -1179,6 +1241,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
           ..write('includeInNetWorth: $includeInNetWorth, ')
+          ..write('isLiability: $isLiability, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -5462,6 +5525,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
       Value<bool> isArchived,
       Value<bool> isDefault,
       Value<bool> includeInNetWorth,
+      Value<bool> isLiability,
       Value<String?> externalId,
     });
 typedef $$AccountsTableUpdateCompanionBuilder =
@@ -5474,6 +5538,7 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<bool> isArchived,
       Value<bool> isDefault,
       Value<bool> includeInNetWorth,
+      Value<bool> isLiability,
       Value<String?> externalId,
     });
 
@@ -5547,6 +5612,11 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<bool> get includeInNetWorth => $composableBuilder(
     column: $table.includeInNetWorth,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isLiability => $composableBuilder(
+    column: $table.isLiability,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5630,6 +5700,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isLiability => $composableBuilder(
+    column: $table.isLiability,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get externalId => $composableBuilder(
     column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
@@ -5674,6 +5749,11 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<bool> get includeInNetWorth => $composableBuilder(
     column: $table.includeInNetWorth,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isLiability => $composableBuilder(
+    column: $table.isLiability,
     builder: (column) => column,
   );
 
@@ -5744,6 +5824,7 @@ class $$AccountsTableTableManager
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<bool> includeInNetWorth = const Value.absent(),
+                Value<bool> isLiability = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
@@ -5754,6 +5835,7 @@ class $$AccountsTableTableManager
                 isArchived: isArchived,
                 isDefault: isDefault,
                 includeInNetWorth: includeInNetWorth,
+                isLiability: isLiability,
                 externalId: externalId,
               ),
           createCompanionCallback:
@@ -5766,6 +5848,7 @@ class $$AccountsTableTableManager
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
                 Value<bool> includeInNetWorth = const Value.absent(),
+                Value<bool> isLiability = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
@@ -5776,6 +5859,7 @@ class $$AccountsTableTableManager
                 isArchived: isArchived,
                 isDefault: isDefault,
                 includeInNetWorth: includeInNetWorth,
+                isLiability: isLiability,
                 externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0

@@ -39,6 +39,12 @@ void main() {
       expect(Money.fromMinor(100) < Money.fromMinor(200), isTrue);
       expect(Money.fromMinor(200) >= Money.fromMinor(200), isTrue);
     });
+
+    test('abs() always non-negative', () {
+      expect(Money.fromMinor(-1000).abs().minor, 1000);
+      expect(Money.fromMinor(1000).abs().minor, 1000);
+      expect(Money.zero.abs().minor, 0);
+    });
   });
 
   group('Money — formatting round-trips', () {

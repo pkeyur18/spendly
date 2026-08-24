@@ -105,6 +105,16 @@ class Accounts extends Table {
   BoolColumn get includeInNetWorth =>
       boolean().withDefault(const Constant(true))();
 
+  /// True for a liability (a loan, a credit card's running debt) rather than
+  /// an asset (schema v19). Purely a display/sign convention — nothing else
+  /// in the schema branches on it: [openingBalanceMinor] is stored negative
+  /// for a liability account so the running balance in `balance_math.dart`
+  /// (unchanged, nature-agnostic) reads as debt from day one, and every
+  /// later expense/income/transfer against it works exactly as it does for
+  /// any other account. Defaults false (an asset), matching every account
+  /// that existed before this column did.
+  BoolColumn get isLiability => boolean().withDefault(const Constant(false))();
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
@@ -352,7 +362,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -539,6 +549,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 18) {
         if (!await _hasColumn('accounts', 'include_in_net_worth')) {
           await m.addColumn(accounts, accounts.includeInNetWorth);
+        }
+      }
+      if (from < 19) {
+        if (!await _hasColumn('accounts', 'is_liability')) {
+          await m.addColumn(accounts, accounts.isLiability);
         }
       }
     },

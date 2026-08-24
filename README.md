@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v18, backup format v10, 490 passing tests (57 test
+> Recap feature. Drift schema v19, backup format v10, 499 passing tests (57 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -74,7 +74,14 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   worth total" switch (schema v18, default on) that only affects the home screen's
   "Balance across accounts" figure — lets a car loan or a credit card's running debt be
   left out of that one number without changing anything else about the account (its own
-  balance, its transaction history, exports — all identical either way).
+  balance, its transaction history, exports — all identical either way). An account can
+  also be marked a liability (schema v19) — a loan, a credit card's running debt — via a
+  switch in its edit sheet; the opening balance field still takes a plain positive amount
+  (e.g. "10,00,000"), stored as negative under the hood so the running balance reads as
+  debt from day one and every later expense/income/transfer against it works exactly as it
+  does for any other account. A liability account still in debt shows "You owe ₹X" on its
+  detail screen instead of "Balance ₹X", in red; paid off or overpaid, it reads like any
+  other account's balance again.
 - **Income & savings rate** — log income (amount, date, optional account, source label,
   note) from a dedicated Income screen under Profile; swipe to delete with undo, same as
   expenses. Kept in its own table, never mixed into `Expenses` — see

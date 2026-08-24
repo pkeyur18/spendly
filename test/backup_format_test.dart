@@ -372,6 +372,59 @@ void main() {
     expect(decoded.includeInNetWorth, isTrue);
   });
 
+  test('a liability account round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        accounts: const [
+          BackupAccount(
+            id: 1,
+            name: 'Car loan',
+            type: AccountType.bank,
+            openingBalanceMinor: -1000000000,
+            isArchived: false,
+            externalId: 'acc-1',
+            isLiability: true,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).accounts.single;
+    expect(decoded.isLiability, isTrue);
+    expect(decoded.openingBalanceMinor, -1000000000);
+  });
+
+  test('a pre-v19 account (no isLiability key) decodes as an asset',
+      () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['accounts'] = [
+          {
+            'id': 1,
+            'name': 'Cash',
+            'type': 'cash',
+            'openingBalanceMinor': 0,
+            'isArchived': false,
+            'externalId': null,
+            // No "isLiability" key at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v8Json)).accounts.single;
+    expect(decoded.isLiability, isFalse);
+  });
+
   test('a pre-v8 file (no accounts key) decodes with no accounts at all',
       () async {
     final v7Json = jsonEncode({

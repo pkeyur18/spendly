@@ -275,4 +275,42 @@ void main() {
       expect((await accounts.byId(id))!.includeInNetWorth, isFalse);
     });
   });
+
+  group('isLiability', () {
+    test('create defaults to false', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      expect((await accounts.byId(id))!.isLiability, isFalse);
+    });
+
+    test('create can mark a liability, storing a negative opening balance',
+        () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        openingBalance: Money.parse('-1000000'),
+        isLiability: true,
+      );
+      final row = (await accounts.byId(id))!;
+      expect(row.isLiability, isTrue);
+      expect(row.openingBalance, Money.parse('-1000000'));
+    });
+
+    test('update flips it either way', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.update(id, isLiability: true);
+      expect((await accounts.byId(id))!.isLiability, isTrue);
+      await accounts.update(id, isLiability: false);
+      expect((await accounts.byId(id))!.isLiability, isFalse);
+    });
+
+    test('updating other fields leaves it alone', () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        isLiability: true,
+      );
+      await accounts.update(id, name: 'Car loan (Axis)');
+      expect((await accounts.byId(id))!.isLiability, isTrue);
+    });
+  });
 }

@@ -1294,7 +1294,7 @@ explicitly decomposed into four independent sub-projects rather than one spec, p
 approval, smallest/lowest-risk first:
 
 1. **Net worth inclusion toggle — done.** [x]
-2. Debit/credit account nature (liability accounts start negative) — not started.
+2. **Debit/credit account nature (liability accounts start negative) — done.** [x]
 3. Custom account types with icon/color (per-account, not a reusable type registry — user's
    explicit choice over a Categories-style type table) — not started.
 4. Recurring income + actionable notification (salary, meal card reload) — not started, and
@@ -1324,4 +1324,34 @@ approval, smallest/lowest-risk first:
       flakiness documented under Phase 6 is still unresolved, so this one-line `.where` filter
       is covered by the repository-level persistence tests plus on-device verification instead,
       same tradeoff as before. `flutter analyze` clean, 490 tests passing.
+
+### Sub-project 2 — debit/credit account nature (schema v19) — done
+
+- [x] **`Accounts.isLiability`** — bool, default false. Additive migration (`if (from < 19)`),
+      same `_hasColumn`-guarded shape as sub-project 1's column. Purely a display/sign
+      convention: nothing in `balance_math.dart` or anywhere else branches on it — a
+      liability's `openingBalanceMinor` is simply stored negative, so the existing
+      nature-agnostic running-balance math reads it as debt from day one with zero changes
+      to how expenses/income/transfers against it are computed.
+- [x] **`Money.abs()`** — new helper, needed to prefill the opening-balance field with a
+      magnitude regardless of the stored sign when editing an existing liability account.
+- [x] **Account edit sheet** — one more `SwitchListTile`, "This is money I owe", near the
+      opening balance field (which relabels to "Amount owed" when it's on). The field always
+      takes a plain positive magnitude; `_save()` computes the stored sign from the switch
+      (`magnitude * -1` for a liability) every time, so toggling nature on an account that
+      already has a balance re-signs it immediately on save — confirmed with the user as the
+      intended behavior, no confirmation dialog.
+- [x] **Account detail screen** — a liability account still in debt (`isLiability &&
+      balance.minor < 0`) shows "You owe ₹X" (magnitude, `AppColors.red`) instead of
+      "Balance ₹X"; paid off or overpaid, it falls back to a normal balance display. Nothing
+      else changed — accounts list (shows spend, not balance), budgets, reports, exports all
+      untouched, per the confirmed scope.
+- [x] **Backup** — `isLiability` added to `BackupAccount` as a plain additive field, same
+      shape as `includeInNetWorth`; no version bump.
+- [x] Tests: 1 new `money_test.dart` case (`abs()`), 4 new `account_repository_test.dart`
+      cases, one `migration_test.dart` assertion, 2 new `backup_format_test.dart` round-trip
+      cases, 2 new `backup_repository_test.dart` merge/replace cases. The sign-selection
+      ternary in the edit sheet's `_save()` is trivial enough (one line) to skip a dedicated
+      test for, per this project's "trivial one-liners need no test" convention — covered
+      instead by on-device verification. `flutter analyze` clean, 499 tests passing.
 

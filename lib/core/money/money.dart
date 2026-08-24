@@ -53,6 +53,10 @@ class Money {
   /// Percentage of [budget] this amount represents, 0 when budget is zero.
   double ratioOf(Money budget) => budget.minor == 0 ? 0 : minor / budget.minor;
 
+  /// Always non-negative — e.g. for showing a debt's magnitude regardless of
+  /// which sign it's stored with.
+  Money abs() => minor < 0 ? Money._(-minor) : this;
+
   /// Locale-aware currency string, e.g. "₹24,350.00".
   /// [locale] defaults to the device locale; symbol follows the locale's currency.
   String format({String? locale, String? symbol}) {

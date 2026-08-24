@@ -277,5 +277,9 @@ void main() {
     // createTable call — same "createTable trap" as openingBalanceMonth.
     // Defaults true, same as any pre-v18 account would read once upgraded.
     expect(reloadedAccounts.single.includeInNetWorth, isTrue);
+
+    // from<19: same createTable trap again — is_liability defaults false,
+    // same as any pre-v19 account (an asset) would read once upgraded.
+    expect(reloadedAccounts.single.isLiability, isFalse);
   });
 }

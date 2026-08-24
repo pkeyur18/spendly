@@ -519,6 +519,23 @@ A pre-v18 file has no `includeInNetWorth` key. `BackupAccount.fromJson` reads a 
 as `true` — counted, matching what a pre-v18 account already was by not having the concept
 at all.
 
+## Additive field — `isLiability` on accounts (schema v19)
+
+Whether this account is a liability (a loan, a credit card's running debt) rather than an
+asset — purely a display/sign convention, same as `includeInNetWorth`: nothing in the
+schema branches on it, `openingBalanceMinor` is simply stored negative for a liability
+account. Plain new nullable-by-omission key on each `accounts` entry, no version bump, same
+additive pattern as `includeInNetWorth`.
+
+- **Replace** restores it verbatim, same as every other account field.
+- **Merge** restores it verbatim too on a newly-inserted account — no "at most one"
+  invariant to protect, so a plain carry-over is safe. A matched (already-present) account
+  isn't touched by merge at all, so its own local setting is never overwritten by the
+  backup's.
+
+A pre-v19 file has no `isLiability` key. `BackupAccount.fromJson` reads a missing key as
+`false` — an asset, matching what every pre-v19 account already was.
+
 ## App Lock is never in the payload
 
 Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export

@@ -91,7 +91,11 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
     // just the snapshot passed in at navigation time.
     final account = accountById[widget.account.id] ?? widget.account;
     final openingBalance = account.openingBalance;
-    final balance = ref.watch(accountBalancesProvider)[widget.account.id];
+    final balance = ref.watch(accountBalancesProvider)[widget.account.id] ?? Money.zero;
+    // A liability account still in debt reads "You owe ₹X" (magnitude, red)
+    // rather than a bare negative "Balance" — paid off or overpaid, there's
+    // no debt left to call out, so it falls back to a normal balance.
+    final inDebt = account.isLiability && balance.minor < 0;
     final activeAccounts =
         ref.watch(activeAccountsProvider).value ?? const <AccountRow>[];
 
@@ -145,17 +149,19 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Balance',
+                          inDebt ? 'You owe' : 'Balance',
                           style: TextStyle(fontSize: 13, color: palette.textDim),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          (balance ?? Money.zero).format(locale: 'en_IN'),
-                          style: const TextStyle(
+                          (inDebt ? balance.abs() : balance).format(
+                            locale: 'en_IN',
+                          ),
+                          style: TextStyle(
                             fontFamily: 'Sora',
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
+                            color: inDebt ? AppColors.red : AppColors.primary,
                           ),
                         ),
                         if (openingBalance.minor != 0) ...[
