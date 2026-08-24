@@ -392,6 +392,30 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
     Navigator.of(context).pop((id: id, archived: false));
   }
 
+  /// Switch title with an (i) that reveals [info] on tap, instead of a
+  /// permanent subtitle line — the subtitles were the main cause of this
+  /// sheet overflowing shorter phones.
+  Widget _infoLabel(BuildContext context, String label, String info) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: Text(label)),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: info,
+          triggerMode: TooltipTriggerMode.tap,
+          showDuration: const Duration(seconds: 5),
+          child: Icon(
+            Icons.info_outline_rounded,
+            size: 16,
+            color: palette.textDim,
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _archive(bool archived) async {
     final id = widget.existing!.id;
     await ref.read(accountRepositoryProvider).setArchived(id, archived);
@@ -409,7 +433,8 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
       ),
       child: SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -463,10 +488,11 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
             ],
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('This is money I owe'),
-              subtitle: const Text(
+              title: _infoLabel(
+                context,
+                'This is money I owe',
                 'Loan, credit card debt — opening balance below is stored '
-                'as a negative running balance',
+                    'as a negative running balance',
               ),
               value: _isLiability,
               onChanged: (v) => setState(() => _isLiability = v),
@@ -485,8 +511,9 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Count toward net worth total'),
-              subtitle: const Text(
+              title: _infoLabel(
+                context,
+                'Count toward net worth total',
                 "Include this account in the home screen's balance",
               ),
               value: _includeInNetWorth,
@@ -513,6 +540,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
               ),
             ],
           ],
+          ),
         ),
       ),
     );

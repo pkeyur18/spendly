@@ -158,7 +158,7 @@ class _BottomNav extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: BottomAppBar(
-              color: palette.navBackground.withValues(alpha: 0.72),
+              color: palette.navBackground.withValues(alpha: 0.94),
               height: 56,
               shape: const CircularNotchedRectangle(),
               notchMargin: 8,
