@@ -45,6 +45,7 @@ class AccountRepository {
     required String name,
     required AccountType type,
     Money openingBalance = Money.zero,
+    bool includeInNetWorth = true,
   }) async {
     final countExpr = _db.accounts.id.count();
     final count = await (_db.selectOnly(
@@ -59,6 +60,7 @@ class AccountRepository {
             type: type,
             openingBalanceMinor: Value(openingBalance.minor),
             isDefault: Value(isFirst),
+            includeInNetWorth: Value(includeInNetWorth),
           ),
         );
   }
@@ -81,6 +83,7 @@ class AccountRepository {
     String? name,
     AccountType? type,
     Money? openingBalance,
+    bool? includeInNetWorth,
   }) {
     return (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
       AccountsCompanion(
@@ -89,6 +92,9 @@ class AccountRepository {
         openingBalanceMinor: openingBalance == null
             ? const Value.absent()
             : Value(openingBalance.minor),
+        includeInNetWorth: includeInNetWorth == null
+            ? const Value.absent()
+            : Value(includeInNetWorth),
       ),
     );
   }

@@ -230,6 +230,7 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
         : widget.existing!.openingBalance.major.toStringAsFixed(2),
   );
   late AccountType _type = widget.existing?.type ?? AccountType.cash;
+  late bool _includeInNetWorth = widget.existing?.includeInNetWorth ?? true;
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
@@ -255,9 +256,20 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
     final int id;
     if (_isEdit) {
       id = widget.existing!.id;
-      await repo.update(id, name: name, type: _type, openingBalance: balance);
+      await repo.update(
+        id,
+        name: name,
+        type: _type,
+        openingBalance: balance,
+        includeInNetWorth: _includeInNetWorth,
+      );
     } else {
-      id = await repo.create(name: name, type: _type, openingBalance: balance);
+      id = await repo.create(
+        name: name,
+        type: _type,
+        openingBalance: balance,
+        includeInNetWorth: _includeInNetWorth,
+      );
     }
     if (!mounted) return;
     Navigator.of(context).pop((id: id, archived: false));
@@ -321,6 +333,15 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
                 prefixText: '₹ ',
                 border: OutlineInputBorder(),
               ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Count toward net worth total'),
+              subtitle: const Text(
+                "Include this account in the home screen's balance",
+              ),
+              value: _includeInNetWorth,
+              onChanged: (v) => setState(() => _includeInNetWorth = v),
             ),
             const SizedBox(height: AppSpacing.lg),
             SizedBox(

@@ -643,6 +643,40 @@ void main() {
       expect(await db.select(db.accounts).get(), isEmpty);
     });
 
+    test('merge carries includeInNetWorth over to a newly-inserted account',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      await AccountRepository(sourceDb).create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        includeInNetWorth: false,
+      );
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      final account = (await db.select(db.accounts).get()).single;
+      expect(account.includeInNetWorth, isFalse);
+    });
+
+    test('replace restores includeInNetWorth verbatim', () async {
+      final accountRepo = AccountRepository(db);
+      await accountRepo.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        includeInNetWorth: false,
+      );
+      final payload = await repo.exportAll();
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restored = (await freshDb.select(freshDb.accounts).get()).single;
+      expect(restored.includeInNetWorth, isFalse);
+    });
+
     group('default account', () {
       test('replace restores the backup default verbatim', () async {
         final accountRepo = AccountRepository(db);

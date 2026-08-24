@@ -98,6 +98,13 @@ class Accounts extends Table {
   /// archived account — archiving clears it (schema v13).
   BoolColumn get isDefault => boolean().withDefault(const Constant(false))();
 
+  /// Whether this account's balance counts toward the home screen's "Balance
+  /// across accounts" total (schema v18) — nothing else reads this. Defaults
+  /// true so every existing account keeps counting until the user opts one
+  /// out (a car loan, a credit card's running debt) from its edit sheet.
+  BoolColumn get includeInNetWorth =>
+      boolean().withDefault(const Constant(true))();
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
@@ -345,7 +352,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -528,6 +535,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 17) {
         // Whole new table — no populated-table hazard.
         await m.createTable(savingsGoals);
+      }
+      if (from < 18) {
+        if (!await _hasColumn('accounts', 'include_in_net_worth')) {
+          await m.addColumn(accounts, accounts.includeInNetWorth);
+        }
       }
     },
   );

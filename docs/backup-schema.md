@@ -502,6 +502,23 @@ whole-new-table additions. The payload gets a new top-level array:
 A pre-v10 file has no `savingsGoals` key at all. `BackupPayload.fromJson` reads it as `[]` —
 same additive, no-destructive-branch pattern as every new array before it.
 
+## Additive field — `includeInNetWorth` on accounts (schema v18)
+
+Whether this account's balance counts toward the home screen's "Balance across accounts"
+total — nothing else reads it (an account's own balance, its transaction history, exports:
+all identical either way). Plain new nullable-by-omission key on each `accounts` entry, no
+version bump, same additive pattern as `openingBalanceMonth`.
+
+- **Replace** restores it verbatim, same as every other account field.
+- **Merge** restores it verbatim too on a newly-inserted account — no "at most one"
+  invariant to protect (unlike `isDefault`), so a plain carry-over is safe. A matched
+  (already-present) account isn't touched by merge at all, so its own local setting is
+  never overwritten by the backup's.
+
+A pre-v18 file has no `includeInNetWorth` key. `BackupAccount.fromJson` reads a missing key
+as `true` — counted, matching what a pre-v18 account already was by not having the concept
+at all.
+
 ## App Lock is never in the payload
 
 Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export

@@ -1284,3 +1284,44 @@ User-reported after manually testing Phase 7 on-device (2026-08-23/24):
       assertion that exercised the retired monthly-reset behavior; `flutter analyze` clean,
       482 tests passing (483 minus the one now-removed monthly-reset-specific test).
 
+## Account enhancements (net worth toggle, done; liability nature, custom types, recurring income — planned)
+
+User asked for five related account features (2026-08-24): a per-account "count toward net
+worth" opt-out (so a car loan or credit card doesn't distort the home total), a debit/credit
+account nature so a liability starts negative, custom account types with their own
+icon/color, and recurring income with an actionable notification. Brainstormed and
+explicitly decomposed into four independent sub-projects rather than one spec, per user
+approval, smallest/lowest-risk first:
+
+1. **Net worth inclusion toggle — done.** [x]
+2. Debit/credit account nature (liability accounts start negative) — not started.
+3. Custom account types with icon/color (per-account, not a reusable type registry — user's
+   explicit choice over a Categories-style type table) — not started.
+4. Recurring income + actionable notification (salary, meal card reload) — not started, and
+   the biggest piece: `LedgerEntries` has no recurrence columns today (unlike `Expenses`,
+   which already carries `isRecurring`/`recurrence`/`nextDueDate`), and no notification in
+   this app has ever used an action button — every one today is tap-to-open only. Agreed
+   home: the existing Recurring screen gets an income tab rather than a new screen.
+
+### Sub-project 1 — net worth inclusion toggle (schema v18) — done
+
+- [x] **`Accounts.includeInNetWorth`** — bool, default true. Additive migration
+      (`if (from < 18)`, `_hasColumn` guarded like every other additive column here).
+      `AccountRepository.create`/`update` gain the param.
+- [x] **`totalBalanceProvider`** (`account_balance_provider.dart`) filters to
+      `includeInNetWorth` accounts before folding — the only provider this flag touches.
+      `accountBalancesProvider` (each account's own balance, feeding the account detail
+      screen) is unchanged, satisfying the user's explicit "should not impact any other
+      calculation" requirement.
+- [x] **Account edit sheet** — one `SwitchListTile`, "Count toward net worth total", shown
+      for both create and edit, default on.
+- [x] **Backup** — `includeInNetWorth` added to `BackupAccount` as a plain additive field,
+      same pattern as `openingBalanceMonth`; no version bump.
+- [x] Tests: 4 new `account_repository_test.dart` cases, one `migration_test.dart`
+      assertion, 2 new `backup_format_test.dart` round-trip cases, 2 new
+      `backup_repository_test.dart` merge/replace cases. No provider-level test for the
+      `totalBalanceProvider` filter itself — the `ProviderContainer` + chained-`StreamProvider`
+      flakiness documented under Phase 6 is still unresolved, so this one-line `.where` filter
+      is covered by the repository-level persistence tests plus on-device verification instead,
+      same tradeoff as before. `flutter analyze` clean, 490 tests passing.
+

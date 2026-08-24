@@ -10,7 +10,7 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
 
 > **Status:** built through UX-enhancement phases 1–4 (daily-loop friction fixes,
 > recurring expenses, receipt photos, accounts), on top of Sprint 12 and the Monthly
-> Recap feature. Drift schema v17, backup format v10, 482 passing tests (57 test
+> Recap feature. Drift schema v18, backup format v10, 490 passing tests (57 test
 > files). Beta & hardening (Sprint 8) and store submission (Sprint 9) are not
 > started. See [PROGRESS.md](PROGRESS.md) for the full sprint-by-sprint log and
 > locked decisions.
@@ -70,7 +70,11 @@ Single codebase (Flutter), no account, no server. Money is stored as integer min
   archived like categories/tags, so history and exports stay intact (archiving the default
   account clears the flag rather than silently picking a replacement). The free-text
   `paymentMethod` field expenses already carried is migrated into real accounts
-  automatically on upgrade, preserved either way.
+  automatically on upgrade, preserved either way. Each account has a "count toward net
+  worth total" switch (schema v18, default on) that only affects the home screen's
+  "Balance across accounts" figure — lets a car loan or a credit card's running debt be
+  left out of that one number without changing anything else about the account (its own
+  balance, its transaction history, exports — all identical either way).
 - **Income & savings rate** — log income (amount, date, optional account, source label,
   note) from a dedicated Income screen under Profile; swipe to delete with undo, same as
   expenses. Kept in its own table, never mixed into `Expenses` — see

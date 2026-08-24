@@ -117,6 +117,7 @@ class BackupAccount {
     required this.externalId,
     this.isDefault = false,
     this.openingBalanceMonth,
+    this.includeInNetWorth = true,
   });
 
   final int id;
@@ -125,6 +126,14 @@ class BackupAccount {
   final int openingBalanceMinor;
   final bool isArchived;
   final String? externalId;
+
+  /// Additive field (schema v18) — no backup version bump, same pattern as
+  /// `openingBalanceMonth`. Restored verbatim by both Merge and Replace:
+  /// like `openingBalanceMonth`, there's no "at most one" invariant to
+  /// protect, so a plain carry-over is safe either way. A pre-v18 file
+  /// simply lacks the key, which reads as `true` (counted, matching what a
+  /// pre-v18 account already was by not having the concept at all).
+  final bool includeInNetWorth;
 
   /// Additive field (schema v14) — no backup version bump, same pattern as
   /// [isDefault]. Restored verbatim by both Merge and Replace: unlike
@@ -152,6 +161,7 @@ class BackupAccount {
     externalId: row.externalId,
     isDefault: row.isDefault,
     openingBalanceMonth: row.openingBalanceMonth,
+    includeInNetWorth: row.includeInNetWorth,
   );
 
   factory BackupAccount.fromJson(Map<String, dynamic> j) => BackupAccount(
@@ -166,6 +176,8 @@ class BackupAccount {
     // Pre-v14 files have no "openingBalanceMonth" key; absent = null, which
     // already reads as "not set this month" everywhere it's consumed.
     openingBalanceMonth: j['openingBalanceMonth'] as String?,
+    // Pre-v18 files have no "includeInNetWorth" key; absent = true.
+    includeInNetWorth: j['includeInNetWorth'] as bool? ?? true,
   );
 
   Map<String, dynamic> toJson() => {
@@ -177,6 +189,7 @@ class BackupAccount {
     'externalId': externalId,
     'isDefault': isDefault,
     'openingBalanceMonth': openingBalanceMonth,
+    'includeInNetWorth': includeInNetWorth,
   };
 
   /// Merge: new row, id auto-assigned. [asDefault] is computed by the caller
@@ -193,6 +206,7 @@ class BackupAccount {
             : Value(openingBalanceMonth),
         isArchived: Value(isArchived),
         isDefault: Value(asDefault),
+        includeInNetWorth: Value(includeInNetWorth),
         externalId: externalId == null
             ? const Value.absent()
             : Value(externalId),
@@ -210,6 +224,7 @@ class BackupAccount {
     openingBalanceMonth: Value(openingBalanceMonth),
     isArchived: Value(isArchived),
     isDefault: Value(isDefault),
+    includeInNetWorth: Value(includeInNetWorth),
     externalId: externalId == null ? const Value.absent() : Value(externalId),
   );
 }

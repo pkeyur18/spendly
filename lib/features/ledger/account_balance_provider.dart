@@ -47,15 +47,20 @@ final accountBalancesProvider = Provider<Map<int, Money>>((ref) {
   };
 });
 
-/// Sum of every active account's balance — the dashboard summary figure.
-/// Archived accounts are excluded, same convention as every other
+/// Sum of every active, opted-in account's balance — the dashboard summary
+/// figure. Archived accounts are excluded, same convention as every other
 /// account-total shown in the app: they're hidden from every picker, so
 /// folding their balance into a headline total would count money the user
-/// can no longer act on through the UI.
+/// can no longer act on through the UI. [AccountRow.includeInNetWorth] lets
+/// the user exclude a specific account too (a car loan, a credit card's
+/// running debt) — this is the only provider that flag affects; every
+/// per-account balance (including that account's own detail screen) is
+/// computed exactly the same either way.
 final totalBalanceProvider = Provider<Money>((ref) {
   final active = ref.watch(activeAccountsProvider).value ?? const [];
+  final counted = active.where((a) => a.includeInNetWorth);
   final balances = ref.watch(accountBalancesProvider);
-  return active.fold(
+  return counted.fold(
     Money.zero,
     (sum, a) => sum + (balances[a.id] ?? Money.zero),
   );

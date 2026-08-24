@@ -667,6 +667,21 @@ class $AccountsTable extends Accounts
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _includeInNetWorthMeta = const VerificationMeta(
+    'includeInNetWorth',
+  );
+  @override
+  late final GeneratedColumn<bool> includeInNetWorth = GeneratedColumn<bool>(
+    'include_in_net_worth',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("include_in_net_worth" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _externalIdMeta = const VerificationMeta(
     'externalId',
   );
@@ -688,6 +703,7 @@ class $AccountsTable extends Accounts
     openingBalanceMonth,
     isArchived,
     isDefault,
+    includeInNetWorth,
     externalId,
   ];
   @override
@@ -743,6 +759,15 @@ class $AccountsTable extends Accounts
         isDefault.isAcceptableOrUnknown(data['is_default']!, _isDefaultMeta),
       );
     }
+    if (data.containsKey('include_in_net_worth')) {
+      context.handle(
+        _includeInNetWorthMeta,
+        includeInNetWorth.isAcceptableOrUnknown(
+          data['include_in_net_worth']!,
+          _includeInNetWorthMeta,
+        ),
+      );
+    }
     if (data.containsKey('external_id')) {
       context.handle(
         _externalIdMeta,
@@ -788,6 +813,10 @@ class $AccountsTable extends Accounts
         DriftSqlType.bool,
         data['${effectivePrefix}is_default'],
       )!,
+      includeInNetWorth: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}include_in_net_worth'],
+      )!,
       externalId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
@@ -815,13 +844,11 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// from.
   final int openingBalanceMinor;
 
-  /// 'YYYY-MM' stamp of the month [openingBalanceMinor] was last set
-  /// (schema v14). Null on accounts created before this column existed.
-  /// Opening balance is a monthly concept — read it through
-  /// `AccountRow.effectiveOpeningBalanceMinor`, never this raw column
-  /// directly: a stamp from an earlier month means the balance has rolled
-  /// over to zero for display purposes even though the row itself is left
-  /// untouched (no background job zeroes it out on the 1st).
+  /// Unused (schema v14). Originally stamped the month
+  /// [openingBalanceMinor] was last set, backing a monthly-reset display
+  /// rule that has since been removed — opening balance is now a one-time
+  /// starting point that carries forward forever. Column kept, not dropped,
+  /// so old backup files with this key still round-trip cleanly.
   final String? openingBalanceMonth;
   final bool isArchived;
 
@@ -831,6 +858,12 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// with this account, still changeable per-expense. Never true on an
   /// archived account — archiving clears it (schema v13).
   final bool isDefault;
+
+  /// Whether this account's balance counts toward the home screen's "Balance
+  /// across accounts" total (schema v18) — nothing else reads this. Defaults
+  /// true so every existing account keeps counting until the user opts one
+  /// out (a car loan, a credit card's running debt) from its edit sheet.
+  final bool includeInNetWorth;
 
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
@@ -842,6 +875,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     this.openingBalanceMonth,
     required this.isArchived,
     required this.isDefault,
+    required this.includeInNetWorth,
     this.externalId,
   });
   @override
@@ -858,6 +892,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     }
     map['is_archived'] = Variable<bool>(isArchived);
     map['is_default'] = Variable<bool>(isDefault);
+    map['include_in_net_worth'] = Variable<bool>(includeInNetWorth);
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
@@ -875,6 +910,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           : Value(openingBalanceMonth),
       isArchived: Value(isArchived),
       isDefault: Value(isDefault),
+      includeInNetWorth: Value(includeInNetWorth),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
@@ -900,6 +936,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       ),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
       isDefault: serializer.fromJson<bool>(json['isDefault']),
+      includeInNetWorth: serializer.fromJson<bool>(json['includeInNetWorth']),
       externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
@@ -916,6 +953,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       'openingBalanceMonth': serializer.toJson<String?>(openingBalanceMonth),
       'isArchived': serializer.toJson<bool>(isArchived),
       'isDefault': serializer.toJson<bool>(isDefault),
+      'includeInNetWorth': serializer.toJson<bool>(includeInNetWorth),
       'externalId': serializer.toJson<String?>(externalId),
     };
   }
@@ -928,6 +966,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     Value<String?> openingBalanceMonth = const Value.absent(),
     bool? isArchived,
     bool? isDefault,
+    bool? includeInNetWorth,
     Value<String?> externalId = const Value.absent(),
   }) => AccountRow(
     id: id ?? this.id,
@@ -939,6 +978,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
         : this.openingBalanceMonth,
     isArchived: isArchived ?? this.isArchived,
     isDefault: isDefault ?? this.isDefault,
+    includeInNetWorth: includeInNetWorth ?? this.includeInNetWorth,
     externalId: externalId.present ? externalId.value : this.externalId,
   );
   AccountRow copyWithCompanion(AccountsCompanion data) {
@@ -956,6 +996,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ? data.isArchived.value
           : this.isArchived,
       isDefault: data.isDefault.present ? data.isDefault.value : this.isDefault,
+      includeInNetWorth: data.includeInNetWorth.present
+          ? data.includeInNetWorth.value
+          : this.includeInNetWorth,
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
@@ -972,6 +1015,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('openingBalanceMonth: $openingBalanceMonth, ')
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
+          ..write('includeInNetWorth: $includeInNetWorth, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -986,6 +1030,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     openingBalanceMonth,
     isArchived,
     isDefault,
+    includeInNetWorth,
     externalId,
   );
   @override
@@ -999,6 +1044,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.openingBalanceMonth == this.openingBalanceMonth &&
           other.isArchived == this.isArchived &&
           other.isDefault == this.isDefault &&
+          other.includeInNetWorth == this.includeInNetWorth &&
           other.externalId == this.externalId);
 }
 
@@ -1010,6 +1056,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<String?> openingBalanceMonth;
   final Value<bool> isArchived;
   final Value<bool> isDefault;
+  final Value<bool> includeInNetWorth;
   final Value<String?> externalId;
   const AccountsCompanion({
     this.id = const Value.absent(),
@@ -1019,6 +1066,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.openingBalanceMonth = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
+    this.includeInNetWorth = const Value.absent(),
     this.externalId = const Value.absent(),
   });
   AccountsCompanion.insert({
@@ -1029,6 +1077,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.openingBalanceMonth = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.isDefault = const Value.absent(),
+    this.includeInNetWorth = const Value.absent(),
     this.externalId = const Value.absent(),
   }) : name = Value(name),
        type = Value(type);
@@ -1040,6 +1089,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<String>? openingBalanceMonth,
     Expression<bool>? isArchived,
     Expression<bool>? isDefault,
+    Expression<bool>? includeInNetWorth,
     Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
@@ -1052,6 +1102,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
         'opening_balance_month': openingBalanceMonth,
       if (isArchived != null) 'is_archived': isArchived,
       if (isDefault != null) 'is_default': isDefault,
+      if (includeInNetWorth != null) 'include_in_net_worth': includeInNetWorth,
       if (externalId != null) 'external_id': externalId,
     });
   }
@@ -1064,6 +1115,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<String?>? openingBalanceMonth,
     Value<bool>? isArchived,
     Value<bool>? isDefault,
+    Value<bool>? includeInNetWorth,
     Value<String?>? externalId,
   }) {
     return AccountsCompanion(
@@ -1074,6 +1126,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       openingBalanceMonth: openingBalanceMonth ?? this.openingBalanceMonth,
       isArchived: isArchived ?? this.isArchived,
       isDefault: isDefault ?? this.isDefault,
+      includeInNetWorth: includeInNetWorth ?? this.includeInNetWorth,
       externalId: externalId ?? this.externalId,
     );
   }
@@ -1106,6 +1159,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     if (isDefault.present) {
       map['is_default'] = Variable<bool>(isDefault.value);
     }
+    if (includeInNetWorth.present) {
+      map['include_in_net_worth'] = Variable<bool>(includeInNetWorth.value);
+    }
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
@@ -1122,6 +1178,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('openingBalanceMonth: $openingBalanceMonth, ')
           ..write('isArchived: $isArchived, ')
           ..write('isDefault: $isDefault, ')
+          ..write('includeInNetWorth: $includeInNetWorth, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -5404,6 +5461,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
       Value<String?> openingBalanceMonth,
       Value<bool> isArchived,
       Value<bool> isDefault,
+      Value<bool> includeInNetWorth,
       Value<String?> externalId,
     });
 typedef $$AccountsTableUpdateCompanionBuilder =
@@ -5415,6 +5473,7 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String?> openingBalanceMonth,
       Value<bool> isArchived,
       Value<bool> isDefault,
+      Value<bool> includeInNetWorth,
       Value<String?> externalId,
     });
 
@@ -5483,6 +5542,11 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<bool> get isDefault => $composableBuilder(
     column: $table.isDefault,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get includeInNetWorth => $composableBuilder(
+    column: $table.includeInNetWorth,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5561,6 +5625,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get includeInNetWorth => $composableBuilder(
+    column: $table.includeInNetWorth,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get externalId => $composableBuilder(
     column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
@@ -5602,6 +5671,11 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<bool> get isDefault =>
       $composableBuilder(column: $table.isDefault, builder: (column) => column);
+
+  GeneratedColumn<bool> get includeInNetWorth => $composableBuilder(
+    column: $table.includeInNetWorth,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get externalId => $composableBuilder(
     column: $table.externalId,
@@ -5669,6 +5743,7 @@ class $$AccountsTableTableManager
                 Value<String?> openingBalanceMonth = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
+                Value<bool> includeInNetWorth = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
@@ -5678,6 +5753,7 @@ class $$AccountsTableTableManager
                 openingBalanceMonth: openingBalanceMonth,
                 isArchived: isArchived,
                 isDefault: isDefault,
+                includeInNetWorth: includeInNetWorth,
                 externalId: externalId,
               ),
           createCompanionCallback:
@@ -5689,6 +5765,7 @@ class $$AccountsTableTableManager
                 Value<String?> openingBalanceMonth = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<bool> isDefault = const Value.absent(),
+                Value<bool> includeInNetWorth = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
@@ -5698,6 +5775,7 @@ class $$AccountsTableTableManager
                 openingBalanceMonth: openingBalanceMonth,
                 isArchived: isArchived,
                 isDefault: isDefault,
+                includeInNetWorth: includeInNetWorth,
                 externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0

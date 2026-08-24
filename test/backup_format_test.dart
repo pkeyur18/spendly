@@ -320,6 +320,58 @@ void main() {
     expect(decoded.isDefault, isFalse);
   });
 
+  test('an account opted out of net worth round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        accounts: const [
+          BackupAccount(
+            id: 1,
+            name: 'Car loan',
+            type: AccountType.bank,
+            openingBalanceMinor: -1000000000,
+            isArchived: false,
+            externalId: 'acc-1',
+            includeInNetWorth: false,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).accounts.single;
+    expect(decoded.includeInNetWorth, isFalse);
+  });
+
+  test('a pre-v18 account (no includeInNetWorth key) decodes as counted',
+      () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['accounts'] = [
+          {
+            'id': 1,
+            'name': 'Cash',
+            'type': 'cash',
+            'openingBalanceMinor': 0,
+            'isArchived': false,
+            'externalId': null,
+            // No "includeInNetWorth" key at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v8Json)).accounts.single;
+    expect(decoded.includeInNetWorth, isTrue);
+  });
+
   test('a pre-v8 file (no accounts key) decodes with no accounts at all',
       () async {
     final v7Json = jsonEncode({

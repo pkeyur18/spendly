@@ -241,4 +241,38 @@ void main() {
       expect(row.openingBalance, Money.zero);
     });
   });
+
+  group('includeInNetWorth', () {
+    test('create defaults to true', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      expect((await accounts.byId(id))!.includeInNetWorth, isTrue);
+    });
+
+    test('create can opt out', () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        includeInNetWorth: false,
+      );
+      expect((await accounts.byId(id))!.includeInNetWorth, isFalse);
+    });
+
+    test('update flips it either way', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.update(id, includeInNetWorth: false);
+      expect((await accounts.byId(id))!.includeInNetWorth, isFalse);
+      await accounts.update(id, includeInNetWorth: true);
+      expect((await accounts.byId(id))!.includeInNetWorth, isTrue);
+    });
+
+    test('updating other fields leaves it alone', () async {
+      final id = await accounts.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+        includeInNetWorth: false,
+      );
+      await accounts.update(id, name: 'Car loan (Axis)');
+      expect((await accounts.byId(id))!.includeInNetWorth, isFalse);
+    });
+  });
 }

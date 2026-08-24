@@ -271,5 +271,11 @@ void main() {
     expect(goal.name, 'New laptop');
     expect(goal.savedMinor, 0);
     expect(goal.externalId, isNotNull);
+
+    // from<18: the account created above (from<13's own payment-method
+    // migration path) already has include_in_net_worth from that single
+    // createTable call — same "createTable trap" as openingBalanceMonth.
+    // Defaults true, same as any pre-v18 account would read once upgraded.
+    expect(reloadedAccounts.single.includeInNetWorth, isTrue);
   });
 }
