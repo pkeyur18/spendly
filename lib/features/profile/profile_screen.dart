@@ -19,6 +19,8 @@ import '../goals/goals_screen.dart';
 import '../insights/insights_screen.dart';
 import '../ledger/income_screen.dart';
 import '../recap/monthly_recap_screen.dart';
+import '../reports/monthly_report_screen.dart';
+import '../reports/past_month_picker_sheet.dart';
 import '../security/app_lock_provider.dart';
 
 /// Profile (FR-51, FR-57) — prototype phone 10. The account/settings hub:
@@ -234,6 +236,21 @@ class ProfileScreen extends ConsumerWidget {
                       builder: (_) => const BackupRestoreScreen(),
                     ),
                   ),
+                ),
+                _MenuRow(
+                  icon: Icons.file_download_outlined,
+                  title: 'Export past month',
+                  subtitle: 'Excel or PDF for any of the last 12 months',
+                  onTap: () async {
+                    final picked = await showPastMonthPickerSheet(context);
+                    if (picked != null && context.mounted) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MonthlyReportScreen(month: picked),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ],
             ),
