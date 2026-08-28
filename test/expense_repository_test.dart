@@ -539,4 +539,125 @@ void main() {
       expect(await repo.topNotes(limit: 2), hasLength(2));
     });
   });
+
+  group('addWithRecurrence', () {
+    test('the real transaction is never itself flagged recurring', () async {
+      final id = await repo.addWithRecurrence(
+        amount: Money.parse('199'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 3),
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 4, 3),
+      );
+      final rows = await repo.watchMonth(DateTime(2026, 3, 1)).first;
+      final real = rows.firstWhere((e) => e.id == id);
+      expect(real.isRecurring, isFalse);
+      expect(real.templateOnly, isFalse);
+    });
+
+    test('a separate template-only row carries the schedule', () async {
+      await repo.addWithRecurrence(
+        amount: Money.parse('199'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 3),
+        note: 'Netflix',
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 4, 3),
+      );
+      final all = await (db.select(db.expenses)).get();
+      expect(all, hasLength(2));
+      final template = all.firstWhere((e) => e.templateOnly);
+      expect(template.isRecurring, isTrue);
+      expect(template.recurrence, Recurrence.monthly);
+      expect(template.nextDueDate, DateTime(2026, 4, 3));
+      expect(template.note, 'Netflix');
+    });
+
+    test('the template-only row is excluded from the month total', () async {
+      await repo.addWithRecurrence(
+        amount: Money.parse('199'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 3),
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 4, 3),
+      );
+      // Only the real ₹199 transaction counts — not doubled by its template.
+      expect(await repo.monthTotal(DateTime(2026, 3, 1)), Money.parse('199'));
+    });
+
+    test('no recurrence set behaves like a plain add — no second row', () async {
+      await repo.addWithRecurrence(
+        amount: Money.parse('50'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 3),
+      );
+      expect(await (db.select(db.expenses)).get(), hasLength(1));
+    });
+  });
+
+  group('updateWithRecurrence', () {
+    test(
+      'turning recurrence on for a plain expense keeps it a plain, '
+      'non-recurring row and spawns a separate template instead',
+      () async {
+        final id = await repo.add(
+          amount: Money.parse('199'),
+          categoryId: 1,
+          date: DateTime(2026, 3, 3),
+        );
+        await repo.updateWithRecurrence(
+          id: id,
+          amount: Money.parse('199'),
+          categoryId: 1,
+          date: DateTime(2026, 3, 3),
+          recurrence: Recurrence.monthly,
+          nextDueDate: DateTime(2026, 4, 3),
+        );
+
+        final original = await (db.select(
+          db.expenses,
+        )..where((t) => t.id.equals(id))).getSingle();
+        expect(original.isRecurring, isFalse);
+        expect(original.templateOnly, isFalse);
+
+        final all = await (db.select(db.expenses)).get();
+        expect(all, hasLength(2));
+        final template = all.firstWhere((e) => e.id != id);
+        expect(template.templateOnly, isTrue);
+        expect(template.isRecurring, isTrue);
+      },
+    );
+
+    test(
+      'editing the spawned template later never touches the original '
+      'transaction',
+      () async {
+        final id = await repo.add(
+          amount: Money.parse('199'),
+          categoryId: 1,
+          date: DateTime(2026, 3, 3),
+        );
+        await repo.updateWithRecurrence(
+          id: id,
+          amount: Money.parse('199'),
+          categoryId: 1,
+          date: DateTime(2026, 3, 3),
+          recurrence: Recurrence.monthly,
+          nextDueDate: DateTime(2026, 4, 3),
+        );
+        final template = (await (db.select(
+          db.expenses,
+        )).get()).firstWhere((e) => e.id != id);
+
+        // Editing "the rule" — e.g. Netflix's price went up — via the plain
+        // update() a template row uses, exactly like editing any other row.
+        await repo.update(template.id, amount: Money.parse('249'));
+
+        final original = await (db.select(
+          db.expenses,
+        )..where((t) => t.id.equals(id))).getSingle();
+        expect(original.amount, Money.parse('199'));
+      },
+    );
+  });
 }

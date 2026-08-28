@@ -26,6 +26,7 @@ void main() {
     createdAt: march10,
     updatedAt: march10,
     externalId: 'abc',
+    templateOnly: false,
   );
 
   test('a fresh add has no source and opens on today', () {

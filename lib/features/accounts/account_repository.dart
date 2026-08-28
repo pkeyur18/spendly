@@ -154,7 +154,8 @@ class AccountRepository {
       ..where(
         _db.expenses.date.isBiggerOrEqualValue(start) &
             _db.expenses.date.isSmallerThanValue(end) &
-            _db.expenses.accountId.isNotNull(),
+            _db.expenses.accountId.isNotNull() &
+            _db.expenses.templateOnly.equals(false),
       )
       ..groupBy([_db.expenses.accountId]);
     return query.watch().map(

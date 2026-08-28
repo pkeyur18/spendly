@@ -1381,40 +1381,63 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         : previous!.nextDueDate;
     final int expenseId;
     if (_isEdit) {
-      expenseId = widget.editing!.id;
-      await repo.update(
-        expenseId,
-        amount: amount,
-        categoryId: categoryId,
-        date: _selectedDate,
-        note: Value(note.isEmpty ? null : note),
-        isRecurring: _recurrence != null && nextDue != null,
-        recurrence: Value(_recurrence),
-        nextDueDate: Value(nextDue),
-        recurrenceEndDate: Value(_recurrenceEndDate),
-        tagId: Value(_tagId),
-        accountId: Value(_accountId),
-        // Always passed, never absent: moving an expense off a trip has to
-        // clear the foreign receipt, not leave a stale one behind.
-        fxCurrency: Value(resolved.fxCurrency),
-        fxAmount: Value(resolved.fxAmount),
-      );
+      final editing = widget.editing!;
+      expenseId = editing.id;
+      if (editing.templateOnly || editing.isRecurring) {
+        // Already its own template row, or a legacy pre-split shared-row
+        // template (kept as-is — forward-only fix, see
+        // `ExpenseRepository.addWithRecurrence`'s doc comment) — safe to
+        // edit every field on this same row.
+        await repo.update(
+          expenseId,
+          amount: amount,
+          categoryId: categoryId,
+          date: _selectedDate,
+          note: Value(note.isEmpty ? null : note),
+          isRecurring: _recurrence != null && nextDue != null,
+          recurrence: Value(_recurrence),
+          nextDueDate: Value(nextDue),
+          recurrenceEndDate: Value(_recurrenceEndDate),
+          tagId: Value(_tagId),
+          accountId: Value(_accountId),
+          // Always passed, never absent: moving an expense off a trip has to
+          // clear the foreign receipt, not leave a stale one behind.
+          fxCurrency: Value(resolved.fxCurrency),
+          fxAmount: Value(resolved.fxAmount),
+        );
+      } else {
+        // A genuinely plain expense — turning "Repeat" on here must not
+        // turn this historical transaction into the shared template row.
+        await repo.updateWithRecurrence(
+          id: expenseId,
+          amount: amount,
+          categoryId: categoryId,
+          date: _selectedDate,
+          note: note.isEmpty ? null : note,
+          tagId: _tagId,
+          accountId: _accountId,
+          fxCurrency: resolved.fxCurrency,
+          fxAmount: resolved.fxAmount,
+          recurrence: _recurrence,
+          nextDueDate: nextDue,
+          recurrenceEndDate: _recurrenceEndDate,
+        );
+      }
     } else {
-      expenseId = await repo.add(
+      expenseId = await repo.addWithRecurrence(
         amount: amount,
         categoryId: categoryId,
         date: _selectedDate,
         note: note.isEmpty ? null : note,
-        // A schedule with no future occurrence left (end date already passed)
-        // is not a template — it is a plain expense.
-        isRecurring: _recurrence != null && nextDue != null,
-        recurrence: _recurrence,
-        nextDueDate: nextDue,
-        recurrenceEndDate: _recurrenceEndDate,
         tagId: _tagId,
         accountId: _accountId,
         fxCurrency: resolved.fxCurrency,
         fxAmount: resolved.fxAmount,
+        // A schedule with no future occurrence left (end date already passed)
+        // is not a template — it is a plain expense.
+        recurrence: _recurrence,
+        nextDueDate: nextDue,
+        recurrenceEndDate: _recurrenceEndDate,
       );
     }
     // set(id, null) when nothing was ever attached is a harmless no-op

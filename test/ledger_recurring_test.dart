@@ -4,6 +4,7 @@ import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/row_extensions.dart';
 import 'package:spendly/core/money/money.dart';
 import 'package:spendly/features/accounts/account_repository.dart';
+import 'package:spendly/features/ledger/income_screen.dart';
 import 'package:spendly/features/ledger/ledger_repository.dart';
 
 void main() {
@@ -177,6 +178,49 @@ void main() {
     });
   });
 
+  group('confirmSheetInitialDate', () {
+    test('due-or-past occurrence defaults to the scheduled day', () {
+      expect(
+        confirmSheetInitialDate(
+          confirmOccurrence: DateTime(2026, 7, 1),
+          existingDate: null,
+          now: DateTime(2026, 7, 1),
+        ),
+        DateTime(2026, 7, 1),
+      );
+      expect(
+        confirmSheetInitialDate(
+          confirmOccurrence: DateTime(2026, 7, 1),
+          existingDate: null,
+          now: DateTime(2026, 7, 5), // logged a few days late
+        ),
+        DateTime(2026, 7, 1),
+      );
+    });
+
+    test('a future occurrence (early confirm) defaults to today', () {
+      expect(
+        confirmSheetInitialDate(
+          confirmOccurrence: DateTime(2026, 8, 1),
+          existingDate: null,
+          now: DateTime(2026, 7, 28), // salary landed early
+        ),
+        DateTime(2026, 7, 28),
+      );
+    });
+
+    test('editing an existing entry (no confirm) keeps its own date', () {
+      expect(
+        confirmSheetInitialDate(
+          confirmOccurrence: null,
+          existingDate: DateTime(2026, 6, 12),
+          now: DateTime(2026, 7, 28),
+        ),
+        DateTime(2026, 6, 12),
+      );
+    });
+  });
+
   test('dueIncomeRecurringProvider ordering: oldest due first (via '
       'watchIncomeSeries, which it derives from)', () async {
     await seedSalary(nextDue: DateTime(2026, 8, 1));
@@ -193,5 +237,105 @@ void main() {
     final due = series.where((s) => s.pending.isNotEmpty).toList()
       ..sort((a, b) => a.pending.first.compareTo(b.pending.first));
     expect(due.first.template.sourceLabel, 'Meal card');
+  });
+
+  group('addIncomeWithRecurrence', () {
+    test('the real entry is never itself flagged recurring', () async {
+      final id = await ledger.addIncomeWithRecurrence(
+        amount: Money.parse('85000'),
+        date: DateTime(2026, 6, 1),
+        sourceLabel: 'Salary',
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 7, 1),
+      );
+      final real = (await ledger.byId(id))!;
+      expect(real.isRecurring, isFalse);
+      expect(real.templateOnly, isFalse);
+    });
+
+    test('a separate template-only row carries the schedule', () async {
+      await ledger.addIncomeWithRecurrence(
+        amount: Money.parse('85000'),
+        date: DateTime(2026, 6, 1),
+        sourceLabel: 'Salary',
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 7, 1),
+      );
+      final all = await ledger.watchIncomeTemplates().first;
+      final template = all.single;
+      expect(template.templateOnly, isTrue);
+      expect(template.nextDueDate, DateTime(2026, 7, 1));
+    });
+
+    test('the template-only row is excluded from the income list and total',
+        () async {
+      await ledger.addIncomeWithRecurrence(
+        amount: Money.parse('85000'),
+        date: DateTime(2026, 6, 1),
+        sourceLabel: 'Salary',
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 7, 1),
+      );
+      final visible = await ledger.watchAll().first;
+      expect(visible, hasLength(1));
+      expect(
+        await ledger.watchTotalInRange(DateTime(2026, 6, 1), DateTime(2026, 7, 1)).first,
+        Money.parse('85000'),
+      );
+    });
+  });
+
+  group('updateIncomeWithRecurrence', () {
+    test(
+      'turning recurrence on for a plain income entry keeps it plain and '
+      'spawns a separate template instead',
+      () async {
+        final id = await ledger.addIncome(
+          amount: Money.parse('85000'),
+          date: DateTime(2026, 6, 1),
+          sourceLabel: 'Salary',
+        );
+        await ledger.updateIncomeWithRecurrence(
+          id: id,
+          amount: Money.parse('85000'),
+          date: DateTime(2026, 6, 1),
+          sourceLabel: 'Salary',
+          recurrence: Recurrence.monthly,
+          nextDueDate: DateTime(2026, 7, 1),
+        );
+
+        final original = (await ledger.byId(id))!;
+        expect(original.isRecurring, isFalse);
+        expect(original.templateOnly, isFalse);
+
+        final templates = await ledger.watchIncomeTemplates().first;
+        expect(templates, hasLength(1));
+      },
+    );
+
+    test('editing the spawned template later never touches the original entry',
+        () async {
+      final id = await ledger.addIncome(
+        amount: Money.parse('85000'),
+        date: DateTime(2026, 6, 1),
+        sourceLabel: 'Salary',
+      );
+      await ledger.updateIncomeWithRecurrence(
+        id: id,
+        amount: Money.parse('85000'),
+        date: DateTime(2026, 6, 1),
+        sourceLabel: 'Salary',
+        recurrence: Recurrence.monthly,
+        nextDueDate: DateTime(2026, 7, 1),
+      );
+      final template = (await ledger.watchIncomeTemplates().first).single;
+
+      // A raise for future months — editing "the rule" directly, exactly
+      // like editing any other row.
+      await ledger.update(template.id, amount: Money.parse('92000'));
+
+      final original = (await ledger.byId(id))!;
+      expect(original.amount, Money.parse('85000'));
+    });
   });
 }

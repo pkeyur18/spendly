@@ -70,6 +70,7 @@ class ExpenseRepository {
     int? accountId,
     String? fxCurrency,
     Money? fxAmount,
+    bool templateOnly = false,
   }) {
     return _db
         .into(_db.expenses)
@@ -88,8 +89,66 @@ class ExpenseRepository {
             accountId: Value(accountId),
             fxCurrency: Value(fxCurrency),
             fxAmountMinor: Value(fxAmount?.minor),
+            templateOnly: Value(templateOnly),
           ),
         );
+  }
+
+  /// Logs a real, permanent expense and — when [recurrence] is set — also
+  /// inserts a separate template-only row carrying the schedule, wrapped in
+  /// one transaction. Used for a brand new expense; [updateWithRecurrence]
+  /// is the edit-time twin.
+  ///
+  /// Before this split existed, the recurring template WAS the logged
+  /// expense — the same row played both roles, so editing the rule later
+  /// (recurring_screen.dart) silently rewrote this historical transaction
+  /// too. The template row inserted here is flagged `templateOnly: true` and
+  /// excluded from every total/listing query in this file — editing it can
+  /// never touch a real transaction again.
+  Future<int> addWithRecurrence({
+    required Money amount,
+    required int categoryId,
+    DateTime? date,
+    String? note,
+    String? paymentMethod,
+    int? tagId,
+    int? accountId,
+    String? fxCurrency,
+    Money? fxAmount,
+    Recurrence? recurrence,
+    DateTime? nextDueDate,
+    DateTime? recurrenceEndDate,
+  }) {
+    return _db.transaction(() async {
+      final id = await add(
+        amount: amount,
+        categoryId: categoryId,
+        date: date,
+        note: note,
+        paymentMethod: paymentMethod,
+        tagId: tagId,
+        accountId: accountId,
+        fxCurrency: fxCurrency,
+        fxAmount: fxAmount,
+      );
+      if (recurrence != null && nextDueDate != null) {
+        await add(
+          amount: amount,
+          categoryId: categoryId,
+          date: date,
+          note: note,
+          paymentMethod: paymentMethod,
+          tagId: tagId,
+          accountId: accountId,
+          isRecurring: true,
+          recurrence: recurrence,
+          nextDueDate: nextDueDate,
+          recurrenceEndDate: recurrenceEndDate,
+          templateOnly: true,
+        );
+      }
+      return id;
+    });
   }
 
   Future<void> update(
@@ -136,6 +195,56 @@ class ExpenseRepository {
     );
   }
 
+  /// Updates [id]'s plain fields and — when [recurrence] is newly set on an
+  /// expense that wasn't already recurring — also inserts a new
+  /// template-only row, rather than turning [id] itself into a shared
+  /// template row. The edit-time twin of [addWithRecurrence]; callers must
+  /// only use this on a genuinely plain expense (not already `isRecurring`,
+  /// not itself `templateOnly`) — see `quick_add_screen.dart`'s dispatch.
+  Future<void> updateWithRecurrence({
+    required int id,
+    required Money amount,
+    required int categoryId,
+    required DateTime date,
+    String? note,
+    int? tagId,
+    int? accountId,
+    String? fxCurrency,
+    Money? fxAmount,
+    Recurrence? recurrence,
+    DateTime? nextDueDate,
+    DateTime? recurrenceEndDate,
+  }) {
+    return _db.transaction(() async {
+      await update(
+        id,
+        amount: amount,
+        categoryId: categoryId,
+        date: date,
+        note: Value(note),
+        tagId: Value(tagId),
+        accountId: Value(accountId),
+        fxCurrency: Value(fxCurrency),
+        fxAmount: Value(fxAmount),
+      );
+      if (recurrence != null && nextDueDate != null) {
+        await add(
+          amount: amount,
+          categoryId: categoryId,
+          date: date,
+          note: note,
+          tagId: tagId,
+          accountId: accountId,
+          isRecurring: true,
+          recurrence: recurrence,
+          nextDueDate: nextDueDate,
+          recurrenceEndDate: recurrenceEndDate,
+          templateOnly: true,
+        );
+      }
+    });
+  }
+
   Future<void> delete(int id) =>
       (_db.delete(_db.expenses)..where((t) => t.id.equals(id))).go();
 
@@ -175,7 +284,9 @@ class ExpenseRepository {
     final query = _db.select(_db.expenses)
       ..where(
         (t) =>
-            t.date.isBiggerOrEqualValue(start) & t.date.isSmallerThanValue(end),
+            t.date.isBiggerOrEqualValue(start) &
+            t.date.isSmallerThanValue(end) &
+            t.templateOnly.equals(false),
       )
       ..orderBy([
         (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
@@ -218,7 +329,8 @@ class ExpenseRepository {
       ..addColumns([_db.expenses.categoryId])
       ..where(
         _db.expenses.date.isBiggerOrEqualValue(start) &
-            _db.expenses.date.isSmallerThanValue(end),
+            _db.expenses.date.isSmallerThanValue(end) &
+            _db.expenses.templateOnly.equals(false),
       )
       ..groupBy([_db.expenses.categoryId]);
     return query.watch().map(
@@ -264,7 +376,8 @@ class ExpenseRepository {
       ..addColumns([sum])
       ..where(
         _db.expenses.date.isBiggerOrEqualValue(start) &
-            _db.expenses.date.isSmallerThanValue(end),
+            _db.expenses.date.isSmallerThanValue(end) &
+            _db.expenses.templateOnly.equals(false),
       );
     if (excludeCategoryIds != null && excludeCategoryIds.isNotEmpty) {
       query.where(_db.expenses.categoryId.isIn(excludeCategoryIds).not());
@@ -278,9 +391,10 @@ class ExpenseRepository {
   /// engine's "how many of the last 6 months are real usage history" check.
   Future<DateTime?> earliestExpenseDate() async {
     final min = _db.expenses.date.min();
-    final row = await (_db.selectOnly(
-      _db.expenses,
-    )..addColumns([min])).getSingle();
+    final row = await (_db.selectOnly(_db.expenses)
+          ..addColumns([min])
+          ..where(_db.expenses.templateOnly.equals(false)))
+        .getSingle();
     return row.read(min);
   }
 
@@ -291,7 +405,8 @@ class ExpenseRepository {
           ..where(
             (t) =>
                 t.date.isBiggerOrEqualValue(start) &
-                t.date.isSmallerThanValue(end),
+                t.date.isSmallerThanValue(end) &
+                t.templateOnly.equals(false),
           )
           ..orderBy([
             (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
@@ -303,7 +418,8 @@ class ExpenseRepository {
   /// stats (FR-51). Only these two columns, not full rows.
   Stream<List<(DateTime, int)>> watchLifetimeStats() {
     final query = _db.selectOnly(_db.expenses)
-      ..addColumns([_db.expenses.date, _db.expenses.categoryId]);
+      ..addColumns([_db.expenses.date, _db.expenses.categoryId])
+      ..where(_db.expenses.templateOnly.equals(false));
     return query.watch().map(
       (rows) => [
         for (final r in rows)
@@ -319,7 +435,8 @@ class ExpenseRepository {
       ..addColumns([_db.expenses.categoryId, sum])
       ..where(
         _db.expenses.date.isBiggerOrEqualValue(start) &
-            _db.expenses.date.isSmallerThanValue(end),
+            _db.expenses.date.isSmallerThanValue(end) &
+            _db.expenses.templateOnly.equals(false),
       )
       ..groupBy([_db.expenses.categoryId]);
     final rows = await query.get();
@@ -339,7 +456,8 @@ class ExpenseRepository {
       ..addColumns([_db.expenses.categoryId, sum])
       ..where(
         _db.expenses.date.isBiggerOrEqualValue(start) &
-            _db.expenses.date.isSmallerThanValue(end),
+            _db.expenses.date.isSmallerThanValue(end) &
+            _db.expenses.templateOnly.equals(false),
       )
       ..groupBy([_db.expenses.categoryId]);
     return query.watch().map(
@@ -353,7 +471,9 @@ class ExpenseRepository {
   /// Expenses tagged with [tagId] (e.g. all spend on one trip), newest first.
   Stream<List<ExpenseRow>> watchByTag(int tagId) {
     return (_db.select(_db.expenses)
-          ..where((t) => t.tagId.equals(tagId))
+          ..where(
+            (t) => t.tagId.equals(tagId) & t.templateOnly.equals(false),
+          )
           ..orderBy([
             (t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc),
           ]))
@@ -367,7 +487,10 @@ class ExpenseRepository {
     final countExpr = _db.expenses.id.count();
     return (_db.selectOnly(_db.expenses)
           ..addColumns([countExpr])
-          ..where(_db.expenses.tagId.equals(tagId)))
+          ..where(
+            _db.expenses.tagId.equals(tagId) &
+                _db.expenses.templateOnly.equals(false),
+          ))
         .map((row) => row.read(countExpr) ?? 0)
         .watchSingle();
   }
@@ -380,7 +503,10 @@ class ExpenseRepository {
     final sum = _db.expenses.amountMinor.sum();
     final query = _db.selectOnly(_db.expenses)
       ..addColumns([_db.expenses.tagId, sum])
-      ..where(_db.expenses.tagId.isNotNull())
+      ..where(
+        _db.expenses.tagId.isNotNull() &
+            _db.expenses.templateOnly.equals(false),
+      )
       ..groupBy([_db.expenses.tagId]);
     return query.watch().map(
       (rows) => {
@@ -398,7 +524,10 @@ class ExpenseRepository {
     final count = _db.expenses.id.count();
     final query = _db.selectOnly(_db.expenses)
       ..addColumns([_db.expenses.note, count])
-      ..where(_db.expenses.note.isNotNull())
+      ..where(
+        _db.expenses.note.isNotNull() &
+            _db.expenses.templateOnly.equals(false),
+      )
       ..groupBy([_db.expenses.note])
       ..orderBy([OrderingTerm(expression: count, mode: OrderingMode.desc)])
       ..limit(limit);

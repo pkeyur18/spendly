@@ -150,7 +150,10 @@ class TagRepository {
     final row =
         await (_db.selectOnly(_db.expenses)
               ..addColumns([count])
-              ..where(_db.expenses.tagId.equals(id)))
+              ..where(
+                _db.expenses.tagId.equals(id) &
+                    _db.expenses.templateOnly.equals(false),
+              ))
             .getSingle();
     return (row.read(count) ?? 0) > 0;
   }

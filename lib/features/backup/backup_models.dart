@@ -392,6 +392,7 @@ class BackupExpense {
     required this.fxAmountMinor,
     required this.nextDueDate,
     required this.recurrenceEndDate,
+    this.templateOnly = false,
   });
 
   final int id;
@@ -427,6 +428,11 @@ class BackupExpense {
   final DateTime? nextDueDate;
   final DateTime? recurrenceEndDate;
 
+  /// True only for a dedicated recurring-template row, never a real
+  /// transaction (schema v22). A pre-v22 file has no such key; absent =
+  /// false, exactly what every row already was before this column existed.
+  final bool templateOnly;
+
   factory BackupExpense.fromRow(ExpenseRow row) => BackupExpense(
     id: row.id,
     amountMinor: row.amountMinor,
@@ -445,6 +451,7 @@ class BackupExpense {
     fxAmountMinor: row.fxAmountMinor,
     nextDueDate: row.nextDueDate,
     recurrenceEndDate: row.recurrenceEndDate,
+    templateOnly: row.templateOnly,
   );
 
   factory BackupExpense.fromJson(Map<String, dynamic> j) => BackupExpense(
@@ -475,6 +482,8 @@ class BackupExpense {
     recurrenceEndDate: j['recurrenceEndDate'] == null
         ? null
         : DateTime.parse(j['recurrenceEndDate'] as String),
+    // Pre-v22 files have no "templateOnly" key; absent = false.
+    templateOnly: j['templateOnly'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
@@ -495,6 +504,7 @@ class BackupExpense {
     'fxAmountMinor': fxAmountMinor,
     'nextDueDate': nextDueDate?.toIso8601String(),
     'recurrenceEndDate': recurrenceEndDate?.toIso8601String(),
+    'templateOnly': templateOnly,
   };
 
   /// Merge: new row, id auto-assigned; [mappedCategoryId] is the local
@@ -524,6 +534,7 @@ class BackupExpense {
     fxAmountMinor: Value(fxAmountMinor),
     nextDueDate: Value(nextDueDate),
     recurrenceEndDate: Value(recurrenceEndDate),
+    templateOnly: Value(templateOnly),
   );
 
   /// Replace: tables are wiped first, so the original id is reused verbatim.
@@ -547,14 +558,21 @@ class BackupExpense {
     fxAmountMinor: Value(fxAmountMinor),
     nextDueDate: Value(nextDueDate),
     recurrenceEndDate: Value(recurrenceEndDate),
+    templateOnly: Value(templateOnly),
   );
 
   /// Content fingerprint used to dedupe on Merge — deliberately not the id,
   /// which isn't stable across devices/reinstalls. [mappedCategoryId] is the
   /// *local* category id (post name-match), so fingerprints compare like for
   /// like even when the backup's own category ids don't match this device's.
+  ///
+  /// Includes [templateOnly]: a recurring series' template row is cloned
+  /// from the real transaction that started it (same amount/date/category/
+  /// note/paymentMethod, schema v22), so without this the two would collide
+  /// on Merge — the incoming template silently dropped as a "duplicate" of
+  /// the real row already present (or vice versa), losing one of them.
   String fingerprint({required int mappedCategoryId}) =>
-      '$amountMinor|${date.toIso8601String()}|$mappedCategoryId|$note|$paymentMethod';
+      '$amountMinor|${date.toIso8601String()}|$mappedCategoryId|$note|$paymentMethod|$templateOnly';
 }
 
 class BackupBudget {
@@ -670,6 +688,7 @@ class BackupLedgerEntry {
     this.recurrence,
     this.nextDueDate,
     this.recurrenceEndDate,
+    this.templateOnly = false,
   });
 
   final int id;
@@ -699,6 +718,10 @@ class BackupLedgerEntry {
   final DateTime? nextDueDate;
   final DateTime? recurrenceEndDate;
 
+  /// Income's twin of [BackupExpense.templateOnly] (schema v22) — additive,
+  /// no version bump; a pre-v22 file lacks the key, absent = false.
+  final bool templateOnly;
+
   factory BackupLedgerEntry.fromRow(LedgerEntryRow row) => BackupLedgerEntry(
     id: row.id,
     amountMinor: row.amountMinor,
@@ -713,6 +736,7 @@ class BackupLedgerEntry {
     recurrence: row.recurrence,
     nextDueDate: row.nextDueDate,
     recurrenceEndDate: row.recurrenceEndDate,
+    templateOnly: row.templateOnly,
   );
 
   factory BackupLedgerEntry.fromJson(Map<String, dynamic> j) =>
@@ -740,6 +764,8 @@ class BackupLedgerEntry {
         recurrenceEndDate: j['recurrenceEndDate'] == null
             ? null
             : DateTime.parse(j['recurrenceEndDate'] as String),
+        // Pre-v22 files have no "templateOnly" key; absent = false.
+        templateOnly: j['templateOnly'] as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -756,6 +782,7 @@ class BackupLedgerEntry {
     'recurrence': recurrence?.name,
     'nextDueDate': nextDueDate?.toIso8601String(),
     'recurrenceEndDate': recurrenceEndDate?.toIso8601String(),
+    'templateOnly': templateOnly,
   };
 
   /// Merge: new row, id auto-assigned. [mappedAccountId]/[mappedCounterAccountId]
@@ -776,6 +803,7 @@ class BackupLedgerEntry {
     recurrence: Value(recurrence),
     nextDueDate: Value(nextDueDate),
     recurrenceEndDate: Value(recurrenceEndDate),
+    templateOnly: Value(templateOnly),
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
@@ -795,6 +823,7 @@ class BackupLedgerEntry {
     recurrence: Value(recurrence),
     nextDueDate: Value(nextDueDate),
     recurrenceEndDate: Value(recurrenceEndDate),
+    templateOnly: Value(templateOnly),
     externalId: externalId == null
         ? const Value.absent()
         : Value(externalId),
@@ -806,12 +835,16 @@ class BackupLedgerEntry {
   /// [mappedCounterAccountId] are *local* account ids, so fingerprints
   /// compare like for like even when the backup's own account ids don't
   /// match this device's.
+  ///
+  /// Includes [templateOnly] for the same reason [BackupExpense.fingerprint]
+  /// does: a recurring template is cloned from the real income entry that
+  /// started it, and without this the two would collide on Merge.
   String fingerprint({
     required int? mappedAccountId,
     int? mappedCounterAccountId,
   }) =>
       '${kind.name}|$amountMinor|${date.toIso8601String()}|'
-      '$mappedAccountId|$mappedCounterAccountId|$sourceLabel|$note';
+      '$mappedAccountId|$mappedCounterAccountId|$sourceLabel|$note|$templateOnly';
 }
 
 /// A savings goal (backup v10, schema v17). No FK to any other table — the

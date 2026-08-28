@@ -565,6 +565,28 @@ A pre-v21 file has no recurrence keys at all. `BackupLedgerEntry.fromJson` reads
 `isRecurring` as `false` and the other three as `null` — matching every pre-v21 entry,
 none of which could recur.
 
+## Additive field — `templateOnly` on expenses and ledger entries (schema v22)
+
+A recurring series created from schema v22 onward gets its own dedicated template row,
+separate from the real transaction that started it (see `database.dart`'s
+`Expenses.templateOnly` doc comment for why). `templateOnly` marks that dedicated row —
+true only for a row that exists purely to carry a schedule, never a real transaction.
+Additive on both tables, no version bump, same pattern as every field above it.
+
+- **Replace** restores it verbatim, same as every other field.
+- **Merge** restores it verbatim on a newly-inserted row; a matched (already-present)
+  row isn't touched by merge at all — same as `isRecurring`/`recurrence` above.
+- **Unlike schema v21's recurrence fields, this one IS included in the Merge dedupe
+  fingerprint**, for the opposite reason v21 gave for excluding theirs: a template row is
+  a near-exact clone of the real transaction that spawned it (same amount, date, category,
+  note, payment method) and both can plausibly lack an `externalId` match across devices,
+  so without `templateOnly` in the fingerprint the two would collide — Merge would treat
+  one as a duplicate of the other and silently drop it, losing either the real transaction
+  or its recurring schedule. See `BackupExpense.fingerprint`/`BackupLedgerEntry.fingerprint`.
+
+A pre-v22 file has no `templateOnly` key at all. `fromJson` reads it as `false` on both
+tables — matching every pre-v22 row, none of which were a dedicated template.
+
 ## App Lock is never in the payload
 
 Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export

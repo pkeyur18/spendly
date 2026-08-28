@@ -195,6 +195,20 @@ class Expenses extends Table {
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
+
+  /// True only for a row that exists purely to carry a recurring series'
+  /// schedule — never a real transaction, never counted in any total or
+  /// transaction list (schema v22).
+  ///
+  /// Before this column, the recurring template WAS the first logged
+  /// occurrence — one row playing both roles — so editing the rule (amount,
+  /// category, schedule) silently rewrote that historical transaction too.
+  /// A series created from here on gets its own dedicated template row
+  /// instead; the transaction that started it stays a normal, untouched
+  /// row forever. Existing pre-v22 series are left as they were (forward-
+  /// only fix — see `recurring_repository.dart` / `ledger_repository.dart`).
+  BoolColumn get templateOnly =>
+      boolean().withDefault(const Constant(false))();
 }
 
 /// User-defined grouping for expenses (trips, home renovation, ...) —
@@ -336,6 +350,11 @@ class LedgerEntries extends Table {
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
+
+  /// Income's twin of [Expenses.templateOnly] (schema v22) — see that
+  /// column's doc comment. Never meaningful on a transfer row.
+  BoolColumn get templateOnly =>
+      boolean().withDefault(const Constant(false))();
 }
 
 /// A savings target the user is putting money aside for (Phase 7, schema
@@ -387,7 +406,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -604,6 +623,17 @@ class AppDatabase extends _$AppDatabase {
         }
         if (!await _hasColumn('ledger_entries', 'recurrence_end_date')) {
           await m.addColumn(ledgerEntries, ledgerEntries.recurrenceEndDate);
+        }
+      }
+      if (from < 22) {
+        // Additive, defaults false — safe on populated tables, no backfill:
+        // every pre-v22 row (real transaction or shared-row template alike)
+        // reads as templateOnly = false, exactly what it already was.
+        if (!await _hasColumn('expenses', 'template_only')) {
+          await m.addColumn(expenses, expenses.templateOnly);
+        }
+        if (!await _hasColumn('ledger_entries', 'template_only')) {
+          await m.addColumn(ledgerEntries, ledgerEntries.templateOnly);
         }
       }
     },

@@ -296,5 +296,12 @@ void main() {
     expect(reloadedAccounts.single.customTypeName, isNull);
     expect(reloadedAccounts.single.customTypeIcon, isNull);
     expect(reloadedAccounts.single.customTypeColorValue, isNull);
+
+    // from<22: templateOnly defaults false on both tables — every pre-v22
+    // row, real transaction or shared-row template alike, reads as exactly
+    // what it already was: not a dedicated template-only row.
+    expect(expense.templateOnly, isFalse);
+    expect(recurring.templateOnly, isFalse);
+    expect(entry.templateOnly, isFalse);
   });
 }

@@ -2279,6 +2279,21 @@ class $ExpensesTable extends Expenses
     requiredDuringInsert: false,
     clientDefault: generateExternalId,
   );
+  static const VerificationMeta _templateOnlyMeta = const VerificationMeta(
+    'templateOnly',
+  );
+  @override
+  late final GeneratedColumn<bool> templateOnly = GeneratedColumn<bool>(
+    'template_only',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("template_only" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -2298,6 +2313,7 @@ class $ExpensesTable extends Expenses
     createdAt,
     updatedAt,
     externalId,
+    templateOnly,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2428,6 +2444,15 @@ class $ExpensesTable extends Expenses
         externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
       );
     }
+    if (data.containsKey('template_only')) {
+      context.handle(
+        _templateOnlyMeta,
+        templateOnly.isAcceptableOrUnknown(
+          data['template_only']!,
+          _templateOnlyMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -2507,6 +2532,10 @@ class $ExpensesTable extends Expenses
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
       ),
+      templateOnly: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}template_only'],
+      )!,
     );
   }
 
@@ -2574,6 +2603,19 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
 
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
+
+  /// True only for a row that exists purely to carry a recurring series'
+  /// schedule — never a real transaction, never counted in any total or
+  /// transaction list (schema v22).
+  ///
+  /// Before this column, the recurring template WAS the first logged
+  /// occurrence — one row playing both roles — so editing the rule (amount,
+  /// category, schedule) silently rewrote that historical transaction too.
+  /// A series created from here on gets its own dedicated template row
+  /// instead; the transaction that started it stays a normal, untouched
+  /// row forever. Existing pre-v22 series are left as they were (forward-
+  /// only fix — see `recurring_repository.dart` / `ledger_repository.dart`).
+  final bool templateOnly;
   const ExpenseRow({
     required this.id,
     required this.amountMinor,
@@ -2592,6 +2634,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     required this.createdAt,
     required this.updatedAt,
     this.externalId,
+    required this.templateOnly,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2635,6 +2678,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
+    map['template_only'] = Variable<bool>(templateOnly);
     return map;
   }
 
@@ -2675,6 +2719,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
+      templateOnly: Value(templateOnly),
     );
   }
 
@@ -2705,6 +2750,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       externalId: serializer.fromJson<String?>(json['externalId']),
+      templateOnly: serializer.fromJson<bool>(json['templateOnly']),
     );
   }
   @override
@@ -2730,6 +2776,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'externalId': serializer.toJson<String?>(externalId),
+      'templateOnly': serializer.toJson<bool>(templateOnly),
     };
   }
 
@@ -2751,6 +2798,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<String?> externalId = const Value.absent(),
+    bool? templateOnly,
   }) => ExpenseRow(
     id: id ?? this.id,
     amountMinor: amountMinor ?? this.amountMinor,
@@ -2775,6 +2823,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     externalId: externalId.present ? externalId.value : this.externalId,
+    templateOnly: templateOnly ?? this.templateOnly,
   );
   ExpenseRow copyWithCompanion(ExpensesCompanion data) {
     return ExpenseRow(
@@ -2815,6 +2864,9 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
+      templateOnly: data.templateOnly.present
+          ? data.templateOnly.value
+          : this.templateOnly,
     );
   }
 
@@ -2837,7 +2889,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           ..write('fxAmountMinor: $fxAmountMinor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('externalId: $externalId')
+          ..write('externalId: $externalId, ')
+          ..write('templateOnly: $templateOnly')
           ..write(')'))
         .toString();
   }
@@ -2861,6 +2914,7 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
     createdAt,
     updatedAt,
     externalId,
+    templateOnly,
   );
   @override
   bool operator ==(Object other) =>
@@ -2882,7 +2936,8 @@ class ExpenseRow extends DataClass implements Insertable<ExpenseRow> {
           other.fxAmountMinor == this.fxAmountMinor &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
-          other.externalId == this.externalId);
+          other.externalId == this.externalId &&
+          other.templateOnly == this.templateOnly);
 }
 
 class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
@@ -2903,6 +2958,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<String?> externalId;
+  final Value<bool> templateOnly;
   const ExpensesCompanion({
     this.id = const Value.absent(),
     this.amountMinor = const Value.absent(),
@@ -2921,6 +2977,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.externalId = const Value.absent(),
+    this.templateOnly = const Value.absent(),
   });
   ExpensesCompanion.insert({
     this.id = const Value.absent(),
@@ -2940,6 +2997,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.externalId = const Value.absent(),
+    this.templateOnly = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        categoryId = Value(categoryId),
        date = Value(date);
@@ -2961,6 +3019,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<String>? externalId,
+    Expression<bool>? templateOnly,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2980,6 +3039,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (externalId != null) 'external_id': externalId,
+      if (templateOnly != null) 'template_only': templateOnly,
     });
   }
 
@@ -3001,6 +3061,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<String?>? externalId,
+    Value<bool>? templateOnly,
   }) {
     return ExpensesCompanion(
       id: id ?? this.id,
@@ -3020,6 +3081,7 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       externalId: externalId ?? this.externalId,
+      templateOnly: templateOnly ?? this.templateOnly,
     );
   }
 
@@ -3079,6 +3141,9 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
+    if (templateOnly.present) {
+      map['template_only'] = Variable<bool>(templateOnly.value);
+    }
     return map;
   }
 
@@ -3101,7 +3166,8 @@ class ExpensesCompanion extends UpdateCompanion<ExpenseRow> {
           ..write('fxAmountMinor: $fxAmountMinor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('externalId: $externalId')
+          ..write('externalId: $externalId, ')
+          ..write('templateOnly: $templateOnly')
           ..write(')'))
         .toString();
   }
@@ -4231,6 +4297,21 @@ class $LedgerEntriesTable extends LedgerEntries
     requiredDuringInsert: false,
     clientDefault: generateExternalId,
   );
+  static const VerificationMeta _templateOnlyMeta = const VerificationMeta(
+    'templateOnly',
+  );
+  @override
+  late final GeneratedColumn<bool> templateOnly = GeneratedColumn<bool>(
+    'template_only',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("template_only" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4247,6 +4328,7 @@ class $LedgerEntriesTable extends LedgerEntries
     nextDueDate,
     recurrenceEndDate,
     externalId,
+    templateOnly,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4351,6 +4433,15 @@ class $LedgerEntriesTable extends LedgerEntries
         externalId.isAcceptableOrUnknown(data['external_id']!, _externalIdMeta),
       );
     }
+    if (data.containsKey('template_only')) {
+      context.handle(
+        _templateOnlyMeta,
+        templateOnly.isAcceptableOrUnknown(
+          data['template_only']!,
+          _templateOnlyMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4420,6 +4511,10 @@ class $LedgerEntriesTable extends LedgerEntries
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
       ),
+      templateOnly: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}template_only'],
+      )!,
     );
   }
 
@@ -4471,6 +4566,10 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
 
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
+
+  /// Income's twin of [Expenses.templateOnly] (schema v22) — see that
+  /// column's doc comment. Never meaningful on a transfer row.
+  final bool templateOnly;
   const LedgerEntryRow({
     required this.id,
     required this.amountMinor,
@@ -4486,6 +4585,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     this.nextDueDate,
     this.recurrenceEndDate,
     this.externalId,
+    required this.templateOnly,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4526,6 +4626,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
+    map['template_only'] = Variable<bool>(templateOnly);
     return map;
   }
 
@@ -4559,6 +4660,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
+      templateOnly: Value(templateOnly),
     );
   }
 
@@ -4588,6 +4690,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
         json['recurrenceEndDate'],
       ),
       externalId: serializer.fromJson<String?>(json['externalId']),
+      templateOnly: serializer.fromJson<bool>(json['templateOnly']),
     );
   }
   @override
@@ -4612,6 +4715,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       'nextDueDate': serializer.toJson<DateTime?>(nextDueDate),
       'recurrenceEndDate': serializer.toJson<DateTime?>(recurrenceEndDate),
       'externalId': serializer.toJson<String?>(externalId),
+      'templateOnly': serializer.toJson<bool>(templateOnly),
     };
   }
 
@@ -4630,6 +4734,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     Value<DateTime?> nextDueDate = const Value.absent(),
     Value<DateTime?> recurrenceEndDate = const Value.absent(),
     Value<String?> externalId = const Value.absent(),
+    bool? templateOnly,
   }) => LedgerEntryRow(
     id: id ?? this.id,
     amountMinor: amountMinor ?? this.amountMinor,
@@ -4649,6 +4754,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
         ? recurrenceEndDate.value
         : this.recurrenceEndDate,
     externalId: externalId.present ? externalId.value : this.externalId,
+    templateOnly: templateOnly ?? this.templateOnly,
   );
   LedgerEntryRow copyWithCompanion(LedgerEntriesCompanion data) {
     return LedgerEntryRow(
@@ -4682,6 +4788,9 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
+      templateOnly: data.templateOnly.present
+          ? data.templateOnly.value
+          : this.templateOnly,
     );
   }
 
@@ -4701,7 +4810,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           ..write('recurrence: $recurrence, ')
           ..write('nextDueDate: $nextDueDate, ')
           ..write('recurrenceEndDate: $recurrenceEndDate, ')
-          ..write('externalId: $externalId')
+          ..write('externalId: $externalId, ')
+          ..write('templateOnly: $templateOnly')
           ..write(')'))
         .toString();
   }
@@ -4722,6 +4832,7 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
     nextDueDate,
     recurrenceEndDate,
     externalId,
+    templateOnly,
   );
   @override
   bool operator ==(Object other) =>
@@ -4740,7 +4851,8 @@ class LedgerEntryRow extends DataClass implements Insertable<LedgerEntryRow> {
           other.recurrence == this.recurrence &&
           other.nextDueDate == this.nextDueDate &&
           other.recurrenceEndDate == this.recurrenceEndDate &&
-          other.externalId == this.externalId);
+          other.externalId == this.externalId &&
+          other.templateOnly == this.templateOnly);
 }
 
 class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
@@ -4758,6 +4870,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
   final Value<DateTime?> nextDueDate;
   final Value<DateTime?> recurrenceEndDate;
   final Value<String?> externalId;
+  final Value<bool> templateOnly;
   const LedgerEntriesCompanion({
     this.id = const Value.absent(),
     this.amountMinor = const Value.absent(),
@@ -4773,6 +4886,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     this.nextDueDate = const Value.absent(),
     this.recurrenceEndDate = const Value.absent(),
     this.externalId = const Value.absent(),
+    this.templateOnly = const Value.absent(),
   });
   LedgerEntriesCompanion.insert({
     this.id = const Value.absent(),
@@ -4789,6 +4903,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     this.nextDueDate = const Value.absent(),
     this.recurrenceEndDate = const Value.absent(),
     this.externalId = const Value.absent(),
+    this.templateOnly = const Value.absent(),
   }) : amountMinor = Value(amountMinor),
        date = Value(date);
   static Insertable<LedgerEntryRow> custom({
@@ -4806,6 +4921,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     Expression<DateTime>? nextDueDate,
     Expression<DateTime>? recurrenceEndDate,
     Expression<String>? externalId,
+    Expression<bool>? templateOnly,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4822,6 +4938,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
       if (nextDueDate != null) 'next_due_date': nextDueDate,
       if (recurrenceEndDate != null) 'recurrence_end_date': recurrenceEndDate,
       if (externalId != null) 'external_id': externalId,
+      if (templateOnly != null) 'template_only': templateOnly,
     });
   }
 
@@ -4840,6 +4957,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     Value<DateTime?>? nextDueDate,
     Value<DateTime?>? recurrenceEndDate,
     Value<String?>? externalId,
+    Value<bool>? templateOnly,
   }) {
     return LedgerEntriesCompanion(
       id: id ?? this.id,
@@ -4856,6 +4974,7 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
       nextDueDate: nextDueDate ?? this.nextDueDate,
       recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
       externalId: externalId ?? this.externalId,
+      templateOnly: templateOnly ?? this.templateOnly,
     );
   }
 
@@ -4908,6 +5027,9 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
+    if (templateOnly.present) {
+      map['template_only'] = Variable<bool>(templateOnly.value);
+    }
     return map;
   }
 
@@ -4927,7 +5049,8 @@ class LedgerEntriesCompanion extends UpdateCompanion<LedgerEntryRow> {
           ..write('recurrence: $recurrence, ')
           ..write('nextDueDate: $nextDueDate, ')
           ..write('recurrenceEndDate: $recurrenceEndDate, ')
-          ..write('externalId: $externalId')
+          ..write('externalId: $externalId, ')
+          ..write('templateOnly: $templateOnly')
           ..write(')'))
         .toString();
   }
@@ -6801,6 +6924,7 @@ typedef $$ExpensesTableCreateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<String?> externalId,
+      Value<bool> templateOnly,
     });
 typedef $$ExpensesTableUpdateCompanionBuilder =
     ExpensesCompanion Function({
@@ -6821,6 +6945,7 @@ typedef $$ExpensesTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<String?> externalId,
+      Value<bool> templateOnly,
     });
 
 final class $$ExpensesTableReferences
@@ -6976,6 +7101,11 @@ class $$ExpensesTableFilterComposer
 
   ColumnFilters<String> get externalId => $composableBuilder(
     column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get templateOnly => $composableBuilder(
+    column: $table.templateOnly,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7153,6 +7283,11 @@ class $$ExpensesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get templateOnly => $composableBuilder(
+    column: $table.templateOnly,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$CategoriesTableOrderingComposer get categoryId {
     final $$CategoriesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -7290,6 +7425,11 @@ class $$ExpensesTableAnnotationComposer
 
   GeneratedColumn<String> get externalId => $composableBuilder(
     column: $table.externalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get templateOnly => $composableBuilder(
+    column: $table.templateOnly,
     builder: (column) => column,
   );
 
@@ -7438,6 +7578,7 @@ class $$ExpensesTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
+                Value<bool> templateOnly = const Value.absent(),
               }) => ExpensesCompanion(
                 id: id,
                 amountMinor: amountMinor,
@@ -7456,6 +7597,7 @@ class $$ExpensesTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 externalId: externalId,
+                templateOnly: templateOnly,
               ),
           createCompanionCallback:
               ({
@@ -7476,6 +7618,7 @@ class $$ExpensesTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
+                Value<bool> templateOnly = const Value.absent(),
               }) => ExpensesCompanion.insert(
                 id: id,
                 amountMinor: amountMinor,
@@ -7494,6 +7637,7 @@ class $$ExpensesTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 externalId: externalId,
+                templateOnly: templateOnly,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -8417,6 +8561,7 @@ typedef $$LedgerEntriesTableCreateCompanionBuilder =
       Value<DateTime?> nextDueDate,
       Value<DateTime?> recurrenceEndDate,
       Value<String?> externalId,
+      Value<bool> templateOnly,
     });
 typedef $$LedgerEntriesTableUpdateCompanionBuilder =
     LedgerEntriesCompanion Function({
@@ -8434,6 +8579,7 @@ typedef $$LedgerEntriesTableUpdateCompanionBuilder =
       Value<DateTime?> nextDueDate,
       Value<DateTime?> recurrenceEndDate,
       Value<String?> externalId,
+      Value<bool> templateOnly,
     });
 
 final class $$LedgerEntriesTableReferences
@@ -8547,6 +8693,11 @@ class $$LedgerEntriesTableFilterComposer
 
   ColumnFilters<String> get externalId => $composableBuilder(
     column: $table.externalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get templateOnly => $composableBuilder(
+    column: $table.templateOnly,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8666,6 +8817,11 @@ class $$LedgerEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get templateOnly => $composableBuilder(
+    column: $table.templateOnly,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$AccountsTableOrderingComposer get accountId {
     final $$AccountsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -8773,6 +8929,11 @@ class $$LedgerEntriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get templateOnly => $composableBuilder(
+    column: $table.templateOnly,
+    builder: (column) => column,
+  );
+
   $$AccountsTableAnnotationComposer get accountId {
     final $$AccountsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -8862,6 +9023,7 @@ class $$LedgerEntriesTableTableManager
                 Value<DateTime?> nextDueDate = const Value.absent(),
                 Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
+                Value<bool> templateOnly = const Value.absent(),
               }) => LedgerEntriesCompanion(
                 id: id,
                 amountMinor: amountMinor,
@@ -8877,6 +9039,7 @@ class $$LedgerEntriesTableTableManager
                 nextDueDate: nextDueDate,
                 recurrenceEndDate: recurrenceEndDate,
                 externalId: externalId,
+                templateOnly: templateOnly,
               ),
           createCompanionCallback:
               ({
@@ -8894,6 +9057,7 @@ class $$LedgerEntriesTableTableManager
                 Value<DateTime?> nextDueDate = const Value.absent(),
                 Value<DateTime?> recurrenceEndDate = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
+                Value<bool> templateOnly = const Value.absent(),
               }) => LedgerEntriesCompanion.insert(
                 id: id,
                 amountMinor: amountMinor,
@@ -8909,6 +9073,7 @@ class $$LedgerEntriesTableTableManager
                 nextDueDate: nextDueDate,
                 recurrenceEndDate: recurrenceEndDate,
                 externalId: externalId,
+                templateOnly: templateOnly,
               ),
           withReferenceMapper: (p0) => p0
               .map(

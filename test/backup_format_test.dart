@@ -626,6 +626,62 @@ void main() {
     expect(decoded.recurrenceEndDate, isNull);
   });
 
+  test('a template-only ledger entry (schema v22) round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        ledgerEntries: [
+          BackupLedgerEntry(
+            id: 1,
+            amountMinor: 5000000,
+            date: DateTime(2026, 7, 1),
+            accountId: 1,
+            sourceLabel: 'Salary',
+            note: null,
+            externalId: 'inc-1',
+            isRecurring: true,
+            recurrence: Recurrence.monthly,
+            nextDueDate: DateTime(2026, 8, 1),
+            templateOnly: true,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).ledgerEntries.single;
+    expect(decoded.templateOnly, isTrue);
+  });
+
+  test('a pre-v22 ledger entry (no "templateOnly" key) decodes as false',
+      () async {
+    final v9Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 9,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['ledgerEntries'] = [
+          {
+            'id': 1,
+            'amountMinor': 5000000,
+            'date': DateTime(2026, 7, 1).toIso8601String(),
+            'accountId': null,
+            'sourceLabel': 'Salary',
+            'note': null,
+            'externalId': 'inc-1',
+            // No "templateOnly" key at all.
+          },
+        ],
+    });
+    final decoded = (await decodePayload(v9Json)).ledgerEntries.single;
+    expect(decoded.templateOnly, isFalse);
+  });
+
   test('a pre-v16 ledger entry (no "kind" key) decodes as income', () async {
     final v9Json = jsonEncode({
       'spendlyBackup': true,
@@ -803,6 +859,116 @@ void main() {
     // The v4 fx pair is untouched by the missing v6 keys.
     expect(decoded.fxCurrency, 'JPY');
   });
+
+  test('a template-only expense (schema v22) round-trips', () async {
+    final payload = _samplePayload();
+    final template = BackupExpense(
+      id: payload.expenses.single.id,
+      amountMinor: payload.expenses.single.amountMinor,
+      categoryId: payload.expenses.single.categoryId,
+      date: payload.expenses.single.date,
+      note: payload.expenses.single.note,
+      paymentMethod: payload.expenses.single.paymentMethod,
+      isRecurring: true,
+      recurrence: Recurrence.monthly,
+      nextDueDate: DateTime(2026, 8, 1),
+      recurrenceEndDate: null,
+      tagId: payload.expenses.single.tagId,
+      accountId: payload.expenses.single.accountId,
+      createdAt: payload.expenses.single.createdAt,
+      updatedAt: payload.expenses.single.updatedAt,
+      externalId: payload.expenses.single.externalId,
+      fxCurrency: payload.expenses.single.fxCurrency,
+      fxAmountMinor: payload.expenses.single.fxAmountMinor,
+      templateOnly: true,
+    );
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: [template],
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).expenses.single;
+    expect(decoded.templateOnly, isTrue);
+  });
+
+  test('a pre-v22 file (no "templateOnly" key) decodes as false', () async {
+    final v5Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 5,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['expenses'] = [
+          _samplePayload().expenses.single.toJson()..remove('templateOnly'),
+        ],
+    });
+
+    final decoded = (await decodePayload(v5Json)).expenses.single;
+    expect(decoded.templateOnly, isFalse);
+  });
+
+  test(
+    'a real expense and its cloned recurring template have distinct '
+    'Merge fingerprints despite matching amount/date/category/note',
+    () {
+      const shared = (
+        amountMinor: 19900,
+        categoryId: 3,
+        note: 'Netflix',
+        paymentMethod: 'UPI',
+      );
+      final date = DateTime(2026, 3, 3);
+      final real = BackupExpense(
+        id: 1,
+        amountMinor: shared.amountMinor,
+        categoryId: shared.categoryId,
+        date: date,
+        note: shared.note,
+        paymentMethod: shared.paymentMethod,
+        isRecurring: false,
+        recurrence: null,
+        tagId: null,
+        accountId: null,
+        createdAt: date,
+        updatedAt: date,
+        externalId: 'real-1',
+        fxCurrency: null,
+        fxAmountMinor: null,
+        nextDueDate: null,
+        recurrenceEndDate: null,
+      );
+      final template = BackupExpense(
+        id: 2,
+        amountMinor: shared.amountMinor,
+        categoryId: shared.categoryId,
+        date: date,
+        note: shared.note,
+        paymentMethod: shared.paymentMethod,
+        isRecurring: true,
+        recurrence: Recurrence.monthly,
+        tagId: null,
+        accountId: null,
+        createdAt: date,
+        updatedAt: date,
+        externalId: 'template-1',
+        fxCurrency: null,
+        fxAmountMinor: null,
+        nextDueDate: DateTime(2026, 4, 3),
+        recurrenceEndDate: null,
+        templateOnly: true,
+      );
+
+      expect(
+        real.fingerprint(mappedCategoryId: shared.categoryId),
+        isNot(template.fingerprint(mappedCategoryId: shared.categoryId)),
+      );
+    },
+  );
 
   test('a v5 trip date range round-trips', () async {
     final envelope = await encodeEnvelope(_samplePayload());

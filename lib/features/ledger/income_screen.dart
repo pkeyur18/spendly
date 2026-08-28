@@ -371,6 +371,24 @@ Future<int?> showIncomeConfirmSheet(
   );
 }
 
+/// The date field's starting value for [_IncomeEditSheet].
+///
+/// A due-or-past [confirmOccurrence] defaults to the scheduled day itself —
+/// the normal confirm flow. An occurrence still in the future means this is
+/// an early confirm (see `_MarkReceivedEarlyButton`): default to today, the
+/// day it's actually being received, not the day it was scheduled for.
+DateTime confirmSheetInitialDate({
+  required DateTime? confirmOccurrence,
+  required DateTime? existingDate,
+  DateTime? now,
+}) {
+  final today = now ?? DateTime.now();
+  if (confirmOccurrence != null && !confirmOccurrence.isAfter(today)) {
+    return confirmOccurrence;
+  }
+  return existingDate ?? today;
+}
+
 class _IncomeEditSheet extends ConsumerStatefulWidget {
   const _IncomeEditSheet({
     this.existing,
@@ -402,8 +420,10 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
     text: _source?.sourceLabel ?? '',
   );
   late final _note = TextEditingController(text: _source?.note ?? '');
-  late DateTime _date =
-      widget.confirmOccurrence ?? widget.existing?.date ?? DateTime.now();
+  late DateTime _date = confirmSheetInitialDate(
+    confirmOccurrence: widget.confirmOccurrence,
+    existingDate: widget.existing?.date,
+  );
   late int? _accountId = _source?.accountId;
   // A confirmed occurrence is never itself a template — recurrence is the
   // template's own property, edited only when editing the template directly
@@ -480,28 +500,49 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
 
     final int id;
     if (_isEdit) {
-      id = widget.existing!.id;
-      await repo.update(
-        id,
-        amount: amount,
-        date: _date,
-        accountId: _accountId,
-        clearAccount: _accountId == null,
-        sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
-        note: note.isEmpty ? null : note,
-        isRecurring: _recurrence != null && nextDue != null,
-        recurrence: Value(_recurrence),
-        nextDueDate: Value(nextDue),
-        recurrenceEndDate: Value(_recurrenceEndDate),
-      );
+      final existing = widget.existing!;
+      id = existing.id;
+      if (existing.templateOnly || existing.isRecurring) {
+        // Already its own template row, or a legacy pre-split shared-row
+        // template (kept as-is — forward-only fix, see
+        // `LedgerRepository.addIncomeWithRecurrence`'s doc comment) — safe
+        // to edit every field on this same row.
+        await repo.update(
+          id,
+          amount: amount,
+          date: _date,
+          accountId: _accountId,
+          clearAccount: _accountId == null,
+          sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
+          note: note.isEmpty ? null : note,
+          isRecurring: _recurrence != null && nextDue != null,
+          recurrence: Value(_recurrence),
+          nextDueDate: Value(nextDue),
+          recurrenceEndDate: Value(_recurrenceEndDate),
+        );
+      } else {
+        // A genuinely plain income entry — turning "Repeat" on here must
+        // not turn this historical transaction into the shared template row.
+        await repo.updateIncomeWithRecurrence(
+          id: id,
+          amount: amount,
+          date: _date,
+          accountId: _accountId,
+          clearAccount: _accountId == null,
+          sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
+          note: note.isEmpty ? null : note,
+          recurrence: _recurrence,
+          nextDueDate: nextDue,
+          recurrenceEndDate: _recurrenceEndDate,
+        );
+      }
     } else {
-      id = await repo.addIncome(
+      id = await repo.addIncomeWithRecurrence(
         amount: amount,
         date: _date,
         accountId: _accountId,
         sourceLabel: sourceLabel.isEmpty ? null : sourceLabel,
         note: note.isEmpty ? null : note,
-        isRecurring: _recurrence != null && nextDue != null,
         recurrence: _recurrence,
         nextDueDate: nextDue,
         recurrenceEndDate: _recurrenceEndDate,

@@ -160,5 +160,6 @@ ExpenseRow _template({required int amountMinor, required Recurrence recurrence})
     recurrence: recurrence,
     createdAt: now,
     updatedAt: now,
+    templateOnly: false,
   );
 }

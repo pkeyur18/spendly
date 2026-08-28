@@ -36,6 +36,7 @@ class LedgerRepository {
     Recurrence? recurrence,
     DateTime? nextDueDate,
     DateTime? recurrenceEndDate,
+    bool templateOnly = false,
   }) => _db
       .into(_db.ledgerEntries)
       .insert(
@@ -50,8 +51,51 @@ class LedgerRepository {
           recurrence: Value(recurrence),
           nextDueDate: Value(nextDueDate),
           recurrenceEndDate: Value(recurrenceEndDate),
+          templateOnly: Value(templateOnly),
         ),
       );
+
+  /// Logs a real, permanent income entry and — when [recurrence] is set —
+  /// also inserts a separate template-only row carrying the schedule,
+  /// wrapped in one transaction. Income's twin of
+  /// `ExpenseRepository.addWithRecurrence` — see its doc comment for why
+  /// the split exists. Used for a brand new entry; [updateIncomeWithRecurrence]
+  /// is the edit-time twin.
+  Future<int> addIncomeWithRecurrence({
+    required Money amount,
+    required DateTime date,
+    int? accountId,
+    String? sourceLabel,
+    String? note,
+    Recurrence? recurrence,
+    DateTime? nextDueDate,
+    DateTime? recurrenceEndDate,
+  }) {
+    return _db.transaction(() async {
+      final id = await addIncome(
+        amount: amount,
+        date: date,
+        accountId: accountId,
+        sourceLabel: sourceLabel,
+        note: note,
+      );
+      if (recurrence != null && nextDueDate != null) {
+        await addIncome(
+          amount: amount,
+          date: date,
+          accountId: accountId,
+          sourceLabel: sourceLabel,
+          note: note,
+          isRecurring: true,
+          recurrence: recurrence,
+          nextDueDate: nextDueDate,
+          recurrenceEndDate: recurrenceEndDate,
+          templateOnly: true,
+        );
+      }
+      return id;
+    });
+  }
 
   /// [fromAccountId] and [toAccountId] must differ — moving money into the
   /// same account it left isn't a transfer, and would net to zero in the
@@ -111,6 +155,52 @@ class LedgerRepository {
     ),
   );
 
+  /// Updates [id]'s plain fields and — when [recurrence] is newly set on an
+  /// income entry that wasn't already recurring — also inserts a new
+  /// template-only row, rather than turning [id] itself into a shared
+  /// template row. The edit-time twin of [addIncomeWithRecurrence]; callers
+  /// must only use this on a genuinely plain entry (not already
+  /// `isRecurring`, not itself `templateOnly`) — see
+  /// `income_screen.dart`'s dispatch.
+  Future<void> updateIncomeWithRecurrence({
+    required int id,
+    required Money amount,
+    required DateTime date,
+    int? accountId,
+    bool clearAccount = false,
+    String? sourceLabel,
+    String? note,
+    Recurrence? recurrence,
+    DateTime? nextDueDate,
+    DateTime? recurrenceEndDate,
+  }) {
+    return _db.transaction(() async {
+      await update(
+        id,
+        amount: amount,
+        date: date,
+        accountId: accountId,
+        clearAccount: clearAccount,
+        sourceLabel: sourceLabel,
+        note: note,
+      );
+      if (recurrence != null && nextDueDate != null) {
+        await addIncome(
+          amount: amount,
+          date: date,
+          accountId: accountId,
+          sourceLabel: sourceLabel,
+          note: note,
+          isRecurring: true,
+          recurrence: recurrence,
+          nextDueDate: nextDueDate,
+          recurrenceEndDate: recurrenceEndDate,
+          templateOnly: true,
+        );
+      }
+    });
+  }
+
   Future<void> delete(int id) =>
       (_db.delete(_db.ledgerEntries)..where((t) => t.id.equals(id))).go();
 
@@ -124,7 +214,11 @@ class LedgerRepository {
   /// detail timeline, not in a screen named "Income".
   Stream<List<LedgerEntryRow>> watchAll() {
     return (_db.select(_db.ledgerEntries)
-          ..where((t) => t.kind.equalsValue(LedgerEntryKind.income))
+          ..where(
+            (t) =>
+                t.kind.equalsValue(LedgerEntryKind.income) &
+                t.templateOnly.equals(false),
+          )
           ..orderBy(
             [(t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc)],
           ))
@@ -137,7 +231,8 @@ class LedgerRepository {
             (t) =>
                 t.kind.equalsValue(LedgerEntryKind.income) &
                 t.date.isBiggerOrEqualValue(start) &
-                t.date.isSmallerThanValue(end),
+                t.date.isSmallerThanValue(end) &
+                t.templateOnly.equals(false),
           )
           ..orderBy(
             [(t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc)],
@@ -155,7 +250,8 @@ class LedgerRepository {
       ..where(
         _db.ledgerEntries.kind.equalsValue(LedgerEntryKind.income) &
             _db.ledgerEntries.date.isBiggerOrEqualValue(start) &
-            _db.ledgerEntries.date.isSmallerThanValue(end),
+            _db.ledgerEntries.date.isSmallerThanValue(end) &
+            _db.ledgerEntries.templateOnly.equals(false),
       );
     return query.watchSingle().map((r) => Money.fromMinor(r.read(sum) ?? 0));
   }
@@ -176,7 +272,8 @@ class LedgerRepository {
         _db.ledgerEntries.kind.equalsValue(LedgerEntryKind.income) &
             _db.ledgerEntries.accountId.isNotNull() &
             _db.ledgerEntries.date.isBiggerOrEqualValue(start) &
-            _db.ledgerEntries.date.isSmallerThanValue(end),
+            _db.ledgerEntries.date.isSmallerThanValue(end) &
+            _db.ledgerEntries.templateOnly.equals(false),
       )
       ..groupBy([_db.ledgerEntries.accountId]);
     return query.watch().map(
@@ -252,7 +349,8 @@ class LedgerRepository {
                 (t.accountId.equals(accountId) |
                     t.counterAccountId.equals(accountId)) &
                 t.date.isBiggerOrEqualValue(start) &
-                t.date.isSmallerThanValue(end),
+                t.date.isSmallerThanValue(end) &
+                t.templateOnly.equals(false),
           )
           ..orderBy(
             [(t) => OrderingTerm(expression: t.date, mode: OrderingMode.desc)],
