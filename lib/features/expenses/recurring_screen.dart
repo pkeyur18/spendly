@@ -33,12 +33,87 @@ class RecurringScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Recurring'),
-          bottom: const TabBar(
-            tabs: [Tab(text: 'Expenses'), Tab(text: 'Income')],
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(60),
+            child: _PillTabBar(),
           ),
         ),
         body: const TabBarView(
           children: [_ExpenseRecurringTab(), _IncomeRecurringTab()],
+        ),
+      ),
+    );
+  }
+}
+
+/// A rounded segmented-control look built on the stock [TabBar] — its
+/// indicator becomes the active pill rather than an underline — so swipe
+/// sync, accessibility and [DefaultTabController] wiring stay exactly what
+/// [TabBar] already provides; only the paint changes.
+class _PillTabBar extends StatelessWidget {
+  const _PillTabBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: palette.line,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+        ),
+        child: TabBar(
+          dividerColor: Colors.transparent,
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicatorPadding: EdgeInsets.zero,
+          indicator: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.chip),
+          ),
+          labelColor: Theme.of(context).textTheme.bodyLarge?.color,
+          unselectedLabelColor: palette.textDim,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          tabs: const [Tab(text: 'Expenses'), Tab(text: 'Income')],
+        ),
+      ),
+    );
+  }
+}
+
+/// Section header for this screen only — uppercase, letter-spaced, muted.
+/// A local widget rather than reskinning the shared [SectionTitle] (used
+/// across many other screens with its own look).
+class _RecurringSectionLabel extends StatelessWidget {
+  const _RecurringSectionLabel(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xs,
+        AppSpacing.lg,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.9,
+          color: palette.textDim,
         ),
       ),
     );
@@ -81,17 +156,21 @@ class _ExpenseRecurringTab extends ConsumerWidget {
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
             if (due.isNotEmpty) ...[
-              const SectionTitle('Waiting for you'),
+              const _RecurringSectionLabel('Waiting for you'),
               for (final s in due)
                 _DueCard(series: s, category: byId[s.template.categoryId]),
             ],
             if (scheduled.isNotEmpty) ...[
-              const SectionTitle('Scheduled'),
-              for (final s in scheduled)
-                _ScheduledTile(
-                  template: s.template,
-                  category: byId[s.template.categoryId],
-                ),
+              const _RecurringSectionLabel('Scheduled'),
+              _ScheduledList(
+                tiles: [
+                  for (final s in scheduled)
+                    _ScheduledTile(
+                      template: s.template,
+                      category: byId[s.template.categoryId],
+                    ),
+                ],
+              ),
             ],
             const SizedBox(height: 80),
           ],
@@ -140,13 +219,17 @@ class _IncomeRecurringTab extends ConsumerWidget {
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
             if (due.isNotEmpty) ...[
-              const SectionTitle('Waiting for you'),
+              const _RecurringSectionLabel('Waiting for you'),
               for (final s in due) _IncomeDueCard(series: s),
             ],
             if (scheduled.isNotEmpty) ...[
-              const SectionTitle('Scheduled'),
-              for (final s in scheduled)
-                _IncomeScheduledTile(template: s.template),
+              const _RecurringSectionLabel('Scheduled'),
+              _ScheduledList(
+                tiles: [
+                  for (final s in scheduled)
+                    _IncomeScheduledTile(template: s.template),
+                ],
+              ),
             ],
             const SizedBox(height: 80),
           ],
@@ -187,9 +270,8 @@ class _DueCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CategoryGlyph(category?.icon ?? '🔁', size: 20),
-                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,11 +280,16 @@ class _DueCard extends ConsumerWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontFamily: 'Sora',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
                       ),
+                      const SizedBox(height: 3),
                       Text(
                         'Due ${_dueLabel(oldest)}',
-                        style: TextStyle(fontSize: 12, color: palette.textDim),
+                        style: TextStyle(fontSize: 12.5, color: palette.textDim),
                       ),
                     ],
                   ),
@@ -212,6 +299,7 @@ class _DueCard extends ConsumerWidget {
                   style: const TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
+                    fontSize: 17,
                   ),
                 ),
               ],
@@ -225,7 +313,7 @@ class _DueCard extends ConsumerWidget {
                 style: TextStyle(fontSize: 12, color: palette.textDim),
               ),
             ],
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -269,52 +357,64 @@ class _ScheduledTile extends ConsumerWidget {
         : recurrenceLabel(template.recurrence!);
     final ends = template.recurrenceEndDate;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        onTap: () => openQuickAddScreen(context, editing: template),
-        child: Row(
+    return InkWell(
+      onTap: () => openQuickAddScreen(context, editing: template),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CategoryGlyph(category?.icon ?? '🔁', size: 20),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+            Row(
+              children: [
+                _RecurringAvatar(child: CategoryGlyph(category?.icon ?? '🔁', size: 19)),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5),
                   ),
-                  Text(
-                    [
-                      frequency,
-                      // A pre-v10 row can be flagged recurring with nothing
-                      // scheduled; say so rather than showing a blank date.
-                      if (next != null)
-                        'next ${_dueLabel(next)}'
-                      else
-                        'not scheduled — tap to set it',
-                      if (ends != null) 'ends ${_dueLabel(ends)}',
-                    ].where((s) => s.isNotEmpty).join(' · '),
-                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  template.amount.format(locale: 'en_IN'),
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15.5,
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(left: _RecurringAvatar.size + AppSpacing.sm),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      [
+                        frequency,
+                        // A pre-v10 row can be flagged recurring with nothing
+                        // scheduled; say so rather than showing a blank date.
+                        if (next != null)
+                          'next ${_dueLabel(next)}'
+                        else
+                          'not scheduled — tap to set it',
+                        if (ends != null) 'ends ${_dueLabel(ends)}',
+                      ].where((s) => s.isNotEmpty).join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: palette.textDim),
+                    ),
+                  ),
+                  _StopRepeatButton(onTap: () => _confirmCancel(context, ref, title)),
                 ],
               ),
-            ),
-            Text(
-              template.amount.format(locale: 'en_IN'),
-              style: const TextStyle(
-                fontFamily: 'Sora',
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Stop repeating',
-              icon: const Icon(Icons.repeat_on_rounded),
-              onPressed: () => _confirmCancel(context, ref, title),
             ),
           ],
         ),
@@ -383,22 +483,8 @@ class _IncomeDueCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadius.icon),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.savings_outlined,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,11 +493,16 @@ class _IncomeDueCard extends ConsumerWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontFamily: 'Sora',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
                       ),
+                      const SizedBox(height: 3),
                       Text(
                         'Due ${_dueLabel(oldest)}',
-                        style: TextStyle(fontSize: 12, color: palette.textDim),
+                        style: TextStyle(fontSize: 12.5, color: palette.textDim),
                       ),
                     ],
                   ),
@@ -421,6 +512,7 @@ class _IncomeDueCard extends ConsumerWidget {
                   style: const TextStyle(
                     fontFamily: 'Sora',
                     fontWeight: FontWeight.w700,
+                    fontSize: 17,
                     color: AppColors.primary,
                   ),
                 ),
@@ -435,7 +527,7 @@ class _IncomeDueCard extends ConsumerWidget {
                 style: TextStyle(fontSize: 12, color: palette.textDim),
               ),
             ],
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -482,64 +574,73 @@ class _IncomeScheduledTile extends ConsumerWidget {
         : recurrenceLabel(template.recurrence!);
     final ends = template.recurrenceEndDate;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: AppCard(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        onTap: () => showIncomeEditSheet(context, existing: template),
-        child: Row(
+    return InkWell(
+      onTap: () => showIncomeEditSheet(context, existing: template),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.icon),
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.savings_outlined,
-                size: 16,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
+            Row(
+              children: [
+                const _RecurringAvatar(
+                  child: Icon(Icons.savings_outlined, size: 18, color: AppColors.primary),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5),
                   ),
-                  Text(
-                    [
-                      frequency,
-                      if (next != null)
-                        'next ${_dueLabel(next)}'
-                      else
-                        'not scheduled — tap to set it',
-                      if (ends != null) 'ends ${_dueLabel(ends)}',
-                    ].where((s) => s.isNotEmpty).join(' · '),
-                    style: TextStyle(fontSize: 12, color: palette.textDim),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  template.amount.format(locale: 'en_IN'),
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15.5,
+                    color: AppColors.primary,
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(left: _RecurringAvatar.size + AppSpacing.sm),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      [
+                        frequency,
+                        if (next != null)
+                          'next ${_dueLabel(next)}'
+                        else
+                          'not scheduled — tap to set it',
+                        if (ends != null) 'ends ${_dueLabel(ends)}',
+                      ].where((s) => s.isNotEmpty).join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: palette.textDim),
+                    ),
+                  ),
+                  if (next != null)
+                    _MarkReceivedEarlyButton(
+                      onTap: () => showIncomeConfirmSheet(
+                        context,
+                        template: template,
+                        occurrence: next,
+                      ),
+                    ),
+                  _StopRepeatButton(onTap: () => _confirmCancel(context, ref, title)),
                 ],
               ),
-            ),
-            Text(
-              template.amount.format(locale: 'en_IN'),
-              style: const TextStyle(
-                fontFamily: 'Sora',
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Stop repeating',
-              icon: const Icon(Icons.repeat_on_rounded),
-              onPressed: () => _confirmCancel(context, ref, title),
             ),
           ],
         ),
@@ -578,5 +679,122 @@ class _IncomeScheduledTile extends ConsumerWidget {
     if (stop ?? false) {
       await ref.read(ledgerRepositoryProvider).cancelIncomeRecurrence(template);
     }
+  }
+}
+
+/// Ends a scheduled series. Shared by expense and income tiles — same icon,
+/// same tint, same tap target — so the two never drift into different looks.
+class _StopRepeatButton extends StatelessWidget {
+  const _StopRepeatButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return IconButton(
+      tooltip: 'Stop repeating',
+      onPressed: onTap,
+      icon: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: palette.textDim.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppRadius.icon),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.event_repeat_rounded,
+          size: 16,
+          color: palette.textDim,
+        ),
+      ),
+    );
+  }
+}
+
+/// Confirms an income series' next occurrence before its scheduled date —
+/// salary landing a few days early shouldn't have to wait for "due" to log
+/// it. Income-only: an expense's "next due" is a bill still owed, not
+/// something that can arrive ahead of schedule.
+class _MarkReceivedEarlyButton extends StatelessWidget {
+  const _MarkReceivedEarlyButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Mark received early',
+      onPressed: onTap,
+      icon: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: AppColors.green.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(AppRadius.icon),
+        ),
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.event_available_rounded,
+          size: 16,
+          color: AppColors.green,
+        ),
+      ),
+    );
+  }
+}
+
+/// Circular icon avatar for a scheduled row — shared shape/size for expense
+/// and income tiles so the divided list reads as one consistent pattern.
+class _RecurringAvatar extends StatelessWidget {
+  const _RecurringAvatar({required this.child});
+
+  final Widget child;
+
+  /// Exposed so a tile's second line can indent past the avatar exactly,
+  /// rather than a magic number drifting out of sync with this widget.
+  static const double size = 44;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: palette.card2, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+}
+
+/// A card housing every scheduled series as one flat, divider-separated
+/// list, rather than one [AppCard] per row.
+class _ScheduledList extends StatelessWidget {
+  const _ScheduledList({required this.tiles});
+
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            tiles[i],
+            if (i != tiles.length - 1)
+              Divider(
+                height: 1,
+                indent: AppSpacing.md,
+                endIndent: AppSpacing.md,
+                color: palette.line,
+              ),
+          ],
+        ],
+      ),
+    );
   }
 }

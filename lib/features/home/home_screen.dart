@@ -17,6 +17,7 @@ import '../expenses/recurring_repository.dart';
 import '../expenses/recurring_screen.dart';
 import '../expenses/widgets/expense_tile.dart';
 import '../ledger/account_balance_provider.dart';
+import '../ledger/income_screen.dart' show showIncomeEditSheet;
 import '../ledger/ledger_repository.dart' show dueIncomeRecurringProvider;
 import '../ledger/transfer_screen.dart' show showTransferEditSheet;
 import '../profile/profile_provider.dart';
@@ -201,6 +202,14 @@ class _BalanceCard extends ConsumerWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Deliberately quiet (an icon, not a FAB) — adding income is
+                // a 1-2x/month action, not a daily one like Add Expense, but
+                // still deserves a shortcut closer than Profile.
+                IconButton(
+                  tooltip: 'Add income',
+                  icon: const Icon(Icons.arrow_upward_rounded, color: AppColors.green),
+                  onPressed: () => showIncomeEditSheet(context),
+                ),
                 // Nothing to transfer between with a single account — same
                 // gating as the transfer icon on the account detail screen.
                 // Deliberately quiet (an icon, not a FAB) since this is a
