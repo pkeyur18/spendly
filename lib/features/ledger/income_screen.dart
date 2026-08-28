@@ -10,7 +10,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/buttons.dart';
-import '../../core/widgets/glass.dart';
 import '../../core/widgets/repeat_picker.dart';
 import '../accounts/account_picker_sheet.dart';
 import '../accounts/account_repository.dart';
@@ -340,18 +339,25 @@ class _IncomeTile extends ConsumerWidget {
 }
 
 /// Create (no [existing]) or edit an income entry: amount, date, source
-/// label, account, note, repeat. Mirrors `_AccountEditSheet`'s shape.
+/// label, account, note, repeat.
+///
+/// Full screen with a review step (2026-08-28 redesign), mirroring
+/// `_TransferScreen` exactly — same top bar, same account-row and field
+/// styling, same confirm-before-you-save pause — rather than the single-tap
+/// bottom sheet this used to be.
 Future<int?> showIncomeEditSheet(
   BuildContext context, {
   LedgerEntryRow? existing,
 }) {
-  return showGlassSheet<int>(
-    context,
-    builder: (_) => _IncomeEditSheet(existing: existing),
+  return Navigator.of(context).push<int>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _IncomeEditScreen(existing: existing),
+    ),
   );
 }
 
-/// Confirms one occurrence of a recurring income [template]: the sheet
+/// Confirms one occurrence of a recurring income [template]: the screen
 /// prefills from the template at [occurrence]'s date, the user reviews or
 /// edits freely, and saving both logs the entry and advances the template's
 /// schedule (`LedgerRepository.confirmIncome`) — the reviewed counterpart to
@@ -362,16 +368,18 @@ Future<int?> showIncomeConfirmSheet(
   required LedgerEntryRow template,
   required DateTime occurrence,
 }) {
-  return showGlassSheet<int>(
-    context,
-    builder: (_) => _IncomeEditSheet(
-      confirmTemplate: template,
-      confirmOccurrence: occurrence,
+  return Navigator.of(context).push<int>(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _IncomeEditScreen(
+        confirmTemplate: template,
+        confirmOccurrence: occurrence,
+      ),
     ),
   );
 }
 
-/// The date field's starting value for [_IncomeEditSheet].
+/// The date field's starting value for [_IncomeEditScreen].
 ///
 /// A due-or-past [confirmOccurrence] defaults to the scheduled day itself —
 /// the normal confirm flow. An occurrence still in the future means this is
@@ -389,8 +397,8 @@ DateTime confirmSheetInitialDate({
   return existingDate ?? today;
 }
 
-class _IncomeEditSheet extends ConsumerStatefulWidget {
-  const _IncomeEditSheet({
+class _IncomeEditScreen extends ConsumerStatefulWidget {
+  const _IncomeEditScreen({
     this.existing,
     this.confirmTemplate,
     this.confirmOccurrence,
@@ -402,10 +410,10 @@ class _IncomeEditSheet extends ConsumerStatefulWidget {
   final DateTime? confirmOccurrence;
 
   @override
-  ConsumerState<_IncomeEditSheet> createState() => _IncomeEditSheetState();
+  ConsumerState<_IncomeEditScreen> createState() => _IncomeEditScreenState();
 }
 
-class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
+class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
   /// What to prefill from — the template being confirmed, or an existing
   /// entry being edited. Never both; [showIncomeConfirmSheet] never passes
   /// an [existing] alongside a template.
@@ -434,6 +442,11 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
       _isConfirming ? null : widget.existing?.recurrenceEndDate;
   bool _saving = false;
 
+  /// True once the form has passed validation and is showing the
+  /// confirm-before-you-save summary instead of the editable fields — same
+  /// pattern as `_TransferScreenState._reviewing`.
+  bool _reviewing = false;
+
   bool get _isEdit => widget.existing != null;
 
   @override
@@ -456,15 +469,37 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
     setState(() => _date = picked);
   }
 
-  Future<void> _save() async {
+  /// Same check [_save] used to run inline — extracted so the "Review
+  /// income" step and the actual save both refuse the same bad input,
+  /// instead of the review step waving through something the save would
+  /// then reject.
+  String? _validate() {
     final amount = Money.parse(_amount.text);
-    if (amount.minor <= 0) {
+    if (amount.minor <= 0) return 'Enter an amount';
+    return null;
+  }
+
+  void _proceedToReview() {
+    final error = _validate();
+    if (error != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Enter an amount')));
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    setState(() => _reviewing = true);
+  }
+
+  Future<void> _save() async {
+    final error = _validate();
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
     setState(() => _saving = true);
+    final amount = Money.parse(_amount.text);
     final repo = ref.read(ledgerRepositoryProvider);
     final sourceLabel = _sourceLabel.text.trim();
     final note = _note.text.trim();
@@ -589,11 +624,312 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
     setState(() => _accountId = chosen == noAccountChoice ? null : chosen);
   }
 
-  Widget _saveButton() {
-    return PrimaryGradientButton(
-      label: _saving ? 'Saving…' : 'Save',
-      semanticLabel: _saving ? 'Saving' : 'Save income',
-      onPressed: _saving ? null : _save,
+  Widget _topBar(BuildContext context, AppPalette palette) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Semantics(
+            button: true,
+            label: _reviewing ? 'Back' : 'Close',
+            child: GestureDetector(
+              onTap: () {
+                if (_reviewing) {
+                  setState(() => _reviewing = false);
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: palette.card,
+                      border: Border.all(color: palette.line),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      _reviewing ? Icons.arrow_back : Icons.close,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            _reviewing
+                ? 'Review income'
+                : (_isConfirming
+                      ? 'Confirm income'
+                      : (_isEdit ? 'Edit income' : 'Add income')),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _accountRow({
+    required IconData icon,
+    required String label,
+    required String accountName,
+    required VoidCallback? onTap,
+    required AppPalette palette,
+  }) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: palette.card2,
+              borderRadius: BorderRadius.circular(AppRadius.icon),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18, color: palette.textDim),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11.5, color: palette.textDim),
+                ),
+                Text(
+                  accountName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            Icon(Icons.chevron_right, color: palette.textDim),
+        ],
+      ),
+    );
+  }
+
+  Widget _formBody(
+    BuildContext context,
+    AppPalette palette,
+    List<AccountRow> accounts,
+    AccountRow? selectedAccount,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _accountRow(
+          icon: Icons.savings_outlined,
+          label: 'Account',
+          accountName: selectedAccount?.name ?? 'None',
+          onTap: () => _openAccountPicker(accounts),
+          palette: palette,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        TextField(
+          controller: _amount,
+          autofocus: !_isEdit,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(
+            fontFamily: 'Sora',
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: const InputDecoration(
+            labelText: 'Amount',
+            prefixText: '₹ ',
+            prefixStyle: TextStyle(
+              fontFamily: 'Sora',
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        InkWell(
+          onTap: _pickDate,
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Date',
+              border: OutlineInputBorder(),
+            ),
+            child: Text(DateFormat('MMM d, yyyy').format(_date)),
+          ),
+        ),
+        // Recurrence belongs to the template, not to one confirmed
+        // occurrence — hidden while confirming.
+        if (!_isConfirming) ...[
+          const SizedBox(height: AppSpacing.md),
+          InkWell(
+            onTap: () => showRepeatPickerSheet(
+              context,
+              recurrence: _recurrence,
+              endDate: _recurrenceEndDate,
+              anchorDate: _date,
+              onRecurrenceChanged: (r) => setState(() => _recurrence = r),
+              onEndDateChanged: (d) => setState(() => _recurrenceEndDate = d),
+            ),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Repeat',
+                border: OutlineInputBorder(),
+              ),
+              child: Text(
+                _recurrence == null
+                    ? 'Does not repeat'
+                    : recurrenceLabel(_recurrence!),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _sourceLabel,
+          decoration: const InputDecoration(
+            labelText: 'Source (optional)',
+            hintText: 'e.g. Salary, Freelance',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _note,
+          decoration: const InputDecoration(
+            labelText: 'Note (optional)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        PrimaryGradientButton(
+          label: 'Review income',
+          onPressed: _proceedToReview,
+        ),
+        if (_isEdit) ...[
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: _confirmDelete,
+              child: const Text(
+                'Delete entry',
+                style: TextStyle(color: AppColors.red),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _reviewBody(AppPalette palette, AccountRow? selectedAccount) {
+    final amount = Money.parse(_amount.text);
+    final sourceLabel = _sourceLabel.text.trim();
+    final note = _note.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      sourceLabel.isEmpty ? 'Income' : sourceLabel,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward, color: palette.textDim, size: 18),
+                  Expanded(
+                    child: Text(
+                      selectedAccount?.name ?? 'No account',
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Center(
+                child: Text(
+                  amount.format(locale: 'en_IN'),
+                  style: const TextStyle(
+                    fontFamily: 'Sora',
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _reviewLine(
+                'Date',
+                DateFormat('MMM d, yyyy').format(_date),
+                palette,
+              ),
+              if (!_isConfirming && _recurrence != null)
+                _reviewLine('Repeat', recurrenceLabel(_recurrence!), palette),
+              if (note.isNotEmpty) _reviewLine('Note', note, palette),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        PrimaryGradientButton(
+          label: _saving ? 'Saving…' : 'Confirm income',
+          semanticLabel: _saving ? 'Saving' : 'Confirm income',
+          onPressed: _saving ? null : _save,
+        ),
+      ],
+    );
+  }
+
+  Widget _reviewLine(String label, String value, AppPalette palette) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: palette.textDim, fontSize: 13)),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -606,148 +942,26 @@ class _IncomeEditSheetState extends ConsumerState<_IncomeEditSheet> {
         .where((a) => a.id == _accountId)
         .cast<AccountRow?>()
         .firstOrNull;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: AppSpacing.xl,
-        right: AppSpacing.xl,
-        top: AppSpacing.lg,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isConfirming
-                    ? 'Confirm income'
-                    : (_isEdit ? 'Edit income' : 'Add income'),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              // Amount leads and stands apart from the fields below it — the
-              // one figure this whole sheet exists to capture. Sora, like
-              // every monetary figure elsewhere in the app.
-              TextField(
-                controller: _amount,
-                autofocus: !_isEdit,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            _topBar(context, palette),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  0,
+                  AppSpacing.xl,
+                  AppSpacing.xl,
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  prefixText: '₹ ',
-                  prefixStyle: TextStyle(
-                    fontFamily: 'Sora',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  border: OutlineInputBorder(),
-                ),
+                child: _reviewing
+                    ? _reviewBody(palette, selectedAccount)
+                    : _formBody(context, palette, accounts, selectedAccount),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: _pickDate,
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Date',
-                          border: OutlineInputBorder(),
-                        ),
-                        child: Text(DateFormat('MMM d, yyyy').format(_date)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _openAccountPicker(accounts),
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Account',
-                          border: OutlineInputBorder(),
-                        ),
-                        child: Text(
-                          selectedAccount?.name ?? 'None',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              // Recurrence belongs to the template, not to one confirmed
-              // occurrence — hidden while confirming.
-              if (!_isConfirming) ...[
-                const SizedBox(height: AppSpacing.md),
-                InkWell(
-                  onTap: () => showRepeatPickerSheet(
-                    context,
-                    recurrence: _recurrence,
-                    endDate: _recurrenceEndDate,
-                    anchorDate: _date,
-                    onRecurrenceChanged: (r) => setState(() => _recurrence = r),
-                    onEndDateChanged: (d) =>
-                        setState(() => _recurrenceEndDate = d),
-                  ),
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Repeat',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: Text(
-                      _recurrence == null
-                          ? 'Does not repeat'
-                          : recurrenceLabel(_recurrence!),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                'Details',
-                style: TextStyle(color: palette.textDim, fontSize: 13),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(
-                controller: _sourceLabel,
-                decoration: const InputDecoration(
-                  labelText: 'Source (optional)',
-                  hintText: 'e.g. Salary, Freelance',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _note,
-                decoration: const InputDecoration(
-                  labelText: 'Note (optional)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              _saveButton(),
-              if (_isEdit) ...[
-                const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: _confirmDelete,
-                    child: const Text(
-                      'Delete entry',
-                      style: TextStyle(color: AppColors.red),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

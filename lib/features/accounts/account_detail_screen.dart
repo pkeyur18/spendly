@@ -113,7 +113,7 @@ class _AccountDetailScreenState extends ConsumerState<AccountDetailScreen> {
           if (activeAccounts.length > 1)
             IconButton(
               tooltip: 'Transfer money',
-              icon: const Icon(Icons.swap_horiz),
+              icon: const Icon(Icons.send_rounded),
               onPressed: () => showTransferEditSheet(
                 context,
                 defaultFromAccountId: widget.account.id,

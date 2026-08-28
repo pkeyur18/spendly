@@ -50,7 +50,7 @@ class CategoryManagerScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const BudgetSetupScreen()),
             ),
-            icon: const Icon(Icons.account_balance_wallet_outlined),
+            icon: const Icon(Icons.wallet_outlined),
           ),
           // In the app bar rather than a FloatingActionButton: the shell owns
           // the one centre-docked FAB (Add expense) on every tab, and a second

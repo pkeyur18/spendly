@@ -207,7 +207,7 @@ class _BalanceCard extends ConsumerWidget {
                 // still deserves a shortcut closer than Profile.
                 IconButton(
                   tooltip: 'Add income',
-                  icon: const Icon(Icons.arrow_upward_rounded, color: AppColors.green),
+                  icon: const Icon(Icons.account_balance, color: AppColors.green),
                   onPressed: () => showIncomeEditSheet(context),
                 ),
                 // Nothing to transfer between with a single account — same
@@ -217,7 +217,7 @@ class _BalanceCard extends ConsumerWidget {
                 if (accounts.length > 1)
                   IconButton(
                     tooltip: 'Transfer money',
-                    icon: const Icon(Icons.swap_horiz),
+                    icon: const Icon(Icons.send_rounded),
                     onPressed: () => showTransferEditSheet(context),
                   ),
                 Icon(Icons.chevron_right, color: palette.textDim),
@@ -385,7 +385,7 @@ class _HeroCard extends ConsumerWidget {
                   MaterialPageRoute(builder: (_) => const BudgetSetupScreen()),
                 ),
                 icon: const Icon(
-                  Icons.account_balance_wallet_outlined,
+                  Icons.wallet_outlined,
                   color: Colors.white,
                   size: 20,
                 ),

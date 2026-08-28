@@ -513,7 +513,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         .cast<TagRow?>()
         .firstOrNull;
     return _titleBarIconButton(
-      icon: Icons.card_travel_outlined,
+      icon: Icons.travel_explore_outlined,
       semanticsLabel: selected == null ? 'Add trip' : 'Trip, ${selected.name}',
       onTap: () => _openTagPicker(tags),
       palette: palette,
@@ -531,7 +531,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               ? ''
               : ', until ${relativeDayLabel(_recurrenceEndDate!)}'}';
     return _titleBarIconButton(
-      icon: Icons.repeat_rounded,
+      icon: Icons.event_repeat_rounded,
       semanticsLabel: label,
       onTap: _openRepeatSheet,
       palette: palette,
@@ -1036,7 +1036,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                     final t = tags[i - 2];
                     return ListTile(
                       leading: Icon(
-                        Icons.card_travel_outlined,
+                        Icons.travel_explore_outlined,
                         size: 20,
                         color: Color(t.colorValue),
                       ),
