@@ -6,9 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
 import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/core/money/money.dart';
-import 'package:spendly/features/accounts/account_balance_provider.dart';
 import 'package:spendly/features/accounts/account_repository.dart';
 import 'package:spendly/features/expenses/expense_repository.dart';
+import 'package:spendly/features/ledger/account_balance_provider.dart';
 import 'package:spendly/features/ledger/ledger_repository.dart';
 
 /// `accountBalancesProvider`/`totalBalanceProvider` combine opening balance
