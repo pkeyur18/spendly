@@ -93,14 +93,15 @@ void main() {
       toAccountId: b,
     );
 
+    // The total (1500) is invariant under a transfer, so waiting on it would
+    // resolve before the transfer's own streams have actually propagated —
+    // wait on the per-account balances the transfer actually changes.
     await _waitUntil(
       container,
-      totalBalanceProvider,
-      (m) => m == Money.parse('1500'), // unchanged: 1000 + 500
+      accountBalancesProvider,
+      (m) => m[a] == Money.parse('800') && m[b] == Money.parse('700'),
     );
-    final balances = container.read(accountBalancesProvider);
-    expect(balances[a], Money.parse('800'));
-    expect(balances[b], Money.parse('700'));
+    expect(container.read(totalBalanceProvider), Money.parse('1500'));
   });
 
   test('an archived account is excluded from the total, but its balance is '

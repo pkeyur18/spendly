@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spendly/core/db/database.dart';
+import 'package:spendly/core/theme/app_theme.dart';
 import 'package:spendly/features/accounts/account_picker_sheet.dart';
 import 'package:spendly/features/accounts/account_repository.dart';
 
@@ -41,6 +42,7 @@ void main() {
     final holder = _PickResult();
     await tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light(),
         home: Scaffold(
           body: Builder(
             builder: (context) => ElevatedButton(
