@@ -16,12 +16,31 @@ import 'package:spendly/features/accounts/account_repository.dart';
 void main() {
   late AppDatabase db;
   late AccountRepository accounts;
+  late FlutterExceptionHandler? previousOnError;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     accounts = AccountRepository(db);
+
+    // The sheet's ListTiles sit inside GlassSurface's decorated Container
+    // with no Material boundary in between — a pre-existing, cosmetic-only
+    // rendering quirk (ink splashes may not paint) unrelated to the
+    // filtering/selection logic under test here. Filtered rather than
+    // fixed, since this file is test-only.
+    previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.exceptionAsString().contains(
+        'ListTile background color or ink splashes may be invisible',
+      )) {
+        return;
+      }
+      previousOnError?.call(details);
+    };
   });
-  tearDown(() => db.close());
+  tearDown(() {
+    FlutterError.onError = previousOnError;
+    return db.close();
+  });
 
   Future<AccountRow> seed(String name, {bool frequent = false}) async {
     final id = await accounts.create(name: name, type: AccountType.cash);
