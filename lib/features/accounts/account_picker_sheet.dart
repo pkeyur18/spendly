@@ -52,7 +52,7 @@ Future<int?> showAccountPickerSheet(
                     if (selectedAccount != null && !selectedAccount.isFrequent)
                       selectedAccount,
                   ];
-            final showSeeAll = !showAll && frequent.isNotEmpty;
+            final showSeeAll = !showAll && options.length < available.length;
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [

@@ -770,7 +770,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                           !selectedAccount.isFrequent)
                         selectedAccount,
                     ];
-              final showSeeAll = !showAll && frequent.isNotEmpty;
+              final showSeeAll = !showAll && options.length < accounts.length;
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
