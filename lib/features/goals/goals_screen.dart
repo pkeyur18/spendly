@@ -5,6 +5,7 @@ import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/buttons.dart';
@@ -41,15 +42,12 @@ class GoalsScreen extends ConsumerWidget {
           if (goals.isEmpty) {
             return const EmptyView(
               icon: Icons.flag_outlined,
-              message:
-                  'No savings goals yet. Tap + to set your first target.',
+              message: 'No savings goals yet. Tap + to set your first target.',
             );
           }
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
-            children: [
-              for (final g in goals) _GoalTile(goal: g),
-            ],
+            children: [for (final g in goals) _GoalTile(goal: g)],
           );
         },
       ),
@@ -84,7 +82,9 @@ class _GoalTile extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Icon(
-                    goal.isComplete ? Icons.emoji_events_outlined : Icons.flag_outlined,
+                    goal.isComplete
+                        ? Icons.emoji_events_outlined
+                        : Icons.flag_outlined,
                     size: 18,
                     color: AppColors.primary,
                   ),
@@ -95,7 +95,10 @@ class _GoalTile extends StatelessWidget {
                     goal.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 Text(
@@ -132,12 +135,13 @@ class GoalDetailScreen extends ConsumerWidget {
     // Re-reads the live row from the active-goals stream so the screen
     // reflects contributions made from here without a manual refresh; falls
     // back to the row passed in until the stream's first emission arrives.
-    final live = ref
-        .watch(activeGoalsProvider)
-        .value
-        ?.where((g) => g.id == goal.id)
-        .cast<SavingsGoalRow?>()
-        .firstOrNull ??
+    final live =
+        ref
+            .watch(activeGoalsProvider)
+            .value
+            ?.where((g) => g.id == goal.id)
+            .cast<SavingsGoalRow?>()
+            .firstOrNull ??
         goal;
     final remaining = Money.fromMinor(
       (live.targetMinor - live.savedMinor).clamp(0, 1 << 62),
@@ -190,7 +194,7 @@ class GoalDetailScreen extends ConsumerWidget {
                   live.isComplete
                       ? 'Target ${live.target.format(locale: 'en_IN')}'
                       : '${remaining.format(locale: 'en_IN')} left of '
-                          '${live.target.format(locale: 'en_IN')}',
+                            '${live.target.format(locale: 'en_IN')}',
                   style: TextStyle(fontSize: 12, color: palette.textDim),
                 ),
               ],
@@ -201,7 +205,8 @@ class GoalDetailScreen extends ConsumerWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _showAdjustDialog(context, ref, live, isAdd: true),
+                  onPressed: () =>
+                      _showAdjustDialog(context, ref, live, isAdd: true),
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add money'),
                 ),
@@ -211,7 +216,8 @@ class GoalDetailScreen extends ConsumerWidget {
                 child: OutlinedButton.icon(
                   onPressed: live.savedMinor <= 0
                       ? null
-                      : () => _showAdjustDialog(context, ref, live, isAdd: false),
+                      : () =>
+                            _showAdjustDialog(context, ref, live, isAdd: false),
                   icon: const Icon(Icons.remove, size: 18),
                   label: const Text('Withdraw'),
                 ),
@@ -229,35 +235,11 @@ class GoalDetailScreen extends ConsumerWidget {
     SavingsGoalRow goal, {
     required bool isAdd,
   }) async {
-    final controller = TextEditingController();
-    final amount = await showDialog<Money>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(isAdd ? 'Add money' : 'Withdraw'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(prefixText: '₹ '),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final parsed = Money.parse(controller.text);
-              if (parsed.minor <= 0) return;
-              Navigator.of(dialogContext).pop(parsed);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+    final amount = await showAmountSheet(
+      context,
+      title: isAdd ? 'Add money' : 'Withdraw',
     );
-    controller.dispose();
-    if (amount == null) return;
+    if (amount == null || amount.minor <= 0) return;
     await ref
         .read(goalRepositoryProvider)
         .adjustSaved(goal.id, isAdd ? amount : Money.fromMinor(-amount.minor));
@@ -265,7 +247,10 @@ class GoalDetailScreen extends ConsumerWidget {
 }
 
 /// Create (no [existing]) or edit a goal: name, target amount, archive.
-Future<int?> showGoalEditSheet(BuildContext context, {SavingsGoalRow? existing}) {
+Future<int?> showGoalEditSheet(
+  BuildContext context, {
+  SavingsGoalRow? existing,
+}) {
   return showGlassSheet<int>(
     context,
     builder: (_) => _GoalEditSheet(existing: existing),
@@ -282,20 +267,42 @@ class _GoalEditSheet extends ConsumerStatefulWidget {
 
 class _GoalEditSheetState extends ConsumerState<_GoalEditSheet> {
   late final _name = TextEditingController(text: widget.existing?.name ?? '');
-  late final _target = TextEditingController(
-    text: widget.existing == null
-        ? ''
-        : widget.existing!.target.major.toStringAsFixed(2),
-  );
+  final _nameFocusNode = FocusNode();
+  late String _target = widget.existing == null
+      ? '0'
+      : widget.existing!.target.major.toStringAsFixed(2);
   bool _saving = false;
+
+  /// Off until the target amount is explicitly tapped — never on by
+  /// default, and always mutually exclusive with the name field's OS
+  /// keyboard (same rule as Transfer/Income's amount field).
+  bool _amountActive = false;
 
   bool get _isEdit => widget.existing != null;
 
   @override
+  void initState() {
+    super.initState();
+    _nameFocusNode.addListener(() {
+      if (_nameFocusNode.hasFocus) setState(() => _amountActive = false);
+    });
+  }
+
+  @override
   void dispose() {
     _name.dispose();
-    _target.dispose();
+    _nameFocusNode.dispose();
     super.dispose();
+  }
+
+  void _activateAmount() {
+    FocusScope.of(context).unfocus();
+    setState(() => _amountActive = true);
+  }
+
+  void _dismissKeyboards() {
+    FocusScope.of(context).unfocus();
+    setState(() => _amountActive = false);
   }
 
   Future<void> _save() async {
@@ -306,7 +313,7 @@ class _GoalEditSheetState extends ConsumerState<_GoalEditSheet> {
       ).showSnackBar(const SnackBar(content: Text('Enter a goal name')));
       return;
     }
-    final target = Money.parse(_target.text);
+    final target = Money.parse(_target);
     if (target.minor <= 0) {
       ScaffoldMessenger.of(
         context,
@@ -327,7 +334,9 @@ class _GoalEditSheetState extends ConsumerState<_GoalEditSheet> {
   }
 
   Future<void> _archive() async {
-    await ref.read(goalRepositoryProvider).setArchived(widget.existing!.id, true);
+    await ref
+        .read(goalRepositoryProvider)
+        .setArchived(widget.existing!.id, true);
     if (!mounted) return;
     Navigator.of(context)
       ..pop() // the edit sheet
@@ -352,59 +361,66 @@ class _GoalEditSheetState extends ConsumerState<_GoalEditSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
       ),
       child: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isEdit ? 'Edit goal' : 'New savings goal',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              TextField(
-                controller: _name,
-                autofocus: !_isEdit,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Goal name',
-                  hintText: 'e.g. New laptop, Emergency fund',
-                  border: OutlineInputBorder(),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _dismissKeyboards,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isEdit ? 'Edit goal' : 'New savings goal',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _target,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Target amount',
-                  prefixText: '₹ ',
-                  prefixStyle: TextStyle(
-                    fontFamily: 'Sora',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(height: AppSpacing.lg),
+                TextField(
+                  controller: _name,
+                  focusNode: _nameFocusNode,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Goal name',
+                    hintText: 'e.g. New laptop, Emergency fund',
+                    border: OutlineInputBorder(),
                   ),
-                  border: OutlineInputBorder(),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              _saveButton(),
-              if (_isEdit) ...[
+                const SizedBox(height: AppSpacing.lg),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _activateAmount,
+                  child: AmountDisplay(_target, fontSize: 40),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  alignment: Alignment.topCenter,
+                  child: _amountActive
+                      ? Column(
+                          children: [
+                            AmountKeypad(
+                              onKey: (k) => setState(
+                                () => _target = applyAmountKey(_target, k),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                ),
                 const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: _archive,
-                    child: const Text('Archive this goal'),
+                _saveButton(),
+                if (_isEdit) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: _archive,
+                      child: const Text('Archive this goal'),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

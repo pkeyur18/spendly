@@ -7,6 +7,7 @@ import '../../core/db/database.dart';
 import '../../core/db/row_extensions.dart';
 import '../../core/money/money.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/amount_keypad.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/buttons.dart';
@@ -421,13 +422,15 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
 
   bool get _isConfirming => widget.confirmTemplate != null;
 
-  late final _amount = TextEditingController(
-    text: _source == null ? '' : _source!.amount.major.toStringAsFixed(2),
-  );
+  late String _amount = _source == null
+      ? '0'
+      : _source!.amount.major.toStringAsFixed(2);
   late final _sourceLabel = TextEditingController(
     text: _source?.sourceLabel ?? '',
   );
+  final _sourceLabelFocusNode = FocusNode();
   late final _note = TextEditingController(text: _source?.note ?? '');
+  final _noteFocusNode = FocusNode();
   late DateTime _date = confirmSheetInitialDate(
     confirmOccurrence: widget.confirmOccurrence,
     existingDate: widget.existing?.date,
@@ -436,11 +439,19 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
   // A confirmed occurrence is never itself a template — recurrence is the
   // template's own property, edited only when editing the template directly
   // (existing != null, not confirming).
-  late Recurrence? _recurrence =
-      _isConfirming ? null : widget.existing?.recurrence;
-  late DateTime? _recurrenceEndDate =
-      _isConfirming ? null : widget.existing?.recurrenceEndDate;
+  late Recurrence? _recurrence = _isConfirming
+      ? null
+      : widget.existing?.recurrence;
+  late DateTime? _recurrenceEndDate = _isConfirming
+      ? null
+      : widget.existing?.recurrenceEndDate;
   bool _saving = false;
+
+  /// Whether the on-screen numeric keypad (pinned to the bottom, same as
+  /// Add Expense's) is showing. Off until the amount is explicitly tapped —
+  /// never on by default, and always mutually exclusive with the source/note
+  /// fields' OS keyboard.
+  bool _amountActive = false;
 
   /// True once the form has passed validation and is showing the
   /// confirm-before-you-save summary instead of the editable fields — same
@@ -450,10 +461,34 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
   bool get _isEdit => widget.existing != null;
 
   @override
+  void initState() {
+    super.initState();
+    _sourceLabelFocusNode.addListener(() {
+      if (_sourceLabelFocusNode.hasFocus) {
+        setState(() => _amountActive = false);
+      }
+    });
+    _noteFocusNode.addListener(() {
+      if (_noteFocusNode.hasFocus) setState(() => _amountActive = false);
+    });
+  }
+
+  void _activateAmount() {
+    FocusScope.of(context).unfocus();
+    setState(() => _amountActive = true);
+  }
+
+  void _dismissKeyboards() {
+    FocusScope.of(context).unfocus();
+    setState(() => _amountActive = false);
+  }
+
+  @override
   void dispose() {
-    _amount.dispose();
     _sourceLabel.dispose();
+    _sourceLabelFocusNode.dispose();
     _note.dispose();
+    _noteFocusNode.dispose();
     super.dispose();
   }
 
@@ -474,7 +509,7 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
   /// instead of the review step waving through something the save would
   /// then reject.
   String? _validate() {
-    final amount = Money.parse(_amount.text);
+    final amount = Money.parse(_amount);
     if (amount.minor <= 0) return 'Enter an amount';
     return null;
   }
@@ -487,7 +522,10 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
       ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
-    setState(() => _reviewing = true);
+    setState(() {
+      _reviewing = true;
+      _amountActive = false;
+    });
   }
 
   Future<void> _save() async {
@@ -499,7 +537,7 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
       return;
     }
     setState(() => _saving = true);
-    final amount = Money.parse(_amount.text);
+    final amount = Money.parse(_amount);
     final repo = ref.read(ledgerRepositoryProvider);
     final sourceLabel = _sourceLabel.text.trim();
     final note = _note.text.trim();
@@ -728,14 +766,13 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
               ],
             ),
           ),
-          if (onTap != null)
-            Icon(Icons.chevron_right, color: palette.textDim),
+          if (onTap != null) Icon(Icons.chevron_right, color: palette.textDim),
         ],
       ),
     );
   }
 
-  Widget _formBody(
+  Widget _formScrollContent(
     BuildContext context,
     AppPalette palette,
     List<AccountRow> accounts,
@@ -752,27 +789,12 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
           palette: palette,
         ),
         const SizedBox(height: AppSpacing.lg),
-        TextField(
-          controller: _amount,
-          autofocus: !_isEdit,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: const TextStyle(
-            fontFamily: 'Sora',
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
-          decoration: const InputDecoration(
-            labelText: 'Amount',
-            prefixText: '₹ ',
-            prefixStyle: TextStyle(
-              fontFamily: 'Sora',
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-            border: OutlineInputBorder(),
-          ),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _activateAmount,
+          child: AmountDisplay(_amount, fontSize: 40),
         ),
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.lg),
         InkWell(
           onTap: _pickDate,
           child: InputDecorator(
@@ -812,6 +834,7 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
         const SizedBox(height: AppSpacing.md),
         TextField(
           controller: _sourceLabel,
+          focusNode: _sourceLabelFocusNode,
           decoration: const InputDecoration(
             labelText: 'Source (optional)',
             hintText: 'e.g. Salary, Freelance',
@@ -821,12 +844,37 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
         const SizedBox(height: AppSpacing.md),
         TextField(
           controller: _note,
+          focusNode: _noteFocusNode,
           decoration: const InputDecoration(
             labelText: 'Note (optional)',
             border: OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
+      ],
+    );
+  }
+
+  /// The bar pinned to the bottom of the screen (outside the scroll view,
+  /// same structural spot as Add Expense's keypad+save bar): the numeric
+  /// keypad — only while [_amountActive] — then the primary action.
+  Widget _formBottomBar() {
+    return Column(
+      children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.topCenter,
+          child: _amountActive
+              ? Column(
+                  children: [
+                    AmountKeypad(
+                      onKey: (k) =>
+                          setState(() => _amount = applyAmountKey(_amount, k)),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                )
+              : const SizedBox.shrink(),
+        ),
         PrimaryGradientButton(
           label: 'Review income',
           onPressed: _proceedToReview,
@@ -849,67 +897,60 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
   }
 
   Widget _reviewBody(AppPalette palette, AccountRow? selectedAccount) {
-    final amount = Money.parse(_amount.text);
+    final amount = Money.parse(_amount);
     final sourceLabel = _sourceLabel.text.trim();
     final note = _note.text.trim();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      sourceLabel.isEmpty ? 'Income' : sourceLabel,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Icon(Icons.arrow_forward, color: palette.textDim, size: 18),
-                  Expanded(
-                    child: Text(
-                      selectedAccount?.name ?? 'No account',
-                      textAlign: TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Center(
+              Expanded(
                 child: Text(
-                  amount.format(locale: 'en_IN'),
-                  style: const TextStyle(
-                    fontFamily: 'Sora',
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  sourceLabel.isEmpty ? 'Income' : sourceLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              _reviewLine(
-                'Date',
-                DateFormat('MMM d, yyyy').format(_date),
-                palette,
+              Icon(Icons.arrow_forward, color: palette.textDim, size: 18),
+              Expanded(
+                child: Text(
+                  selectedAccount?.name ?? 'No account',
+                  textAlign: TextAlign.end,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
-              if (!_isConfirming && _recurrence != null)
-                _reviewLine('Repeat', recurrenceLabel(_recurrence!), palette),
-              if (note.isNotEmpty) _reviewLine('Note', note, palette),
             ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        PrimaryGradientButton(
-          label: _saving ? 'Saving…' : 'Confirm income',
-          semanticLabel: _saving ? 'Saving' : 'Confirm income',
-          onPressed: _saving ? null : _save,
-        ),
-      ],
+          const SizedBox(height: AppSpacing.lg),
+          Center(
+            child: Text(
+              amount.format(locale: 'en_IN'),
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                fontSize: 32,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _reviewLine('Date', DateFormat('MMM d, yyyy').format(_date), palette),
+          if (!_isConfirming && _recurrence != null)
+            _reviewLine('Repeat', recurrenceLabel(_recurrence!), palette),
+          if (note.isNotEmpty) _reviewLine('Note', note, palette),
+        ],
+      ),
+    );
+  }
+
+  Widget _reviewBottomBar() {
+    return PrimaryGradientButton(
+      label: _saving ? 'Saving…' : 'Confirm income',
+      semanticLabel: _saving ? 'Saving' : 'Confirm income',
+      onPressed: _saving ? null : _save,
     );
   }
 
@@ -949,17 +990,32 @@ class _IncomeEditScreenState extends ConsumerState<_IncomeEditScreen> {
           children: [
             _topBar(context, palette),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xl,
-                  0,
-                  AppSpacing.xl,
-                  AppSpacing.xl,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _dismissKeyboards,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                  ),
+                  child: _reviewing
+                      ? _reviewBody(palette, selectedAccount)
+                      : _formScrollContent(
+                          context,
+                          palette,
+                          accounts,
+                          selectedAccount,
+                        ),
                 ),
-                child: _reviewing
-                    ? _reviewBody(palette, selectedAccount)
-                    : _formBody(context, palette, accounts, selectedAccount),
               ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                AppSpacing.lg,
+              ),
+              child: _reviewing ? _reviewBottomBar() : _formBottomBar(),
             ),
           ],
         ),
