@@ -716,6 +716,41 @@ void main() {
       expect(restored.openingBalance, Money.parse('-1000000'));
     });
 
+    test('merge carries isFrequent over to a newly-inserted account',
+        () async {
+      final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final sourceAccounts = AccountRepository(sourceDb);
+      final id = await sourceAccounts.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+      );
+      await sourceAccounts.setFrequent(id, true);
+      final payload = await BackupRepository(sourceDb).exportAll();
+      await sourceDb.close();
+
+      await repo.mergeAll(payload);
+
+      final account = (await db.select(db.accounts).get()).single;
+      expect(account.isFrequent, isTrue);
+    });
+
+    test('replace restores isFrequent verbatim', () async {
+      final accountRepo = AccountRepository(db);
+      final id = await accountRepo.create(
+        name: 'Car loan',
+        type: AccountType.bank,
+      );
+      await accountRepo.setFrequent(id, true);
+      final payload = await repo.exportAll();
+
+      final freshDb = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(freshDb.close);
+      await BackupRepository(freshDb).replaceAll(payload);
+
+      final restored = (await freshDb.select(freshDb.accounts).get()).single;
+      expect(restored.isFrequent, isTrue);
+    });
+
     test('merge carries a custom type over to a newly-inserted account',
         () async {
       final sourceDb = AppDatabase.forTesting(NativeDatabase.memory());

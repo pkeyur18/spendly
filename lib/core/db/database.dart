@@ -131,6 +131,15 @@ class Accounts extends Table {
   /// alongside [customTypeName].
   IntColumn get customTypeColorValue => integer().nullable()();
 
+  /// Whether this account should be offered first in every account picker
+  /// (Quick Add, Transfer, Income) once at least one account has it set
+  /// (schema v23) — independent of [isDefault]: no "at most one" invariant,
+  /// any number of accounts can be frequent, and marking/unmarking one has no
+  /// effect on the other. Cleared automatically when the account is archived
+  /// (see [AccountRepository.setArchived]), same as [isDefault] already is.
+  BoolColumn get isFrequent =>
+      boolean().withDefault(const Constant(false))();
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   TextColumn get externalId =>
       text().nullable().clientDefault(generateExternalId)();
@@ -406,7 +415,7 @@ class AppDatabase extends _$AppDatabase {
   /// three times already for exactly this reason (see the fixes this comment
   /// shipped with).
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -634,6 +643,14 @@ class AppDatabase extends _$AppDatabase {
         }
         if (!await _hasColumn('ledger_entries', 'template_only')) {
           await m.addColumn(ledgerEntries, ledgerEntries.templateOnly);
+        }
+      }
+      if (from < 23) {
+        // Additive, defaults false — safe on populated tables, no backfill:
+        // every pre-v23 account simply starts out not-frequent, same as it
+        // already reads today with no such concept.
+        if (!await _hasColumn('accounts', 'is_frequent')) {
+          await m.addColumn(accounts, accounts.isFrequent);
         }
       }
     },

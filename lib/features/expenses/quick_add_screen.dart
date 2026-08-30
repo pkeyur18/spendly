@@ -738,7 +738,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   /// sheet — same pattern as [_noTripChoice].
   static const _noAccountChoice = -1;
 
+  /// Frequent-first (schema v23): opens showing only accounts marked
+  /// [AccountRow.isFrequent] (plus the currently-chosen account, if any and
+  /// not itself frequent, so an existing pick is never hidden) once at least
+  /// one exists, with a trailing "See all accounts" row that expands the
+  /// list in place. With none marked frequent, unchanged — every active
+  /// account shows straight away, same as before this existed.
   Future<void> _openAccountPicker(List<AccountRow> accounts) async {
+    final frequent = accounts.where((a) => a.isFrequent).toList();
+    var showAll = frequent.isEmpty;
     final chosen = await showGlassSheet<int?>(
       context,
       builder: (sheetContext) => SafeArea(
@@ -746,80 +754,114 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(AppSpacing.lg),
-                child: Text('Account'),
-              ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: accounts.length + 2,
-                  itemBuilder: (context, i) {
-                    if (i == 0) {
-                      return ListTile(
-                        leading: const Icon(
-                          Icons.add,
-                          size: 20,
-                          color: AppColors.primary,
-                        ),
-                        title: const Text(
-                          '+ New account',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        onTap: () async {
-                          Navigator.of(sheetContext).pop();
-                          final result = await showAccountEditSheet(context);
-                          if (result != null && mounted) {
-                            setState(() {
-                              _accountId = result.id;
-                              _touched = true;
-                            });
-                          }
-                        },
-                      );
-                    }
-                    if (i == 1) {
-                      return ListTile(
-                        leading: const Icon(Icons.close, size: 20),
-                        title: const Text('No account'),
-                        trailing: _accountId == null
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: AppColors.primary,
-                                size: 18,
-                              )
-                            : null,
-                        onTap: () => Navigator.of(
-                          sheetContext,
-                        ).pop<int?>(_noAccountChoice),
-                      );
-                    }
-                    final a = accounts[i - 2];
-                    return ListTile(
-                      leading: const Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: 20,
-                      ),
-                      title: Text(a.name),
-                      trailing: a.id == _accountId
-                          ? const Icon(
-                              Icons.check_circle,
+          child: StatefulBuilder(
+            builder: (context, setSheetState) {
+              final selectedAccount = _accountId == null
+                  ? null
+                  : accounts
+                        .where((a) => a.id == _accountId)
+                        .cast<AccountRow?>()
+                        .firstOrNull;
+              final options = showAll
+                  ? accounts
+                  : [
+                      ...frequent,
+                      if (selectedAccount != null &&
+                          !selectedAccount.isFrequent)
+                        selectedAccount,
+                    ];
+              final showSeeAll = !showAll && options.length < accounts.length;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(AppSpacing.lg),
+                    child: Text('Account'),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount:
+                          options.length + 2 + (showSeeAll ? 1 : 0),
+                      itemBuilder: (context, i) {
+                        if (i == 0) {
+                          return ListTile(
+                            leading: const Icon(
+                              Icons.add,
+                              size: 20,
                               color: AppColors.primary,
-                              size: 18,
-                            )
-                          : null,
-                      onTap: () => Navigator.of(sheetContext).pop<int?>(a.id),
-                    );
-                  },
-                ),
-              ),
-            ],
+                            ),
+                            title: const Text(
+                              '+ New account',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            onTap: () async {
+                              Navigator.of(sheetContext).pop();
+                              final result = await showAccountEditSheet(
+                                context,
+                              );
+                              if (result != null && mounted) {
+                                setState(() {
+                                  _accountId = result.id;
+                                  _touched = true;
+                                });
+                              }
+                            },
+                          );
+                        }
+                        if (i == 1) {
+                          return ListTile(
+                            leading: const Icon(Icons.close, size: 20),
+                            title: const Text('No account'),
+                            trailing: _accountId == null
+                                ? const Icon(
+                                    Icons.check_circle,
+                                    color: AppColors.primary,
+                                    size: 18,
+                                  )
+                                : null,
+                            onTap: () => Navigator.of(
+                              sheetContext,
+                            ).pop<int?>(_noAccountChoice),
+                          );
+                        }
+                        final optionIndex = i - 2;
+                        if (optionIndex >= options.length) {
+                          return ListTile(
+                            leading: const Icon(
+                              Icons.expand_more_rounded,
+                              size: 20,
+                            ),
+                            title: const Text('See all accounts'),
+                            onTap: () => setSheetState(() => showAll = true),
+                          );
+                        }
+                        final a = options[optionIndex];
+                        return ListTile(
+                          leading: const Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 20,
+                          ),
+                          title: Text(a.name),
+                          trailing: a.id == _accountId
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: AppColors.primary,
+                                  size: 18,
+                                )
+                              : null,
+                          onTap: () =>
+                              Navigator.of(sheetContext).pop<int?>(a.id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

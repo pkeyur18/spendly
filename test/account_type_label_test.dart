@@ -18,6 +18,7 @@ AccountRow _account({
   customTypeName: customTypeName,
   customTypeIcon: null,
   customTypeColorValue: null,
+  isFrequent: false,
   externalId: null,
 );
 

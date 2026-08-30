@@ -23,6 +23,11 @@ bool shouldShowBudgetNudge({
   return now.day > daysInMonth - 3;
 }
 
+/// The current time, as seen by [budgetNudgeCheckProvider] — overridden in
+/// tests so the "last 3 days of the month" gate doesn't depend on the day
+/// the test happens to run on.
+final budgetNudgeClockProvider = Provider<DateTime>((ref) => DateTime.now());
+
 /// Runs the once-per-calendar-month "nudge to set next month's budget" check
 /// on app launch/resume — same shape as `monthlyRecapCheckProvider`
 /// (`features/recap/recap_providers.dart`), invalidated on resume in
@@ -32,7 +37,7 @@ bool shouldShowBudgetNudge({
 /// notification.
 final budgetNudgeCheckProvider = FutureProvider<void>((ref) async {
   final settings = ref.watch(settingsRepositoryProvider);
-  final now = DateTime.now();
+  final now = ref.watch(budgetNudgeClockProvider);
   final currentKey = monthKeyFor(now);
   final lastNudged = await settings.get(
     SettingsRepository.lastBudgetNudgeMonthKey,

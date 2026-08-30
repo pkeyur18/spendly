@@ -6,6 +6,8 @@ import 'package:spendly/core/db/providers.dart';
 import 'package:spendly/features/budgets/budget_nudge_provider.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('shouldShowBudgetNudge (pure predicate)', () {
     test('false outside the last 3 days of the month', () {
       expect(
@@ -70,7 +72,12 @@ void main() {
     setUp(() {
       db = AppDatabase.forTesting(NativeDatabase.memory());
       container = ProviderContainer(
-        overrides: [databaseProvider.overrideWithValue(db)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          // Fixed well outside the last-3-days window so this test doesn't
+          // depend on which day of the month it happens to run.
+          budgetNudgeClockProvider.overrideWithValue(DateTime(2026, 8, 20)),
+        ],
       );
     });
     tearDown(() {

@@ -587,6 +587,20 @@ Additive on both tables, no version bump, same pattern as every field above it.
 A pre-v22 file has no `templateOnly` key at all. `fromJson` reads it as `false` on both
 tables — matching every pre-v22 row, none of which were a dedicated template.
 
+## Additive field — `isFrequent` on accounts (schema v23)
+
+Whether an account is offered first in every account picker once at least one account has
+it set. Independent of `isDefault` — no "at most one" invariant, same additive,
+no-version-bump shape as `includeInNetWorth`/`isLiability`.
+
+- **Replace** restores it verbatim, same as `includeInNetWorth`/`isLiability`.
+- **Merge** restores it verbatim too on a newly-inserted account — no invariant to protect,
+  same reasoning. A matched (already-present) account's `isFrequent` is left untouched,
+  same as any other field on a matched row.
+
+A pre-v23 file has no `isFrequent` key. `BackupAccount.fromJson` reads a missing key as
+`false` — matching every pre-v23 account, none of which had this concept.
+
 ## App Lock is never in the payload
 
 Whether App Lock is turned on (`app_lock_enabled` in `Settings`) is excluded from export

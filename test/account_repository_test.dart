@@ -314,6 +314,71 @@ void main() {
     });
   });
 
+  group('isFrequent', () {
+    test('create defaults to false', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      expect((await accounts.byId(id))!.isFrequent, isFalse);
+    });
+
+    test('setFrequent flips it either way', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.setFrequent(id, true);
+      expect((await accounts.byId(id))!.isFrequent, isTrue);
+      await accounts.setFrequent(id, false);
+      expect((await accounts.byId(id))!.isFrequent, isFalse);
+    });
+
+    test('any number of accounts can be frequent at once', () async {
+      final first = await accounts.create(name: 'Cash', type: AccountType.cash);
+      final second = await accounts.create(
+        name: 'Bank',
+        type: AccountType.bank,
+      );
+      await accounts.setFrequent(first, true);
+      await accounts.setFrequent(second, true);
+      expect((await accounts.byId(first))!.isFrequent, isTrue);
+      expect((await accounts.byId(second))!.isFrequent, isTrue);
+    });
+
+    test('is independent of isDefault', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      // create() makes the first account default automatically.
+      expect((await accounts.byId(id))!.isDefault, isTrue);
+      expect((await accounts.byId(id))!.isFrequent, isFalse);
+      await accounts.setFrequent(id, true);
+      expect((await accounts.byId(id))!.isDefault, isTrue);
+      expect((await accounts.byId(id))!.isFrequent, isTrue);
+    });
+
+    test('archiving a frequent account clears the flag', () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.setFrequent(id, true);
+      await accounts.setArchived(id, true);
+      expect((await accounts.byId(id))!.isFrequent, isFalse);
+    });
+
+    test('unarchiving does not restore the frequent flag on its own',
+        () async {
+      final id = await accounts.create(name: 'Cash', type: AccountType.cash);
+      await accounts.setFrequent(id, true);
+      await accounts.setArchived(id, true);
+      await accounts.setArchived(id, false);
+      expect((await accounts.byId(id))!.isFrequent, isFalse);
+    });
+
+    test('archiving a non-frequent account leaves other accounts\' flags '
+        'alone', () async {
+      final frequent = await accounts.create(
+        name: 'Cash',
+        type: AccountType.cash,
+      );
+      final other = await accounts.create(name: 'Bank', type: AccountType.bank);
+      await accounts.setFrequent(frequent, true);
+      await accounts.setArchived(other, true);
+      expect((await accounts.byId(frequent))!.isFrequent, isTrue);
+    });
+  });
+
   group('custom account type', () {
     test('create persists name, icon and color', () async {
       final id = await accounts.create(

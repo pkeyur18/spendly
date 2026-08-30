@@ -160,10 +160,11 @@ class _AccountTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = Theme.of(context).extension<AppPalette>()!;
+    final showSpend = spentThisMonth != null && spentThisMonth!.minor > 0;
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: AppCard(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => AccountDetailScreen(account: account),
@@ -171,67 +172,101 @@ class _AccountTile extends ConsumerWidget {
         ),
         child: Opacity(
           opacity: account.isArchived ? 0.5 : 1,
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _AccountTypeIcon(account: account),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      account.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+              Row(
+                children: [
+                  _AccountTypeIcon(account: account),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          account.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          account.isDefault
+                              ? '${accountTypeLabel(account)} · Default'
+                              : accountTypeLabel(account),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: palette.textDim,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      account.isDefault
-                          ? '${accountTypeLabel(account)} · Default'
-                          : accountTypeLabel(account),
-                      style: TextStyle(fontSize: 12, color: palette.textDim),
+                  ),
+                  if (!account.isArchived) ...[
+                    IconButton(
+                      tooltip: account.isFrequent
+                          ? 'Frequently used'
+                          : 'Mark as frequently used',
+                      icon: Icon(
+                        account.isFrequent
+                            ? Icons.push_pin_rounded
+                            : Icons.push_pin_outlined,
+                        color: account.isFrequent
+                            ? AppColors.accent
+                            : palette.textDim,
+                        size: 22,
+                      ),
+                      onPressed: () => ref
+                          .read(accountRepositoryProvider)
+                          .setFrequent(account.id, !account.isFrequent),
+                    ),
+                    IconButton(
+                      tooltip: account.isDefault
+                          ? 'Default account'
+                          : 'Set as default',
+                      icon: Icon(
+                        account.isDefault
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        color: account.isDefault
+                            ? AppColors.accent
+                            : palette.textDim,
+                        size: 22,
+                      ),
+                      onPressed: account.isDefault
+                          ? null
+                          : () => ref
+                                .read(accountRepositoryProvider)
+                                .setDefault(account.id),
                     ),
                   ],
-                ),
+                ],
               ),
-              if (spentThisMonth != null && spentThisMonth!.minor > 0)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+              if (showSpend) ...[
+                const SizedBox(height: AppSpacing.md),
+                Divider(height: 1, color: palette.line),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    Text(
+                      'Spent this month',
+                      style: TextStyle(fontSize: 12.5, color: palette.textDim),
+                    ),
                     Text(
                       spentThisMonth!.format(locale: 'en_IN'),
                       style: const TextStyle(
                         fontFamily: 'Sora',
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Text(
-                      'this month',
-                      style: TextStyle(fontSize: 11, color: palette.textDim),
-                    ),
                   ],
                 ),
-              if (!account.isArchived)
-                IconButton(
-                  tooltip: account.isDefault
-                      ? 'Default account'
-                      : 'Set as default',
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(
-                    account.isDefault
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: account.isDefault
-                        ? AppColors.accent
-                        : palette.textDim,
-                    size: 20,
-                  ),
-                  onPressed: account.isDefault
-                      ? null
-                      : () => ref
-                            .read(accountRepositoryProvider)
-                            .setDefault(account.id),
-                ),
+              ],
             ],
           ),
         ),
@@ -253,28 +288,30 @@ class _AccountTypeIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = account.customTypeIcon;
     final colorValue = account.customTypeColorValue;
-    if (account.type == AccountType.custom && icon != null && colorValue != null) {
+    if (account.type == AccountType.custom &&
+        icon != null &&
+        colorValue != null) {
       final color = Color(colorValue);
       return Container(
-        width: 40,
-        height: 40,
+        width: 46,
+        height: 46,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(AppRadius.icon),
         ),
         alignment: Alignment.center,
-        child: CategoryGlyph(icon, size: 20),
+        child: CategoryGlyph(icon, size: 22),
       );
     }
     return Container(
-      width: 40,
-      height: 40,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadius.icon),
       ),
       alignment: Alignment.center,
-      child: Icon(_typeIcon(account.type), size: 20, color: AppColors.primary),
+      child: Icon(_typeIcon(account.type), size: 22, color: AppColors.primary),
     );
   }
 }
@@ -435,111 +472,114 @@ class _AccountEditSheetState extends ConsumerState<_AccountEditSheet> {
       child: SafeArea(
         child: SingleChildScrollView(
           child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _isEdit ? 'Edit account' : 'Add account',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: _name,
-              autofocus: !_isEdit,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'e.g. HDFC Bank, Cash',
-                border: OutlineInputBorder(),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _isEdit ? 'Edit account' : 'Add account',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.sm,
-              children: [
-                for (final t in AccountType.values)
-                  ChoiceChip(
-                    label: Text(_typeLabel(t)),
-                    selected: _type == t,
-                    onSelected: (_) => setState(() => _type = t),
-                  ),
-              ],
-            ),
-            if (_type == AccountType.custom) ...[
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
               TextField(
-                controller: _customTypeName,
-                textCapitalization: TextCapitalization.words,
+                controller: _name,
+                autofocus: !_isEdit,
                 decoration: const InputDecoration(
-                  labelText: 'Type name',
-                  hintText: 'e.g. Loan, Gold, Investment',
+                  labelText: 'Name',
+                  hintText: 'e.g. HDFC Bank, Cash',
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              IconColorPicker(
-                iconChoices: _accountIconChoices,
-                selectedIcon: _customTypeIcon,
-                onIconChanged: (v) => setState(() => _customTypeIcon = v),
-                colorChoices: AppColors.swatchPalette,
-                selectedColor: _customTypeColorValue,
-                onColorChanged: (v) =>
-                    setState(() => _customTypeColorValue = v),
+              Wrap(
+                spacing: AppSpacing.sm,
+                children: [
+                  for (final t in AccountType.values)
+                    ChoiceChip(
+                      label: Text(_typeLabel(t)),
+                      selected: _type == t,
+                      onSelected: (_) => setState(() => _type = t),
+                    ),
+                ],
               ),
-            ],
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: _infoLabel(
-                context,
-                'This is money I owe',
-                'Loan, credit card debt — opening balance below is stored '
-                    'as a negative running balance',
-              ),
-              value: _isLiability,
-              onChanged: (v) => setState(() => _isLiability = v),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _openingBalance,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: _isLiability ? 'Amount owed' : 'Opening balance',
-                prefixText: '₹ ',
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: _infoLabel(
-                context,
-                'Count toward net worth total',
-                "Include this account in the home screen's balance",
-              ),
-              value: _includeInNetWorth,
-              onChanged: (v) => setState(() => _includeInNetWorth = v),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            PrimaryGradientButton(
-              label: _saving ? 'Saving…' : 'Save',
-              semanticLabel: _isEdit ? 'Save account' : 'Add account',
-              onPressed: _saving ? null : _save,
-            ),
-            if (_isEdit) ...[
-              const SizedBox(height: AppSpacing.sm),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => _archive(!widget.existing!.isArchived),
-                  child: Text(
-                    widget.existing!.isArchived
-                        ? 'Unarchive'
-                        : 'Archive this account',
+              if (_type == AccountType.custom) ...[
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: _customTypeName,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Type name',
+                    hintText: 'e.g. Loan, Gold, Investment',
+                    border: OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: AppSpacing.md),
+                IconColorPicker(
+                  iconChoices: _accountIconChoices,
+                  selectedIcon: _customTypeIcon,
+                  onIconChanged: (v) => setState(() => _customTypeIcon = v),
+                  colorChoices: AppColors.swatchPalette,
+                  selectedColor: _customTypeColorValue,
+                  onColorChanged: (v) =>
+                      setState(() => _customTypeColorValue = v),
+                ),
+              ],
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: _infoLabel(
+                  context,
+                  'This is money I owe',
+                  'Loan, credit card debt — opening balance below is stored '
+                      'as a negative running balance',
+                ),
+                value: _isLiability,
+                onChanged: (v) => setState(() => _isLiability = v),
               ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _openingBalance,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: _isLiability ? 'Amount owed' : 'Opening balance',
+                  prefixText: '₹ ',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: _infoLabel(
+                  context,
+                  'Count toward net worth total',
+                  "Include this account in the home screen's balance",
+                ),
+                value: _includeInNetWorth,
+                onChanged: (v) => setState(() => _includeInNetWorth = v),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              PrimaryGradientButton(
+                label: _saving ? 'Saving…' : 'Save',
+                semanticLabel: _isEdit ? 'Save account' : 'Add account',
+                onPressed: _saving ? null : _save,
+              ),
+              if (_isEdit) ...[
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => _archive(!widget.existing!.isArchived),
+                    child: Text(
+                      widget.existing!.isArchived
+                          ? 'Unarchive'
+                          : 'Archive this account',
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
           ),
         ),
       ),

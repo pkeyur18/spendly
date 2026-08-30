@@ -133,13 +133,26 @@ class AccountRepository {
   /// (hidden from every picker) must never stay "the" default; there is
   /// deliberately no rule for what becomes default in its place, since
   /// picking one automatically could silently redirect future expenses onto
-  /// an account the user never chose.
+  /// an account the user never chose. Same reasoning clears
+  /// [AccountRow.isFrequent] (schema v23): every picker already hides
+  /// archived accounts, so a lingering frequent flag would only resurface
+  /// confusingly if the account is ever unarchived.
   Future<void> setArchived(int id, bool archived) {
     return (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
       AccountsCompanion(
         isArchived: Value(archived),
         isDefault: archived ? const Value(false) : const Value.absent(),
+        isFrequent: archived ? const Value(false) : const Value.absent(),
       ),
+    );
+  }
+
+  /// Toggles [AccountRow.isFrequent] for one account (schema v23) — unlike
+  /// [setDefault], no other row is touched: any number of accounts can be
+  /// frequent at once, so this is a plain single-row update.
+  Future<void> setFrequent(int id, bool value) {
+    return (_db.update(_db.accounts)..where((t) => t.id.equals(id))).write(
+      AccountsCompanion(isFrequent: Value(value)),
     );
   }
 
@@ -186,6 +199,15 @@ final accountsByIdProvider = Provider<Map<int, AccountRow>>((ref) {
 final activeAccountsProvider = StreamProvider<List<AccountRow>>(
   (ref) => ref.watch(accountRepositoryProvider).watchActive(),
 );
+
+/// Active accounts marked frequently-used (schema v23), in the same
+/// alphabetical order [activeAccountsProvider] already returns — derived
+/// client-side, same pattern as [accountsByIdProvider], since no new DB
+/// query is needed for a plain filter over an already-watched list.
+final frequentAccountsProvider = Provider<List<AccountRow>>((ref) {
+  final active = ref.watch(activeAccountsProvider).value ?? const [];
+  return active.where((a) => a.isFrequent).toList();
+});
 
 /// One-shot, not watched: Quick Add reads this once on open (see
 /// [_loadReceipt]'s doc comment for why an async fetch, not a synchronous
