@@ -43,7 +43,7 @@ void main() {
       if (!exception.toString().contains(
         'ListTile background color or ink splashes may be invisible',
       )) {
-        throw exception;
+        throw exception!;
       }
     }
   }
