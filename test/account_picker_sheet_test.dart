@@ -16,7 +16,7 @@ import 'package:spendly/features/accounts/account_repository.dart';
 void main() {
   late AppDatabase db;
   late AccountRepository accounts;
-  late FlutterExceptionHandler? previousOnError;
+  late void Function(FlutterErrorDetails)? previousOnError;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
