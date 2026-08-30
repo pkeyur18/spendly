@@ -32,32 +32,30 @@ void main() {
   // The sheet's ListTiles sit inside GlassSurface's decorated Container with
   // no Material boundary in between — a pre-existing, cosmetic-only
   // rendering assertion ("ListTile background color or ink splashes may be
-  // invisible") unrelated to the filtering/selection logic under test here.
-  // Every rebuild of the list (opening the sheet, expanding "See all
-  // accounts", etc.) re-throws it, so it's drained via takeException at the
-  // end of each test rather than fixed (test-only change) — asserting
-  // through any OTHER exception still fails the test normally.
-  void expectOnlyKnownListTileGlassAssertions(WidgetTester tester) {
-    Object? exception;
-    while ((exception = tester.takeException()) != null) {
-      if (!exception.toString().contains(
+  // invisible") unrelated to the filtering/selection logic under test here,
+  // and one that fires once per rendered ListTile (multiple per pump), which
+  // rules out draining via WidgetTester.takeException — it throws its own
+  // "multiple exceptions" failure the moment 2+ are already pending rather
+  // than returning them one at a time. Intercepted at the source instead:
+  // installed here, at the very start of a test body (never in
+  // setUp/tearDown — TestWidgetsFlutterBinding installs its own
+  // FlutterError.onError when the test body starts, which runs after setUp
+  // and would clobber a handler installed there), so each matching error is
+  // discarded the moment it's reported and never reaches the binding's own
+  // pending-exception bookkeeping at all. addTearDown restores the previous
+  // handler once this specific test ends. Any other exception is passed
+  // through to the previous handler exactly as if this were never here.
+  void ignoreKnownListTileGlassAssertion() {
+    final previous = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.exceptionAsString().contains(
         'ListTile background color or ink splashes may be invisible',
       )) {
-        throw exception!;
+        return;
       }
-    }
-  }
-
-  // Wraps testWidgets so every test drains the known assertion above right
-  // before it ends, without repeating that call in each test body.
-  void pickerTest(
-    String description,
-    Future<void> Function(WidgetTester tester) body,
-  ) {
-    testWidgets(description, (tester) async {
-      await body(tester);
-      expectOnlyKnownListTileGlassAssertions(tester);
-    });
+      previous?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previous);
   }
 
   // showAccountPickerSheet's Future only resolves once the sheet is popped,
@@ -70,6 +68,7 @@ void main() {
     bool allowNone = true,
     Set<int> exclude = const {},
   }) async {
+    ignoreKnownListTileGlassAssertion();
     final holder = _PickResult();
     await tester.pumpWidget(
       MaterialApp(
@@ -97,7 +96,7 @@ void main() {
     return holder;
   }
 
-  pickerTest(
+  testWidgets(
     'with no frequent accounts, every account shows straight away and '
     'tapping one resolves with its id',
     (tester) async {
@@ -120,7 +119,7 @@ void main() {
     },
   );
 
-  pickerTest(
+  testWidgets(
     'with a frequent account present, only frequent accounts show at '
     'first, expanding via "See all accounts" reveals the rest',
     (tester) async {
@@ -142,7 +141,7 @@ void main() {
     },
   );
 
-  pickerTest('an excluded account id is never shown', (tester) async {
+  testWidgets('an excluded account id is never shown', (tester) async {
     final cash = await seed('Cash Wallet');
     final bank = await seed('HDFC Bank');
 
@@ -156,7 +155,7 @@ void main() {
     expect(find.text('HDFC Bank'), findsOneWidget);
   });
 
-  pickerTest('allowNone: false hides the "No account" row', (tester) async {
+  testWidgets('allowNone: false hides the "No account" row', (tester) async {
     final cash = await seed('Cash Wallet');
 
     await openPicker(tester, accountList: [cash], allowNone: false);
@@ -164,7 +163,7 @@ void main() {
     expect(find.text('No account'), findsNothing);
   });
 
-  pickerTest(
+  testWidgets(
     'tapping "No account" resolves to the noAccountChoice sentinel',
     (tester) async {
       final cash = await seed('Cash Wallet');
