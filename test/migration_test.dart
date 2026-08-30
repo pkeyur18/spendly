@@ -303,5 +303,10 @@ void main() {
     expect(expense.templateOnly, isFalse);
     expect(recurring.templateOnly, isFalse);
     expect(entry.templateOnly, isFalse);
+
+    // from<23: same createTable trap once more — is_frequent defaults
+    // false, same as any pre-v23 account (none of which had this concept)
+    // would read once upgraded.
+    expect(reloadedAccounts.single.isFrequent, isFalse);
   });
 }

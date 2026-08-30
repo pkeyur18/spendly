@@ -729,6 +729,21 @@ class $AccountsTable extends Accounts
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isFrequentMeta = const VerificationMeta(
+    'isFrequent',
+  );
+  @override
+  late final GeneratedColumn<bool> isFrequent = GeneratedColumn<bool>(
+    'is_frequent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_frequent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _externalIdMeta = const VerificationMeta(
     'externalId',
   );
@@ -755,6 +770,7 @@ class $AccountsTable extends Accounts
     customTypeName,
     customTypeIcon,
     customTypeColorValue,
+    isFrequent,
     externalId,
   ];
   @override
@@ -855,6 +871,12 @@ class $AccountsTable extends Accounts
         ),
       );
     }
+    if (data.containsKey('is_frequent')) {
+      context.handle(
+        _isFrequentMeta,
+        isFrequent.isAcceptableOrUnknown(data['is_frequent']!, _isFrequentMeta),
+      );
+    }
     if (data.containsKey('external_id')) {
       context.handle(
         _externalIdMeta,
@@ -920,6 +942,10 @@ class $AccountsTable extends Accounts
         DriftSqlType.int,
         data['${effectivePrefix}custom_type_color_value'],
       ),
+      isFrequent: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_frequent'],
+      )!,
       externalId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}external_id'],
@@ -992,6 +1018,14 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// alongside [customTypeName].
   final int? customTypeColorValue;
 
+  /// Whether this account should be offered first in every account picker
+  /// (Quick Add, Transfer, Income) once at least one account has it set
+  /// (schema v23) — independent of [isDefault]: no "at most one" invariant,
+  /// any number of accounts can be frequent, and marking/unmarking one has no
+  /// effect on the other. Cleared automatically when the account is archived
+  /// (see [AccountRepository.setArchived]), same as [isDefault] already is.
+  final bool isFrequent;
+
   /// Stable cross-device/cross-backup identity — see `docs/backup-schema.md`.
   final String? externalId;
   const AccountRow({
@@ -1007,6 +1041,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     this.customTypeName,
     this.customTypeIcon,
     this.customTypeColorValue,
+    required this.isFrequent,
     this.externalId,
   });
   @override
@@ -1034,6 +1069,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     if (!nullToAbsent || customTypeColorValue != null) {
       map['custom_type_color_value'] = Variable<int>(customTypeColorValue);
     }
+    map['is_frequent'] = Variable<bool>(isFrequent);
     if (!nullToAbsent || externalId != null) {
       map['external_id'] = Variable<String>(externalId);
     }
@@ -1062,6 +1098,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       customTypeColorValue: customTypeColorValue == null && nullToAbsent
           ? const Value.absent()
           : Value(customTypeColorValue),
+      isFrequent: Value(isFrequent),
       externalId: externalId == null && nullToAbsent
           ? const Value.absent()
           : Value(externalId),
@@ -1094,6 +1131,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       customTypeColorValue: serializer.fromJson<int?>(
         json['customTypeColorValue'],
       ),
+      isFrequent: serializer.fromJson<bool>(json['isFrequent']),
       externalId: serializer.fromJson<String?>(json['externalId']),
     );
   }
@@ -1115,6 +1153,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       'customTypeName': serializer.toJson<String?>(customTypeName),
       'customTypeIcon': serializer.toJson<String?>(customTypeIcon),
       'customTypeColorValue': serializer.toJson<int?>(customTypeColorValue),
+      'isFrequent': serializer.toJson<bool>(isFrequent),
       'externalId': serializer.toJson<String?>(externalId),
     };
   }
@@ -1132,6 +1171,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     Value<String?> customTypeName = const Value.absent(),
     Value<String?> customTypeIcon = const Value.absent(),
     Value<int?> customTypeColorValue = const Value.absent(),
+    bool? isFrequent,
     Value<String?> externalId = const Value.absent(),
   }) => AccountRow(
     id: id ?? this.id,
@@ -1154,6 +1194,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     customTypeColorValue: customTypeColorValue.present
         ? customTypeColorValue.value
         : this.customTypeColorValue,
+    isFrequent: isFrequent ?? this.isFrequent,
     externalId: externalId.present ? externalId.value : this.externalId,
   );
   AccountRow copyWithCompanion(AccountsCompanion data) {
@@ -1186,6 +1227,9 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
       customTypeColorValue: data.customTypeColorValue.present
           ? data.customTypeColorValue.value
           : this.customTypeColorValue,
+      isFrequent: data.isFrequent.present
+          ? data.isFrequent.value
+          : this.isFrequent,
       externalId: data.externalId.present
           ? data.externalId.value
           : this.externalId,
@@ -1207,6 +1251,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           ..write('customTypeName: $customTypeName, ')
           ..write('customTypeIcon: $customTypeIcon, ')
           ..write('customTypeColorValue: $customTypeColorValue, ')
+          ..write('isFrequent: $isFrequent, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -1226,6 +1271,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
     customTypeName,
     customTypeIcon,
     customTypeColorValue,
+    isFrequent,
     externalId,
   );
   @override
@@ -1244,6 +1290,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
           other.customTypeName == this.customTypeName &&
           other.customTypeIcon == this.customTypeIcon &&
           other.customTypeColorValue == this.customTypeColorValue &&
+          other.isFrequent == this.isFrequent &&
           other.externalId == this.externalId);
 }
 
@@ -1260,6 +1307,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
   final Value<String?> customTypeName;
   final Value<String?> customTypeIcon;
   final Value<int?> customTypeColorValue;
+  final Value<bool> isFrequent;
   final Value<String?> externalId;
   const AccountsCompanion({
     this.id = const Value.absent(),
@@ -1274,6 +1322,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.customTypeName = const Value.absent(),
     this.customTypeIcon = const Value.absent(),
     this.customTypeColorValue = const Value.absent(),
+    this.isFrequent = const Value.absent(),
     this.externalId = const Value.absent(),
   });
   AccountsCompanion.insert({
@@ -1289,6 +1338,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     this.customTypeName = const Value.absent(),
     this.customTypeIcon = const Value.absent(),
     this.customTypeColorValue = const Value.absent(),
+    this.isFrequent = const Value.absent(),
     this.externalId = const Value.absent(),
   }) : name = Value(name),
        type = Value(type);
@@ -1305,6 +1355,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Expression<String>? customTypeName,
     Expression<String>? customTypeIcon,
     Expression<int>? customTypeColorValue,
+    Expression<bool>? isFrequent,
     Expression<String>? externalId,
   }) {
     return RawValuesInsertable({
@@ -1323,6 +1374,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       if (customTypeIcon != null) 'custom_type_icon': customTypeIcon,
       if (customTypeColorValue != null)
         'custom_type_color_value': customTypeColorValue,
+      if (isFrequent != null) 'is_frequent': isFrequent,
       if (externalId != null) 'external_id': externalId,
     });
   }
@@ -1340,6 +1392,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
     Value<String?>? customTypeName,
     Value<String?>? customTypeIcon,
     Value<int?>? customTypeColorValue,
+    Value<bool>? isFrequent,
     Value<String?>? externalId,
   }) {
     return AccountsCompanion(
@@ -1355,6 +1408,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
       customTypeName: customTypeName ?? this.customTypeName,
       customTypeIcon: customTypeIcon ?? this.customTypeIcon,
       customTypeColorValue: customTypeColorValue ?? this.customTypeColorValue,
+      isFrequent: isFrequent ?? this.isFrequent,
       externalId: externalId ?? this.externalId,
     );
   }
@@ -1404,6 +1458,9 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
         customTypeColorValue.value,
       );
     }
+    if (isFrequent.present) {
+      map['is_frequent'] = Variable<bool>(isFrequent.value);
+    }
     if (externalId.present) {
       map['external_id'] = Variable<String>(externalId.value);
     }
@@ -1425,6 +1482,7 @@ class AccountsCompanion extends UpdateCompanion<AccountRow> {
           ..write('customTypeName: $customTypeName, ')
           ..write('customTypeIcon: $customTypeIcon, ')
           ..write('customTypeColorValue: $customTypeColorValue, ')
+          ..write('isFrequent: $isFrequent, ')
           ..write('externalId: $externalId')
           ..write(')'))
         .toString();
@@ -6064,6 +6122,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
       Value<String?> customTypeName,
       Value<String?> customTypeIcon,
       Value<int?> customTypeColorValue,
+      Value<bool> isFrequent,
       Value<String?> externalId,
     });
 typedef $$AccountsTableUpdateCompanionBuilder =
@@ -6080,6 +6139,7 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String?> customTypeName,
       Value<String?> customTypeIcon,
       Value<int?> customTypeColorValue,
+      Value<bool> isFrequent,
       Value<String?> externalId,
     });
 
@@ -6173,6 +6233,11 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<int> get customTypeColorValue => $composableBuilder(
     column: $table.customTypeColorValue,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isFrequent => $composableBuilder(
+    column: $table.isFrequent,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6276,6 +6341,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isFrequent => $composableBuilder(
+    column: $table.isFrequent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get externalId => $composableBuilder(
     column: $table.externalId,
     builder: (column) => ColumnOrderings(column),
@@ -6340,6 +6410,11 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<int> get customTypeColorValue => $composableBuilder(
     column: $table.customTypeColorValue,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isFrequent => $composableBuilder(
+    column: $table.isFrequent,
     builder: (column) => column,
   );
 
@@ -6414,6 +6489,7 @@ class $$AccountsTableTableManager
                 Value<String?> customTypeName = const Value.absent(),
                 Value<String?> customTypeIcon = const Value.absent(),
                 Value<int?> customTypeColorValue = const Value.absent(),
+                Value<bool> isFrequent = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
@@ -6428,6 +6504,7 @@ class $$AccountsTableTableManager
                 customTypeName: customTypeName,
                 customTypeIcon: customTypeIcon,
                 customTypeColorValue: customTypeColorValue,
+                isFrequent: isFrequent,
                 externalId: externalId,
               ),
           createCompanionCallback:
@@ -6444,6 +6521,7 @@ class $$AccountsTableTableManager
                 Value<String?> customTypeName = const Value.absent(),
                 Value<String?> customTypeIcon = const Value.absent(),
                 Value<int?> customTypeColorValue = const Value.absent(),
+                Value<bool> isFrequent = const Value.absent(),
                 Value<String?> externalId = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
@@ -6458,6 +6536,7 @@ class $$AccountsTableTableManager
                 customTypeName: customTypeName,
                 customTypeIcon: customTypeIcon,
                 customTypeColorValue: customTypeColorValue,
+                isFrequent: isFrequent,
                 externalId: externalId,
               ),
           withReferenceMapper: (p0) => p0

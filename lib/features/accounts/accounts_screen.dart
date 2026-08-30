@@ -211,7 +211,25 @@ class _AccountTile extends ConsumerWidget {
                     ),
                   ],
                 ),
-              if (!account.isArchived)
+              if (!account.isArchived) ...[
+                IconButton(
+                  tooltip: account.isFrequent
+                      ? 'Frequently used'
+                      : 'Mark as frequently used',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    account.isFrequent
+                        ? Icons.push_pin_rounded
+                        : Icons.push_pin_outlined,
+                    color: account.isFrequent
+                        ? AppColors.accent
+                        : palette.textDim,
+                    size: 20,
+                  ),
+                  onPressed: () => ref
+                      .read(accountRepositoryProvider)
+                      .setFrequent(account.id, !account.isFrequent),
+                ),
                 IconButton(
                   tooltip: account.isDefault
                       ? 'Default account'
@@ -232,6 +250,7 @@ class _AccountTile extends ConsumerWidget {
                             .read(accountRepositoryProvider)
                             .setDefault(account.id),
                 ),
+              ],
             ],
           ),
         ),

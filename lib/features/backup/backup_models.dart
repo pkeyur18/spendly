@@ -122,6 +122,7 @@ class BackupAccount {
     this.customTypeName,
     this.customTypeIcon,
     this.customTypeColorValue,
+    this.isFrequent = false,
   });
 
   final int id;
@@ -155,6 +156,14 @@ class BackupAccount {
   final String? customTypeIcon;
   final int? customTypeColorValue;
 
+  /// Additive field (schema v23) — no backup version bump, same pattern as
+  /// `includeInNetWorth`/`isLiability`. Restored verbatim by both Merge and
+  /// Replace: like those two, there's no "at most one" invariant to protect
+  /// (unlike `isDefault`), so a plain carry-over is safe either way. A
+  /// pre-v23 file simply lacks the key, which reads as `false` (matching
+  /// what every pre-v23 account already was by not having the concept).
+  final bool isFrequent;
+
   /// Additive field (schema v14) — no backup version bump, same pattern as
   /// [isDefault]. Restored verbatim by both Merge and Replace: unlike
   /// `isDefault` there's no "at most one" invariant to protect, so a plain
@@ -186,6 +195,7 @@ class BackupAccount {
     customTypeName: row.customTypeName,
     customTypeIcon: row.customTypeIcon,
     customTypeColorValue: row.customTypeColorValue,
+    isFrequent: row.isFrequent,
   );
 
   factory BackupAccount.fromJson(Map<String, dynamic> j) => BackupAccount(
@@ -208,6 +218,8 @@ class BackupAccount {
     customTypeName: j['customTypeName'] as String?,
     customTypeIcon: j['customTypeIcon'] as String?,
     customTypeColorValue: j['customTypeColorValue'] as int?,
+    // Pre-v23 files have no "isFrequent" key; absent = false.
+    isFrequent: j['isFrequent'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
@@ -224,6 +236,7 @@ class BackupAccount {
     'customTypeName': customTypeName,
     'customTypeIcon': customTypeIcon,
     'customTypeColorValue': customTypeColorValue,
+    'isFrequent': isFrequent,
   };
 
   /// Merge: new row, id auto-assigned. [asDefault] is computed by the caller
@@ -245,6 +258,7 @@ class BackupAccount {
         customTypeName: Value(customTypeName),
         customTypeIcon: Value(customTypeIcon),
         customTypeColorValue: Value(customTypeColorValue),
+        isFrequent: Value(isFrequent),
         externalId: externalId == null
             ? const Value.absent()
             : Value(externalId),
@@ -267,6 +281,7 @@ class BackupAccount {
     customTypeName: Value(customTypeName),
     customTypeIcon: Value(customTypeIcon),
     customTypeColorValue: Value(customTypeColorValue),
+    isFrequent: Value(isFrequent),
     externalId: externalId == null ? const Value.absent() : Value(externalId),
   );
 }

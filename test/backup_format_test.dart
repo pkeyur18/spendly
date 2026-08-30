@@ -425,6 +425,58 @@ void main() {
     expect(decoded.isLiability, isFalse);
   });
 
+  test('a frequently-used account round-trips', () async {
+    final payload = _samplePayload();
+    final envelope = await encodeEnvelope(
+      BackupPayload(
+        exportedAt: payload.exportedAt,
+        categories: payload.categories,
+        expenses: payload.expenses,
+        budgets: payload.budgets,
+        tags: payload.tags,
+        settings: payload.settings,
+        accounts: const [
+          BackupAccount(
+            id: 1,
+            name: 'Cash',
+            type: AccountType.cash,
+            openingBalanceMinor: 0,
+            isArchived: false,
+            externalId: 'acc-1',
+            isFrequent: true,
+          ),
+        ],
+      ),
+    );
+
+    final decoded = (await decodePayload(envelope)).accounts.single;
+    expect(decoded.isFrequent, isTrue);
+  });
+
+  test('a pre-v23 account (no isFrequent key) decodes as not frequent',
+      () async {
+    final v8Json = jsonEncode({
+      'spendlyBackup': true,
+      'version': 8,
+      'encrypted': false,
+      'data': _samplePayload().toJson()
+        ..['accounts'] = [
+          {
+            'id': 1,
+            'name': 'Cash',
+            'type': 'cash',
+            'openingBalanceMinor': 0,
+            'isArchived': false,
+            'externalId': null,
+            // No "isFrequent" key at all.
+          },
+        ],
+    });
+
+    final decoded = (await decodePayload(v8Json)).accounts.single;
+    expect(decoded.isFrequent, isFalse);
+  });
+
   test('a custom-type account round-trips', () async {
     final payload = _samplePayload();
     final envelope = await encodeEnvelope(
