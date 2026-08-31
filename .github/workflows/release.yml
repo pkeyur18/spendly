@@ -7,9 +7,14 @@ on:
 permissions:
   contents: write
 
+env:
+  FLUTTER_VERSION: '3.44.5'
+
 jobs:
   tag-and-release:
     runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,3 +39,87 @@ jobs:
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.tag_version.outputs.changelog }}
+
+  build-android:
+    needs: tag-and-release
+    if: needs.tag-and-release.outputs.new_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.tag-and-release.outputs.new_tag }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+
+      # No release keystore is configured yet, so this ships signed with the
+      # Flutter debug key (see android/app/build.gradle.kts). Good enough to
+      # sideload for testing; swap in a real keystore before a Play Store release.
+      - run: flutter build apk --release
+
+      - name: Rename APK with version tag
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "dist/spendly-${{ needs.tag-and-release.outputs.new_tag }}-android.apk"
+
+      - name: Attach APK to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ needs.tag-and-release.outputs.new_tag }}
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          artifacts: dist/*.apk
+
+  build-ios:
+    needs: tag-and-release
+    if: needs.tag-and-release.outputs.new_tag != ''
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.tag-and-release.outputs.new_tag }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+
+      # No Apple Developer signing certificate/provisioning profile is
+      # configured yet, so this builds an unsigned .app for the iOS
+      # Simulator only (installable in Simulator, NOT on a physical device).
+      # Once you have a distribution cert + provisioning profile, add them
+      # as secrets and switch this to `flutter build ipa` with a real
+      # ExportOptions.plist to produce a device-installable .ipa.
+      - run: flutter build ios --release --no-codesign --simulator
+
+      - name: Zip simulator .app
+        run: |
+          mkdir -p dist
+          cd build/ios/iphonesimulator
+          zip -r "../../../dist/spendly-${{ needs.tag-and-release.outputs.new_tag }}-ios-simulator.zip" Runner.app
+
+      - name: Attach iOS build to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ needs.tag-and-release.outputs.new_tag }}
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          artifacts: dist/*.zip
