@@ -104,10 +104,11 @@ jobs:
       # No Apple Developer signing certificate/provisioning profile is
       # configured yet, so this builds an unsigned .app for the iOS
       # Simulator only (installable in Simulator, NOT on a physical device).
+      # Flutter doesn't support --release for simulator builds, hence --debug.
       # Once you have a distribution cert + provisioning profile, add them
       # as secrets and switch this to `flutter build ipa` with a real
       # ExportOptions.plist to produce a device-installable .ipa.
-      - run: flutter build ios --release --no-codesign --simulator
+      - run: flutter build ios --debug --no-codesign --simulator
 
       - name: Zip simulator .app
         run: |
