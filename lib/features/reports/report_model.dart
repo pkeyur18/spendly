@@ -21,6 +21,8 @@ class ReportData {
     required this.breakdown,
     required this.ignoredBreakdown,
     required this.ignoredTotal,
+    required this.grandTotal,
+    required this.grandBreakdown,
     required this.top5,
     required this.weekly,
   });
@@ -45,6 +47,17 @@ class ReportData {
   /// and [breakdown] above, but reported separately (FR-32 export).
   final List<CategorySlice> ignoredBreakdown; // desc by spend
   final Money ignoredTotal;
+
+  /// [total] + [ignoredTotal] — every rupee actually spent this range,
+  /// ignore-toggle included. The Report screen has no use for this (it
+  /// deliberately hides ignored-for-budget categories to declutter known
+  /// recurring bills), but the monthly recap does: money spent in an
+  /// ignored category was still spent, so it must still reduce savings.
+  final Money grandTotal;
+
+  /// Same idea as [breakdown] but over every expense, ignore-toggle
+  /// included — pairs with [grandTotal].
+  final List<CategorySlice> grandBreakdown; // desc by spend
   final List<ExpenseRow> top5; // biggest single expenses, desc
   final List<TrendBar> weekly; // W1..Wn buckets (custom range trend)
 
@@ -103,6 +116,9 @@ ReportData buildReport({
     ignoredTotal,
   );
 
+  final grandTotal = total + ignoredTotal;
+  final grandBreakdown = _breakdown(expenses, categoriesById, grandTotal);
+
   // Top 5 single expenses by amount, desc.
   final top5 = [...counted]
     ..sort((a, b) => b.amountMinor.compareTo(a.amountMinor));
@@ -128,6 +144,8 @@ ReportData buildReport({
     breakdown: breakdown,
     ignoredBreakdown: ignoredBreakdown,
     ignoredTotal: ignoredTotal,
+    grandTotal: grandTotal,
+    grandBreakdown: grandBreakdown,
     top5: top5.take(5).toList(),
     weekly: weeklyBuckets(counted, start, end),
   );

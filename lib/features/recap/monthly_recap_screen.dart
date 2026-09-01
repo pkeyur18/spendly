@@ -10,8 +10,7 @@ import '../../core/widgets/async_state_views.dart';
 import '../../core/widgets/category_glyph.dart';
 import '../budgets/budget_repository.dart';
 import '../expenses/expense_repository.dart' show monthBounds;
-import '../home/dashboard_providers.dart'
-    show CategorySlice, categoriesByIdProvider, ignoredCategoryIds;
+import '../home/dashboard_providers.dart' show CategorySlice;
 import '../ledger/cashflow_math.dart';
 import '../ledger/ledger_repository.dart';
 import '../profile/profile_provider.dart';
@@ -31,12 +30,13 @@ class MonthlyRecapScreen extends ConsumerWidget {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final (start, end) = monthBounds(month);
     final async = ref.watch(reportProvider((start, end)));
-    final byId = ref.watch(categoriesByIdProvider);
-    final budget = effectiveOverallBudget(
-      ref.watch(overallBudgetForMonthProvider(monthKeyFor(month))).value,
-      ref.watch(perCategoryBudgetsForMonthProvider(monthKeyFor(month))),
-      ignoredCategoryIds(byId),
-    );
+    // Raw overall budget, not netted against ignored categories' per-category
+    // budgets (contrast `monthly_report_screen.dart`'s `effectiveOverallBudget`
+    // call): recap now counts every rupee spent (`report.grandTotal` below),
+    // so it must compare against the full budget the user actually set.
+    final budget = ref
+        .watch(overallBudgetForMonthProvider(monthKeyFor(month)))
+        .value;
     final profile = ref.watch(profileProvider).value;
     final monthLabel = DateFormat('MMMM').format(month);
     final incomeTotal =
@@ -67,13 +67,16 @@ class MonthlyRecapScreen extends ConsumerWidget {
             onRetry: () => ref.invalidate(reportProvider((start, end))),
           ),
           data: (report) {
-            final summary = computeRecapSummary(
-              total: report.total,
-              budget: budget,
-            );
+            // Recap counts every rupee actually spent this month, including
+            // categories flagged "ignore for budget" — that toggle only
+            // trims the Report screen's recurring-bill clutter, it doesn't
+            // mean the money wasn't spent, so it must not inflate savings
+            // or hide a category from "Top categories" here.
+            final total = report.grandTotal;
+            final summary = computeRecapSummary(total: total, budget: budget);
             final hasBudget = summary.hasBudget;
             final isPositive = summary.isPositive;
-            final top3 = report.breakdown.take(3).toList();
+            final top3 = report.grandBreakdown.take(3).toList();
             final firstName = (profile?.name ?? '')
                 .trim()
                 .split(RegExp(r'\s+'))
@@ -118,7 +121,7 @@ class MonthlyRecapScreen extends ConsumerWidget {
                       ),
                     ),
                     _RecapHero(
-                      total: report.total,
+                      total: total,
                       summary: summary,
                       monthLabel: monthLabel,
                     ),
@@ -126,10 +129,7 @@ class MonthlyRecapScreen extends ConsumerWidget {
                     // this month — most users never touch Income, and this
                     // stays silent for them rather than showing a 0% row.
                     if (incomeTotal.minor > 0)
-                      _SavingsRateCard(
-                        income: incomeTotal,
-                        expense: report.total,
-                      ),
+                      _SavingsRateCard(income: incomeTotal, expense: total),
                     const SectionTitle('Top categories'),
                     if (top3.isEmpty)
                       AppCard(

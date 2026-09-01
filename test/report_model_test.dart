@@ -162,6 +162,44 @@ void main() {
     expect(r.ignoredTotal, Money.zero);
   });
 
+  test(
+    'grandTotal/grandBreakdown count ignored-for-budget spend too (recap use, '
+    'not the Report screen — see monthly_recap_screen.dart)',
+    () async {
+      await repo.add(
+        amount: Money.parse('600'),
+        categoryId: 1,
+        date: DateTime(2026, 3, 2),
+      );
+      await repo.add(
+        amount: Money.parse('400'),
+        categoryId: 2,
+        date: DateTime(2026, 3, 5),
+      );
+      await CategoryRepository(db).setIgnoredForBudget(1, true);
+
+      final r = await build(previousTotal: Money.zero);
+      // total/breakdown stay ignore-filtered (Report screen's contract)...
+      expect(r.total, Money.fromMinor(40000));
+      // ...but grandTotal/grandBreakdown count every rupee spent, category 1
+      // (ignored) included — this is what the recap screen must use.
+      expect(r.grandTotal, Money.fromMinor(100000));
+      expect(r.grandBreakdown.map((s) => s.$1.id), [1, 2]); // desc: 600, 400
+      expect(r.grandBreakdown.first.$2, Money.fromMinor(60000));
+    },
+  );
+
+  test('no ignored categories → grandTotal equals total', () async {
+    await repo.add(
+      amount: Money.parse('100'),
+      categoryId: 1,
+      date: DateTime(2026, 3, 2),
+    );
+    final r = await build(previousTotal: Money.zero);
+    expect(r.grandTotal, r.total);
+    expect(r.grandBreakdown.map((s) => s.$1.id), r.breakdown.map((s) => s.$1.id));
+  });
+
   test('weekly buckets split the range into 7-day windows', () async {
     await repo.add(
       amount: Money.parse('70'),
