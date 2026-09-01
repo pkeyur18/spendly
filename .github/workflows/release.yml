@@ -83,44 +83,10 @@ jobs:
           omitNameDuringUpdate: true
           artifacts: dist/*.apk
 
-  build-ios:
-    needs: tag-and-release
-    if: needs.tag-and-release.outputs.new_tag != ''
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.tag-and-release.outputs.new_tag }}
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - run: flutter pub get
-      - run: dart run build_runner build --delete-conflicting-outputs
-
-      # No Apple Developer signing certificate/provisioning profile is
-      # configured yet, so this builds an unsigned .app for the iOS
-      # Simulator only (installable in Simulator, NOT on a physical device).
-      # Flutter doesn't support --release for simulator builds, hence --debug.
-      # Once you have a distribution cert + provisioning profile, add them
-      # as secrets and switch this to `flutter build ipa` with a real
-      # ExportOptions.plist to produce a device-installable .ipa.
-      - run: flutter build ios --debug --no-codesign --simulator
-
-      - name: Zip simulator .app
-        run: |
-          mkdir -p dist
-          cd build/ios/iphonesimulator
-          zip -r "../../../dist/spendly-${{ needs.tag-and-release.outputs.new_tag }}-ios-simulator.zip" Runner.app
-
-      - name: Attach iOS build to release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ needs.tag-and-release.outputs.new_tag }}
-          allowUpdates: true
-          omitBodyDuringUpdate: true
-          omitNameDuringUpdate: true
-          artifacts: dist/*.zip
+  # No iOS build job: a real device-installable .ipa needs an Apple
+  # Developer distribution certificate + provisioning profile. A free
+  # Apple ID's signing only lasts 7 days and is tied to an interactive
+  # Xcode session on one machine, so it can't be handed to a stateless
+  # GitHub Actions runner without re-generating and re-uploading secrets
+  # every week — not something a CI pipeline can do unattended. Revisit
+  # this once a paid Apple Developer Program membership is available.
