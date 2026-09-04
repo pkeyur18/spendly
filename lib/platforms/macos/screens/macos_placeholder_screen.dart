@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
-import '../macos_shell.dart';
+import '../macos_tab.dart';
 
 /// Stand-in for every desktop screen not yet built (sprints 2–4 fill these
 /// in one at a time). Only [MacosTab.sync] has a real screen this sprint.

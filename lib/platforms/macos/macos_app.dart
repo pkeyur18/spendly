@@ -18,13 +18,29 @@ import 'macos_shell.dart';
 /// under Application Support, see `macos_database.dart`) — every other
 /// provider in the app (categories, budgets, accounts, backup, …) is reused
 /// completely unmodified and simply reads through to that database.
+///
+/// Uses `overrideWith` (a provider-creation callback Riverpod calls exactly
+/// once per container), not `overrideWithValue` — the latter took
+/// `openMacosDatabase()` as a plain expression inside `build()`, which
+/// constructed a brand new `AppDatabase`/`LazyDatabase` every time this
+/// widget rebuilt (any hot reload) and never registered disposal for the
+/// old one, producing drift's "AppDatabase created multiple times" warning
+/// and a leaked connection. `overrideWith` is the same pattern
+/// `databaseProvider`'s own definition already uses in
+/// `core/db/providers.dart`.
 class MacosSpendlyApp extends StatelessWidget {
   const MacosSpendlyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(openMacosDatabase())],
+      overrides: [
+        databaseProvider.overrideWith((ref) {
+          final db = openMacosDatabase();
+          ref.onDispose(db.close);
+          return db;
+        }),
+      ],
       child: MaterialApp(
         title: 'Spendly',
         debugShowCheckedModeBanner: false,

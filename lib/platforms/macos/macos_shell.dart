@@ -1,27 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
+import 'macos_nav.dart';
+import 'macos_tab.dart';
+import 'screens/macos_accounts_screen.dart';
+import 'screens/macos_budgets_screen.dart';
+import 'screens/macos_categories_screen.dart';
+import 'screens/macos_dashboard_screen.dart';
+import 'screens/macos_goals_screen.dart';
 import 'screens/macos_placeholder_screen.dart';
 import 'screens/macos_sync_screen.dart';
-
-/// The ten destinations from the approved desktop prototype, sidebar order.
-enum MacosTab {
-  dashboard('Dashboard', Icons.home_rounded, 'Good evening'),
-  transactions('Transactions', Icons.receipt_long_rounded, 'Every entry — view only'),
-  insights('Insights', Icons.bar_chart_rounded, 'Deeper cuts of your spending'),
-  budgets('Budgets', Icons.flag_rounded, 'Per-category limits and how close you are'),
-  goals('Goals', Icons.track_changes_rounded, 'Savings targets you are tracking toward'),
-  categories('Categories', Icons.sell_rounded, '18 defaults, as set on your iPhone'),
-  trips('Tags & Trips', Icons.location_on_rounded, 'Group spend outside the category system'),
-  accounts('Accounts', Icons.account_balance_rounded, 'Balances across cash, cards and wallets'),
-  sync('Sync from iPhone', Icons.sync_rounded, 'Pull a read-only copy over — no cloud, nothing sent back'),
-  settings('Settings', Icons.settings_rounded, 'Appearance, security and how this Mac displays your data');
-
-  const MacosTab(this.label, this.icon, this.subtitle);
-  final String label;
-  final IconData icon;
-  final String subtitle;
-}
+import 'screens/macos_transactions_screen.dart';
+import 'screens/macos_trips_screen.dart';
 
 /// Root navigation shell for the macOS build: a fixed sidebar (mirrors the
 /// mobile bottom nav's role, sized for a desktop window instead of a
@@ -56,34 +46,44 @@ class _MacosShellState extends State<MacosShell> {
   Widget _screenFor(MacosTab tab) {
     if (!_visited.contains(tab)) return const SizedBox.shrink();
     return switch (tab) {
+      MacosTab.dashboard => const MacosDashboardScreen(),
+      MacosTab.transactions => const MacosTransactionsScreen(),
+      MacosTab.budgets => const MacosBudgetsScreen(),
+      MacosTab.goals => const MacosGoalsScreen(),
+      MacosTab.categories => const MacosCategoriesScreen(),
+      MacosTab.trips => const MacosTripsScreen(),
+      MacosTab.accounts => const MacosAccountsScreen(),
       MacosTab.sync => const MacosSyncScreen(),
-      _ => MacosPlaceholderScreen(tab: tab),
+      MacosTab.insights || MacosTab.settings => MacosPlaceholderScreen(tab: tab),
     };
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          _Sidebar(current: _current, onSelect: _select),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _TopBar(tab: _current),
-                Expanded(
-                  child: IndexedStack(
-                    index: _current.index,
-                    children: [
-                      for (final tab in MacosTab.values) _screenFor(tab),
-                    ],
+    return MacosNav(
+      goTo: _select,
+      child: Scaffold(
+        body: Row(
+          children: [
+            _Sidebar(current: _current, onSelect: _select),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TopBar(tab: _current),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _current.index,
+                      children: [
+                        for (final tab in MacosTab.values) _screenFor(tab),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
