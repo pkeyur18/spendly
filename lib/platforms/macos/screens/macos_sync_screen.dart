@@ -33,7 +33,6 @@ const _lastSyncKey = 'macos_last_sync_at';
 
 class _MacosSyncScreenState extends ConsumerState<MacosSyncScreen> {
   BackupPreview? _preview;
-  RestoreMode _mode = RestoreMode.merge;
   bool _busy = false;
   String? _error;
   String? _result;
@@ -96,7 +95,7 @@ class _MacosSyncScreenState extends ConsumerState<MacosSyncScreen> {
                     const SizedBox(height: AppSpacing.md),
                     const _Step(1, 'On iPhone: Profile → Backup → Share → AirDrop to your Mac'),
                     const _Step(2, 'Accept the AirDrop on this Mac'),
-                    const _Step(3, 'Preview it here, then Merge in new entries or Replace the whole copy'),
+                    const _Step(3, 'Preview it here, then sync — this replaces the copy on your Mac'),
                     const SizedBox(height: AppSpacing.lg),
                     _LastSyncedLine(),
                   ],
@@ -131,24 +130,15 @@ class _MacosSyncScreenState extends ConsumerState<MacosSyncScreen> {
               ],
             ),
           ),
-          const SectionTitle('How should we bring it in?'),
+          const SizedBox(height: AppSpacing.md),
           Row(
             children: [
+              Icon(Icons.info_outline_rounded, size: 14, color: palette.textDim),
+              const SizedBox(width: 6),
               Expanded(
-                child: _ModeCard(
-                  title: 'Merge',
-                  description: 'Add new entries from the backup to what this Mac already has.',
-                  selected: _mode == RestoreMode.merge,
-                  onTap: () => setState(() => _mode = RestoreMode.merge),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _ModeCard(
-                  title: 'Replace',
-                  description: 'Wipe this Mac\'s copy and reload only from the backup file.',
-                  selected: _mode == RestoreMode.replace,
-                  onTap: () => setState(() => _mode = RestoreMode.replace),
+                child: Text(
+                  "This replaces this Mac's copy entirely with the backup file.",
+                  style: TextStyle(fontSize: 11.5, color: palette.textDim),
                 ),
               ),
             ],
@@ -260,7 +250,7 @@ class _MacosSyncScreenState extends ConsumerState<MacosSyncScreen> {
     });
     try {
       final repo = ref.read(backupRepositoryProvider);
-      await executeRestore(preview.payload, _mode, repo);
+      await executeRestore(preview.payload, RestoreMode.replace, repo);
       await ref
           .read(settingsRepositoryProvider)
           .set(_lastSyncKey, DateTime.now().toIso8601String());
@@ -268,7 +258,7 @@ class _MacosSyncScreenState extends ConsumerState<MacosSyncScreen> {
       if (!mounted) return;
       setState(() {
         _result =
-            '${_mode == RestoreMode.merge ? 'Merged' : 'Replaced'} — ${preview.expenseCount} transactions synced from ${preview.fileName}.';
+            'Replaced — ${preview.expenseCount} transactions synced from ${preview.fileName}.';
         _preview = null;
       });
     } catch (e) {
@@ -367,52 +357,6 @@ class _PreviewRow extends StatelessWidget {
           Text(label, style: TextStyle(fontSize: 13, color: palette.textDim)),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ],
-      ),
-    );
-  }
-}
-
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({
-    required this.title,
-    required this.description,
-    required this.selected,
-    required this.onTap,
-  });
-  final String title;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AppPalette>()!;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '$title. $description',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.button),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary.withValues(alpha: 0.08) : palette.card,
-            borderRadius: BorderRadius.circular(AppRadius.button),
-            border: Border.all(
-              color: selected ? AppColors.primary : palette.line,
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              const SizedBox(height: 4),
-              Text(description, style: TextStyle(fontSize: 11, color: palette.textDim, height: 1.35)),
-            ],
-          ),
-        ),
       ),
     );
   }
