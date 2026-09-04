@@ -5,7 +5,7 @@ import '../../../core/money/money.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../features/budgets/budget_repository.dart';
-import '../../../features/expenses/expense_repository.dart' show monthBounds;
+import '../../../features/expenses/expense_repository.dart' show currentMonthExpensesProvider, monthBounds;
 import '../../../features/home/dashboard_providers.dart';
 import '../../../features/home/widgets/spend_donut.dart';
 import '../../../features/home/widgets/trend_bars.dart';
@@ -13,6 +13,7 @@ import '../../../features/ledger/account_balance_provider.dart';
 import '../../../features/ledger/ledger_repository.dart';
 import '../macos_nav.dart';
 import '../macos_tab.dart';
+import '../widgets/macos_calendar_heatmap.dart';
 import '../widgets/macos_expense_row.dart';
 
 /// Read-only dashboard — same underlying providers and chart widgets as the
@@ -47,6 +48,7 @@ class MacosDashboardScreen extends ConsumerWidget {
     final avgDaily = Money.fromMinor((monthTotal.minor / dayOfMonth).round());
 
     final recent = ref.watch(recentExpensesProvider);
+    final currentMonthExpenses = ref.watch(currentMonthExpensesProvider).value ?? const [];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 32),
@@ -101,10 +103,20 @@ class MacosDashboardScreen extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // SpendDonut is mobile's shared widget (features/home/widgets/) —
+            // its inner chart+legend layout is a fixed-width row that only
+            // fits alongside one sibling, not two, so it keeps this row to
+            // itself with TrendBars; the heatmap gets its own row below
+            // rather than squeezing a third card in here.
             Expanded(child: _CardWrap('Where it went', const SpendDonut())),
             const SizedBox(width: AppSpacing.lg),
             Expanded(child: _CardWrap('6-month trend', const TrendBars())),
           ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _CardWrap(
+          'Daily spend this month',
+          MacosCalendarHeatmap(expenses: currentMonthExpenses, month: DateTime.now()),
         ),
         const SizedBox(height: AppSpacing.lg),
         AppCard(

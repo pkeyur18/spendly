@@ -8,6 +8,7 @@ import 'screens/macos_budgets_screen.dart';
 import 'screens/macos_categories_screen.dart';
 import 'screens/macos_dashboard_screen.dart';
 import 'screens/macos_goals_screen.dart';
+import 'screens/macos_insights_screen.dart';
 import 'screens/macos_placeholder_screen.dart';
 import 'screens/macos_sync_screen.dart';
 import 'screens/macos_transactions_screen.dart';
@@ -54,7 +55,8 @@ class _MacosShellState extends State<MacosShell> {
       MacosTab.trips => const MacosTripsScreen(),
       MacosTab.accounts => const MacosAccountsScreen(),
       MacosTab.sync => const MacosSyncScreen(),
-      MacosTab.insights || MacosTab.settings => MacosPlaceholderScreen(tab: tab),
+      MacosTab.insights => const MacosInsightsScreen(),
+      MacosTab.settings => MacosPlaceholderScreen(tab: tab),
     };
   }
 
