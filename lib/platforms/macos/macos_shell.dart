@@ -9,10 +9,11 @@ import 'screens/macos_categories_screen.dart';
 import 'screens/macos_dashboard_screen.dart';
 import 'screens/macos_goals_screen.dart';
 import 'screens/macos_insights_screen.dart';
-import 'screens/macos_placeholder_screen.dart';
+import 'screens/macos_settings_screen.dart';
 import 'screens/macos_sync_screen.dart';
 import 'screens/macos_transactions_screen.dart';
 import 'screens/macos_trips_screen.dart';
+import 'widgets/macos_menu_bar.dart';
 
 /// Root navigation shell for the macOS build: a fixed sidebar (mirrors the
 /// mobile bottom nav's role, sized for a desktop window instead of a
@@ -56,35 +57,38 @@ class _MacosShellState extends State<MacosShell> {
       MacosTab.accounts => const MacosAccountsScreen(),
       MacosTab.sync => const MacosSyncScreen(),
       MacosTab.insights => const MacosInsightsScreen(),
-      MacosTab.settings => MacosPlaceholderScreen(tab: tab),
+      MacosTab.settings => const MacosSettingsScreen(),
     };
   }
 
   @override
   Widget build(BuildContext context) {
-    return MacosNav(
-      goTo: _select,
-      child: Scaffold(
-        body: Row(
-          children: [
-            _Sidebar(current: _current, onSelect: _select),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _TopBar(tab: _current),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _current.index,
-                      children: [
-                        for (final tab in MacosTab.values) _screenFor(tab),
-                      ],
+    return MacosMenuBar(
+      onSelectTab: _select,
+      child: MacosNav(
+        goTo: _select,
+        child: Scaffold(
+          body: Row(
+            children: [
+              _Sidebar(current: _current, onSelect: _select),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TopBar(tab: _current),
+                    Expanded(
+                      child: IndexedStack(
+                        index: _current.index,
+                        children: [
+                          for (final tab in MacosTab.values) _screenFor(tab),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

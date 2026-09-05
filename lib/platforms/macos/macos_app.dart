@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/db/providers.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/security/app_lock_provider.dart';
+import '../../features/security/lock_screen.dart';
+import '../../features/settings/theme_mode_provider.dart';
 import 'macos_database.dart';
 import 'macos_shell.dart';
 
@@ -41,14 +44,34 @@ class MacosSpendlyApp extends StatelessWidget {
           return db;
         }),
       ],
-      child: MaterialApp(
-        title: 'Spendly',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
-        home: const MacosShell(),
+      child: Consumer(
+        builder: (context, ref, _) {
+          final themeMode = ref.watch(themeModeProvider).value ?? ThemeMode.system;
+          return MaterialApp(
+            title: 'Spendly',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: themeMode,
+            home: const _MacosLockGate(),
+          );
+        },
       ),
     );
+  }
+}
+
+/// Gates [MacosShell] behind [AppLockScreen] on the same terms as mobile's
+/// `app.dart` — App Lock is a per-device settings key, so this Mac's own
+/// database (see `macos_database.dart`) tracks its own on/off state
+/// independently of the iPhone's.
+class _MacosLockGate extends ConsumerWidget {
+  const _MacosLockGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lockEnabled = ref.watch(appLockEnabledProvider).value ?? false;
+    final unlocked = ref.watch(appUnlockedProvider);
+    return (lockEnabled && !unlocked) ? const AppLockScreen() : const MacosShell();
   }
 }
