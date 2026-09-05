@@ -8,8 +8,7 @@ import '../../../core/theme/tokens.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/category_glyph.dart';
 import '../../../features/accounts/account_repository.dart';
-import '../../../features/categories/category_repository.dart' show allCategoriesProvider;
-import '../../../features/expenses/all_transactions_screen.dart' show groupExpensesByDay, transactionsQueryKey;
+import '../../../features/expenses/all_transactions_screen.dart' show groupExpensesByDay, transactionsQueryKey, visibleCategoryChips;
 import '../../../features/expenses/expense_repository.dart';
 import '../../../features/home/dashboard_providers.dart' show categoriesByIdProvider;
 import '../../../features/expenses/widgets/expense_tile.dart' show DayGroupHeader;
@@ -31,25 +30,61 @@ class MacosTransactionsScreen extends ConsumerStatefulWidget {
 }
 
 class _MacosTransactionsScreenState extends ConsumerState<MacosTransactionsScreen> {
-  int? _selectedCategoryId;
+  late (DateTime, DateTime) _range = monthBounds(DateTime.now());
+  Set<int> _selectedCategoryIds = {};
+  bool _categoryChipsExpanded = false;
   int? _selectedExpenseId;
   String _search = '';
+
+  String get _categoryKey => (_selectedCategoryIds.toList()..sort()).join(',');
+
+  void _stepMonth(int delta) {
+    final anchor = DateTime(_range.$1.year, _range.$1.month + delta, 1);
+    setState(() {
+      _range = monthBounds(anchor);
+      _selectedCategoryIds = {};
+      _categoryChipsExpanded = false;
+      _selectedExpenseId = null;
+    });
+  }
+
+  Future<void> _openCategoryFilterDialog(List<CategoryRow> categories) async {
+    final result = await showDialog<Set<int>>(
+      context: context,
+      builder: (_) => _CategoryFilterDialog(categories: categories, initialSelected: _selectedCategoryIds),
+    );
+    if (result != null) {
+      setState(() {
+        _selectedCategoryIds = result;
+        _categoryChipsExpanded = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+    final atCurrentMonth = _range.$1.year == now.year && _range.$1.month == now.month;
     final key = transactionsQueryKey(
       searching: false,
       search: _search,
-      range: (DateTime(2000), DateTime(now.year, now.month, now.day).add(const Duration(days: 1))),
+      range: _range,
       limit: 1000,
-      categoryKey: _selectedCategoryId == null ? '' : '$_selectedCategoryId',
+      categoryKey: _categoryKey,
       now: now,
     );
     final expenses = ref.watch(expensesInRangeProvider(key)).value ?? const [];
     final byId = ref.watch(categoriesByIdProvider);
     final accountsById = ref.watch(accountsByIdProvider);
-    final categories = ref.watch(allCategoriesProvider).value ?? const [];
+    final categoryChips = ref.watch(categoriesInRangeProvider(_range)).value ?? const [];
+
+    final selectedList = [
+      for (final c in categoryChips)
+        if (_selectedCategoryIds.contains(c.id)) c,
+    ];
+    final visibleChips = visibleCategoryChips(selectedList, _categoryChipsExpanded);
+    final hiddenChipCount = selectedList.length - visibleChips.length;
+    final palette = Theme.of(context).extension<AppPalette>()!;
 
     final selected = _selectedExpenseId == null
         ? null
@@ -75,23 +110,80 @@ class _MacosTransactionsScreenState extends ConsumerState<MacosTransactionsScree
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 32,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _FilterChip(label: 'All', selected: _selectedCategoryId == null, onTap: () => setState(() => _selectedCategoryId = null)),
-                for (final c in categories) ...[
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: c.name,
-                    selected: _selectedCategoryId == c.id,
-                    onTap: () => setState(() => _selectedCategoryId = c.id),
-                  ),
-                ],
-              ],
-            ),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Previous month',
+                icon: const Icon(Icons.chevron_left_rounded),
+                onPressed: () => _stepMonth(-1),
+              ),
+              SizedBox(
+                width: 140,
+                child: Text(
+                  DateFormat('MMMM yyyy').format(_range.$1),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next month',
+                icon: const Icon(Icons.chevron_right_rounded),
+                onPressed: atCurrentMonth ? null : () => _stepMonth(1),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Filter by category',
+                icon: Badge(
+                  label: Text('${_selectedCategoryIds.length}'),
+                  isLabelVisible: _selectedCategoryIds.isNotEmpty,
+                  child: const Icon(Icons.filter_list_rounded),
+                ),
+                onPressed: categoryChips.isEmpty ? null : () => _openCategoryFilterDialog(categoryChips),
+              ),
+            ],
           ),
+          if (selectedList.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final c in visibleChips)
+                    InputChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CategoryGlyph(c.icon, size: 16),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(c.name),
+                        ],
+                      ),
+                      selected: true,
+                      onSelected: (_) => setState(() => _selectedCategoryIds.remove(c.id)),
+                      onDeleted: () => setState(() => _selectedCategoryIds.remove(c.id)),
+                      selectedColor: AppColors.primary,
+                      labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      backgroundColor: palette.card,
+                      shape: StadiumBorder(side: BorderSide(color: palette.line)),
+                    ),
+                  if (hiddenChipCount > 0)
+                    ActionChip(
+                      label: Text('+$hiddenChipCount more'),
+                      onPressed: () => setState(() => _categoryChipsExpanded = true),
+                      backgroundColor: palette.card,
+                      shape: StadiumBorder(side: BorderSide(color: palette.line)),
+                    ),
+                  if (_categoryChipsExpanded && selectedList.length > 3)
+                    ActionChip(
+                      label: const Text('Show less'),
+                      onPressed: () => setState(() => _categoryChipsExpanded = false),
+                      backgroundColor: palette.card,
+                      shape: StadiumBorder(side: BorderSide(color: palette.line)),
+                    ),
+                ],
+              ),
+            ),
           const SizedBox(height: 16),
           Expanded(
             child: Row(
@@ -101,7 +193,7 @@ class _MacosTransactionsScreenState extends ConsumerState<MacosTransactionsScree
                   child: expenses.isEmpty
                       ? Center(
                           child: Text(
-                            'No transactions${_selectedCategoryId != null || _search.isNotEmpty ? ' match this filter' : ' yet — sync from your iPhone first'}.',
+                            'No transactions${_selectedCategoryIds.isNotEmpty || _search.isNotEmpty ? ' match this filter' : atCurrentMonth ? ' yet this month' : ' in this month'}.',
                             style: TextStyle(color: Theme.of(context).extension<AppPalette>()!.textDim),
                           ),
                         )
@@ -139,38 +231,93 @@ class _MacosTransactionsScreenState extends ConsumerState<MacosTransactionsScree
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+/// Multi-select category filter — a centered dialog (desktop convention)
+/// rather than mobile's bottom sheet (`_CategoryFilterSheet` in
+/// `all_transactions_screen.dart`), but the same selection model: a
+/// `Set<int>` staged locally and only committed to the screen's state on
+/// "Apply", so cancelling leaves the current filter untouched.
+class _CategoryFilterDialog extends StatefulWidget {
+  const _CategoryFilterDialog({required this.categories, required this.initialSelected});
+
+  final List<CategoryRow> categories;
+  final Set<int> initialSelected;
+
+  @override
+  State<_CategoryFilterDialog> createState() => _CategoryFilterDialogState();
+}
+
+class _CategoryFilterDialogState extends State<_CategoryFilterDialog> {
+  late final Set<int> _selected = {...widget.initialSelected};
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<AppPalette>()!;
-    return Material(
-      color: selected ? AppColors.primary : palette.card,
-      borderRadius: BorderRadius.circular(AppRadius.chip),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.chip),
-            border: Border.all(color: selected ? AppColors.primary : palette.line),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : palette.textDim,
+    final filtered = widget.categories.where((c) => c.name.toLowerCase().contains(_query.toLowerCase())).toList();
+
+    return AlertDialog(
+      title: const Text('Filter by category'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      content: SizedBox(
+        width: 360,
+        height: 420,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search_rounded, size: 18),
+                hintText: 'Search categories…',
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _query = v),
             ),
-          ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final c in filtered)
+                    CheckboxListTile(
+                      value: _selected.contains(c.id),
+                      onChanged: (v) => setState(() {
+                        if (v ?? false) {
+                          _selected.add(c.id);
+                        } else {
+                          _selected.remove(c.id);
+                        }
+                      }),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      activeColor: AppColors.primary,
+                      contentPadding: EdgeInsets.zero,
+                      secondary: CategoryGlyph(c.icon, size: 18),
+                      title: Text(c.name),
+                    ),
+                  if (filtered.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text('No matching categories.', style: TextStyle(color: palette.textDim)),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
+      actions: [
+        if (_selected.isNotEmpty)
+          TextButton(
+            onPressed: () => setState(_selected.clear),
+            child: const Text('Clear all'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selected),
+          child: const Text('Apply'),
+        ),
+      ],
     );
   }
 }

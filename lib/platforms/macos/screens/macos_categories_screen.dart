@@ -28,11 +28,16 @@ class MacosCategoriesScreen extends ConsumerWidget {
 
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 32),
+      // A fixed mainAxisExtent (not childAspectRatio) so cell height never
+      // shrinks with window width — the card's content height (icon + two
+      // text lines) is fixed regardless of how narrow the window gets, and
+      // aspect-ratio-based sizing overflowed by a few pixels once the window
+      // was narrow enough to force extra columns.
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 220,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 1.7,
+        mainAxisExtent: 118,
       ),
       itemCount: categories.length,
       itemBuilder: (context, i) {
