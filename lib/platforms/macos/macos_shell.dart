@@ -161,14 +161,11 @@ class _Brand extends StatelessWidget {
             borderRadius: BorderRadius.circular(11),
           ),
           alignment: Alignment.center,
-          child: const Text(
-            'S',
-            style: TextStyle(
-              fontFamily: 'Sora',
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              color: Colors.white,
-            ),
+          padding: const EdgeInsets.all(6),
+          // Matches mobile's Home app-bar mark exactly (₹, not a letter) —
+          // see `features/home/home_screen.dart`'s AppBar title.
+          child: const FittedBox(
+            child: Text('₹', style: TextStyle(color: Colors.white, fontSize: 16)),
           ),
         ),
         const SizedBox(width: 10),
